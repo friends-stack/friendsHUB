@@ -66,7 +66,8 @@ const MessagingPage = ({ user }) => {
 
 
   useEffect(() => {
-    const s = io('http://localhost:5000', {
+    const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : window.location.origin;
+    const s = io(socketUrl, {
       auth: { token: localStorage.getItem('token') }
     });
     setSocket(s);

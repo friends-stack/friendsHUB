@@ -15,7 +15,8 @@ const multer = require('multer');
 const cron = require('node-cron');
 
 // Ensure upload directory exists
-if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // MIME-type extension mappings for fallback
 const MIME_EXTENSIONS = {
@@ -44,7 +45,7 @@ const MIME_EXTENSIONS = {
 
 // Multer config
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     let ext = path.extname(file.originalname);
     if (!ext) {
@@ -64,7 +65,11 @@ const upload = multer({ storage });
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
-const db = new Database(path.join(__dirname, 'db/database.sqlite'));
+
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db/database.sqlite');
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const db = new Database(dbPath);
 
 // Migration: Add columns and tables if not exists
 try { db.exec("ALTER TABLE users ADD COLUMN nickname TEXT"); } catch (e) { }
@@ -188,7 +193,7 @@ if (configCount === 0) {
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-123';
 const TG_TOKEN = process.env.TG_TOKEN;
@@ -1434,7 +1439,15 @@ app.post('/api/admin/users/cover-photo', checkAuth, (req, res) => {
 
 
 
-const PORT = 5000;
+// Serve compiled frontend assets in production
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// Wildcard route to serve React Router SPA frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

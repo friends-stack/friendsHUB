@@ -4,6 +4,18 @@ import App from './App.jsx'
 import './index.css'
 import axios from 'axios'
 
+// Request interceptor: dynamically swap localhost backend endpoint with the current host origin in production
+axios.interceptors.request.use(
+  (config) => {
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isProduction && config.url && config.url.startsWith('http://localhost:5000')) {
+      config.url = config.url.replace('http://localhost:5000', window.location.origin);
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Global axios interceptor: auto-logout if token is expired (401)
 axios.interceptors.response.use(
   (response) => response,

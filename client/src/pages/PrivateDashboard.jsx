@@ -18,7 +18,8 @@ import SavingsTracker from '../components/SavingsTracker';
 
 
 
-const socket = io('http://localhost:5000', { autoConnect: false });
+const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : window.location.origin;
+const socket = io(socketUrl, { autoConnect: false });
 
 const getOriginalFileName = (url) => {
   if (!url) return '';
