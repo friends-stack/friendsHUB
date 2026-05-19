@@ -847,7 +847,7 @@ const PrivateDashboard = ({ user }) => {
           .chat-input-form { margin-bottom: 70px !important; }
           .chat-messages-container { padding: 1rem 0.5rem !important; }
           .chat-message-bubble-wrapper { 
-            width: 95% !important; 
+            width: auto !important;
             max-width: 95% !important; 
           }
         }
@@ -1715,7 +1715,7 @@ const PrivateDashboard = ({ user }) => {
                               </div>
                             </div>
                           ) : (
-                            msg.content && <div style={{ fontSize: '1rem', lineHeight: '1.5', fontWeight: 400, fontFamily: "'Outfit', 'Inter', sans-serif" }}>{msg.content}</div>
+                            msg.content && <div style={{ fontSize: '1rem', lineHeight: '1.5', fontWeight: 400, fontFamily: "'Outfit', 'Inter', sans-serif", wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                           )}
                         <div style={{ 
                           fontSize: '0.7rem', 
