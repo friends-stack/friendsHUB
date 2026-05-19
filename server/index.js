@@ -388,7 +388,7 @@ const checkAuth = async (req, res, next) => {
 const checkPermission = (permission) => async (req, res, next) => {
   const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
   const role = await db.prepare('SELECT permissions FROM roles WHERE name = ?').get(user.role);
-  const perms = JSON.parse(role.permissions);
+  const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
 
   if (perms[permission]) {
     next();
