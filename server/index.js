@@ -1037,20 +1037,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send_message', (data) => {
+  socket.on('send_message', async (data) => {
     const senderId = socket.user.id;
     const { content, media_url, media_type = 'text', receiverId, replyToId } = data;
 
     // Check if messaging is globally enabled
-    const messagingEnabled = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
+    const msgSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get();
+    const messagingEnabled = msgSetting?.value === 'true';
     const sender = await db.prepare('SELECT email, role FROM users WHERE id = ?').get(senderId);
 
     if (!messagingEnabled && sender?.role !== 'super_admin') return;
 
     if (sender && ['authorized', 'admin', 'super_admin'].includes(sender.role)) {
       const now = new Date().toISOString();
-      const insert = db.prepare('INSERT INTO messages (sender_id, receiver_id, reply_to_id, content, media_url, media_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      const result = insert.run(senderId, receiverId || null, replyToId || null, content, media_url, media_type, now);
+      const result = await db.prepare('INSERT INTO messages (sender_id, receiver_id, reply_to_id, content, media_url, media_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(senderId, receiverId || null, replyToId || null, content, media_url, media_type, now);
 
       const broadcastMsg = {
         id: result.lastInsertRowid,
@@ -1078,22 +1078,17 @@ io.on('connection', (socket) => {
         if (media_url) {
           const filename = media_url.split('/').pop();
           const filePath = path.join(__dirname, 'uploads', filename);
-
           if (fs.existsSync(filePath)) {
             const fileStream = fs.createReadStream(filePath);
             let cleanFilename = filename;
             const hyphenIndex = filename.indexOf('-');
-            if (hyphenIndex !== -1) {
-              cleanFilename = filename.substring(hyphenIndex + 1);
-            }
-
+            if (hyphenIndex !== -1) cleanFilename = filename.substring(hyphenIndex + 1);
             if (media_type === 'image') {
               bot.telegram.sendPhoto(process.env.ADMIN_CHAT_ID, { source: fileStream }, { caption }).catch(console.error);
             } else {
               bot.telegram.sendDocument(process.env.ADMIN_CHAT_ID, { source: fileStream, filename: cleanFilename }, { caption }).catch(console.error);
             }
           } else {
-            // Fallback if file is not local
             if (media_type === 'image') bot.telegram.sendPhoto(process.env.ADMIN_CHAT_ID, { url: media_url }, { caption }).catch(console.error);
             else bot.telegram.sendDocument(process.env.ADMIN_CHAT_ID, { url: media_url }, { caption }).catch(console.error);
           }
@@ -1104,7 +1099,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('edit_message', (data) => {
+  socket.on('edit_message', async (data) => {
     const { messageId, content } = data;
     const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(messageId);
     if (msg && msg.sender_id === socket.user.id) {
@@ -1113,7 +1108,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('delete_message', (messageId) => {
+  socket.on('delete_message', async (messageId) => {
     const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(messageId);
     if (msg && (msg.sender_id === socket.user.id || ['admin', 'super_admin'].includes(socket.user.role))) {
       await db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
