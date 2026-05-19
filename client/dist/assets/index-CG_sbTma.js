@@ -209,7 +209,10 @@ Please change the parent <Route path="${e}"> to <Route path="${e===`/`?`*`:`${e}
           .glass-card { padding: 1rem !important; }
           .dashboard-section { padding: 1rem !important; }
           .chat-input-form { margin-bottom: 70px !important; }
-          .chat-message-bubble-wrapper { max-width: 90% !important; }
+          .chat-message-bubble-wrapper { 
+            width: 88% !important; 
+            max-width: 88% !important; 
+          }
         }
         .chat-input-field-container:focus-within {
           border-color: var(--primary) !important;
