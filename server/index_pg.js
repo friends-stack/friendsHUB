@@ -4,73 +4,90 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const morgan = require('morgan');
+const Database = require('better-sqlite3');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const speakeasy = require('speakeasy');
+const { Telegraf, Markup } = require('telegraf');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const cron = require('node-cron');
+
+// Ensure upload directory exists
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// MIME-type extension mappings for fallback
+const MIME_EXTENSIONS = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'application/zip': '.zip',
+  'application/x-rar-compressed': '.rar',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/ogg': '.ogg',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'video/mp4': '.mp4',
+  'video/mpeg': '.mpeg',
+  'video/quicktime': '.mov'
+};
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    let ext = path.extname(file.originalname);
+    if (!ext) {
+      ext = MIME_EXTENSIONS[file.mimetype] || '';
+    }
+    const cleanOriginal = file.originalname.endsWith(ext)
+      ? file.originalname.slice(0, -ext.length)
+      : file.originalname;
+    
+    // Ensure "blob" uploads get a generic but clean name with the correct extension
+    const baseName = cleanOriginal === 'blob' ? 'document' : cleanOriginal;
+    cb(null, Date.now() + '-' + baseName + ext);
+  }
+});
+const upload = multer({ storage });
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-class Statement {
-  constructor(sql) {
-    let paramCounter = 1;
-    this.sql = sql.replace(/\?/g, () => `$${paramCounter++}`);
-    if (this.sql.trim().toUpperCase().startsWith('INSERT') && !this.sql.toUpperCase().includes('RETURNING')) {
-      this.sql += ' RETURNING id';
-    }
-  }
-  async get(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return res.rows[0];
-  }
-  async all(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return res.rows;
-  }
-  async run(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return { changes: res.rowCount, lastInsertRowid: res.rows[0]?.id };
-  }
-}
-
-const db = {
-  prepare: (sql) => new Statement(sql),
-  exec: async (sql) => {
-    try { await pool.query(sql); } catch(e) {}
-  },
-  transaction: (fn) => {
-    return async (...args) => {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const res = await fn(...args); 
-        await client.query('COMMIT');
-        return res;
-      } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-      } finally {
-        client.release();
-      }
-    }
-  }
-};
 
 // Migration: Add columns and tables if not exists
-try { await db.exec("ALTER TABLE users ADD COLUMN nickname TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN dob TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN gender TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN mobile TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN address TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN bio TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN profile_picture TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN telegram_username TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN fav_food_drink TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN cover_photo TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN created_by_admin INTEGER DEFAULT 0"); } catch (e) { }
-try { await db.exec("ALTER TABLE savings_transactions ADD COLUMN notes TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN nickname TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN dob TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN gender TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN mobile TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN address TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN bio TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN profile_picture TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN telegram_username TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN fav_food_drink TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN cover_photo TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE users ADD COLUMN created_by_admin INTEGER DEFAULT 0"); } catch (e) { }
+try { db.exec("ALTER TABLE savings_transactions ADD COLUMN notes TEXT"); } catch (e) { }
 
-try { await db.exec("ALTER TABLE messages ADD COLUMN receiver_id INTEGER"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN media_url TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN media_type TEXT DEFAULT 'text'"); } catch (e) { }
+try { db.exec("ALTER TABLE messages ADD COLUMN receiver_id INTEGER"); } catch (e) { }
+try { db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER"); } catch (e) { }
+try { db.exec("ALTER TABLE messages ADD COLUMN media_url TEXT"); } catch (e) { }
+try { db.exec("ALTER TABLE messages ADD COLUMN media_type TEXT DEFAULT 'text'"); } catch (e) { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS posts (
@@ -98,7 +115,7 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `);
-try { await db.exec("ALTER TABLE comments ADD COLUMN memory_id INTEGER"); } catch (e) { }
+try { db.exec("ALTER TABLE comments ADD COLUMN memory_id INTEGER"); } catch (e) { }
 
 
 db.exec(`
@@ -166,9 +183,9 @@ db.exec(`
 `);
 
 // Insert default config if empty
-const configCount = await db.prepare('SELECT COUNT(*) as count FROM savings_config').get().count;
+const configCount = (await pool.query('SELECT COUNT(*) as count FROM savings_config')).rows[0].count;
 if (configCount === 0) {
-  await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(300);
+  await pool.query('INSERT INTO savings_config (weekly_amount) VALUES ($1)', [300]);
 }
 
 // Middleware
@@ -196,9 +213,9 @@ const checkAuth = async (req, res, next) => {
   }
 };
 
-const checkPermission = (permission) => async (req, res, next) => {
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
-  const role = await db.prepare('SELECT permissions FROM roles WHERE name = ?').get(user.role);
+const checkPermission = (permission) => (req, res, next) => {
+  const user = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
+  const role = (await pool.query('SELECT permissions FROM roles WHERE name = $1', [user.role])).rows[0];
   const perms = JSON.parse(role.permissions);
 
   if (perms[permission]) {
@@ -209,8 +226,8 @@ const checkPermission = (permission) => async (req, res, next) => {
   }
 };
 
-const checkPaymentClerk = async (req, res, next) => {
-  const clerkSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
+const checkPaymentClerk = (req, res, next) => {
+  const clerkSetting = db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
   const clerkId = clerkSetting && clerkSetting.value ? parseInt(clerkSetting.value) : null;
   if (req.user.id === clerkId) {
     next();
@@ -219,8 +236,8 @@ const checkPaymentClerk = async (req, res, next) => {
   }
 };
 
-const checkSavingsManager = async (req, res, next) => {
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+const checkSavingsManager = (req, res, next) => {
+  const user = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
   if (user.role === 'super_admin') {
     next();
   } else {
@@ -238,7 +255,7 @@ app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
 
 // Logging Function
 const logAction = (userId, action, details) => {
-  const insertLog = db.prepare('INSERT INTO logs (user_id, action, details) VALUES (?, ?, ?)');
+  const insertLog = db.prepare('INSERT INTO logs (user_id, action, details) VALUES ($1, $2, $3)');
   insertLog.run(userId, action, details);
 
   // Exclude private personal uploads from being sent to the Telegram bot
@@ -295,7 +312,7 @@ app.put('/api/profile', checkAuth, async (req, res) => {
   } = req.body;
 
   try {
-    const oldProfile = await db.prepare('SELECT nickname, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = ?').get(req.user.id);
+    const oldProfile = (await pool.query('SELECT nickname, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = $1', [req.user.id])).rows[0];
 
     db.prepare(`
       UPDATE users SET 
@@ -346,30 +363,30 @@ app.put('/api/profile', checkAuth, async (req, res) => {
 });
 
 app.get('/api/profile/:id', checkAuth, async (req, res) => {
-  const user = await db.prepare('SELECT id, email, role, nickname, dob, gender, mobile, address, bio, profile_picture, cover_photo, telegram_username, fav_food_drink, created_at FROM users WHERE id = ?').get(req.params.id);
+  const user = (await pool.query('SELECT id, email, role, nickname, dob, gender, mobile, address, bio, profile_picture, cover_photo, telegram_username, fav_food_drink, created_at FROM users WHERE id = $1', [req.params.id])).rows[0];
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
 });
 
 
 app.get('/api/users', checkAuth, async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, nickname, profile_picture, created_at FROM users ORDER BY created_at DESC').all();
+  const users = (await pool.query('SELECT id, email, role, nickname, profile_picture, created_at FROM users ORDER BY created_at DESC')).rows;
   res.json(users);
 });
 
 app.delete('/api/users/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  const targetUser = await db.prepare('SELECT email, role FROM users WHERE id = ?').get(req.params.id);
+  const targetUser = (await pool.query('SELECT email, role FROM users WHERE id = $1', [req.params.id])).rows[0];
   if (!targetUser) return res.status(404).json({ error: 'User not found' });
   if (targetUser.role === 'super_admin') return res.status(403).json({ error: 'Cannot delete a Super Admin' });
 
-  await db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
   logAction(req.user.id, 'USER_DELETED', `Super Admin deleted user: ${targetUser.email}`);
   res.json({ success: true });
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = (await pool.query('SELECT * FROM users WHERE email = $1', [email])).rows[0];
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
     logAction(null, 'LOGIN_FAILED', `Attempted email: ${email}`);
@@ -405,7 +422,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/verify-2fa', async (req, res) => {
   const { userId, token } = req.body;
-  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const user = (await pool.query('SELECT * FROM users WHERE id = $1', [userId])).rows[0];
 
   if (!user.totp_secret) return res.status(400).json({ error: '2FA not set up' });
 
@@ -437,18 +454,18 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
 
 app.post('/api/auth/setup-2fa', checkAuth, async (req, res) => {
   const secret = speakeasy.generateSecret({ name: `FriendsInfo (${req.user.email})` });
-  await db.prepare('UPDATE users SET totp_secret = ? WHERE id = ?').run(secret.base32, req.user.id);
+  await pool.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret.base32, req.user.id]);
   res.json({ secret: secret.base32, otpauth_url: secret.otpauth_url });
 });
 
 app.get('/api/admin/logs', checkAuth, checkPermission('canViewLogs'), async (req, res) => {
-  const logs = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100').all();
+  const logs = (await pool.query('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100')).rows;
   res.json(logs);
 });
 
 // User Management (Super Admin)
 app.get('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, status, created_at FROM users').all();
+  const users = (await pool.query('SELECT id, email, role, status, created_at FROM users')).rows;
   res.json(users);
 });
 
@@ -456,11 +473,11 @@ app.post('/api/admin/users/role', checkAuth, checkPermission('canManageAdmins'),
   const { userId, role } = req.body;
 
   // Get target user with details
-  const targetUser = await db.prepare('SELECT role, nickname, email FROM users WHERE id = ?').get(userId);
+  const targetUser = (await pool.query('SELECT role, nickname, email FROM users WHERE id = $1', [userId])).rows[0];
   if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
   // Get acting user with details
-  const actingUser = await db.prepare('SELECT role, nickname, email FROM users WHERE id = ?').get(req.user.id);
+  const actingUser = (await pool.query('SELECT role, nickname, email FROM users WHERE id = $1', [req.user.id])).rows[0];
 
   // 1. If target is currently 'super_admin', only they themselves can change their role (e.g. to demote themselves)
   if (targetUser.role === 'super_admin' && req.user.id !== parseInt(userId)) {
@@ -496,11 +513,11 @@ app.post('/api/admin/users/role', checkAuth, checkPermission('canManageAdmins'),
 
   // If a Super Admin is promoting someone else to Super Admin, demote the acting Super Admin to 'admin'
   if (role === 'super_admin' && req.user.id !== parseInt(userId)) {
-    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run('super_admin', userId);
-    await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
+    await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['super_admin', userId]);
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
     logAction(req.user.id, 'ROLE_CHANGE', `${targetName} is promoted to Super Admin by ${promoterName}. Current Super Admin is automatically demoted to Admin.`);
   } else {
-    await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+    await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, userId]);
     logAction(req.user.id, 'ROLE_CHANGE', `${targetName} is promoted to ${roleName} by ${promoterName}`);
   }
 
@@ -512,7 +529,7 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   const hashedPassword = bcrypt.hashSync(password, 10);
 
   // Get acting user
-  const actingAdmin = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(req.user.id);
+  const actingAdmin = (await pool.query('SELECT nickname, email, role FROM users WHERE id = $1', [req.user.id])).rows[0];
 
   // Only Super Admin can create another Super Admin
   if (role === 'super_admin' && (!actingAdmin || actingAdmin.role !== 'super_admin')) {
@@ -525,13 +542,13 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   }
 
   try {
-    const resInsert = await db.prepare('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES (?, ?, ?, ?, 1)').run(email, hashedPassword, nickname, role);
+    const resInsert = await pool.query('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES ($1, $2, $3, $4, 1)', [email, hashedPassword, nickname, role]);
     
     const adminName = actingAdmin ? (actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
     const targetName = nickname || email;
     
     if (role === 'super_admin') {
-      await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
+      db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
       logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created a new Super Admin named ${targetName}. Current Super Admin is automatically demoted to Admin.`);
     } else {
       logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created user named by ${targetName}`);
@@ -549,12 +566,12 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
   if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'Cannot delete self' });
 
   // Prevent deletion of any Super Admin
-  const targetUser = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(id);
+  const targetUser = (await pool.query('SELECT nickname, email, role FROM users WHERE id = $1', [id])).rows[0];
   if (targetUser && targetUser.role === 'super_admin') {
     return res.status(403).json({ error: 'Cannot delete a Super Admin identity' });
   }
 
-  const actingAdmin = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(req.user.id);
+  const actingAdmin = (await pool.query('SELECT nickname, email, role FROM users WHERE id = $1', [req.user.id])).rows[0];
 
   // Admins cannot delete Admin or Super Admin identities
   if (actingAdmin && actingAdmin.role === 'admin' && targetUser && ['admin', 'super_admin'].includes(targetUser.role)) {
@@ -565,9 +582,9 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
   const adminName   = actingAdmin ? (actingAdmin.nickname || actingAdmin.email)  : `Admin #${req.user.id}`;
   const adminRole   = actingAdmin ? actingAdmin.role.replace('_', ' ') : req.user.role;
 
-  await db.prepare('DELETE FROM messages WHERE sender_id = ?').run(id);
-  await db.prepare('DELETE FROM logs WHERE user_id = ?').run(id);
-  await db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  await pool.query('DELETE FROM messages WHERE sender_id = $1', [id]);
+  await pool.query('DELETE FROM logs WHERE user_id = $1', [id]);
+  await pool.query('DELETE FROM users WHERE id = $1', [id]);
 
   logAction(req.user.id, 'ADMIN_DELETED_USER', `🚫 "${targetName}" has been removed by ${adminName} (${adminRole})`);
   res.json({ success: true });
@@ -575,8 +592,8 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
 
 // --- SAVINGS TRACKER API ---
 app.get('/api/savings/members', checkAuth, async (req, res) => {
-  const members = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
-  const users = await db.prepare('SELECT nickname, email, role FROM users').all();
+  const members = (await pool.query('SELECT * FROM savings_members ORDER BY name ASC')).rows;
+  const users = (await pool.query('SELECT nickname, email, role FROM users')).rows;
   
   members.forEach(m => {
     // Try to match savings member to a user to find their role
@@ -605,19 +622,19 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
 
 app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res) => {
   const { name } = req.body;
-  const result = await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(name);
+  const result = await pool.query('INSERT INTO savings_members (name) VALUES ($1)', [name]);
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 app.delete('/api/savings/members/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(req.params.id);
-  await db.prepare('DELETE FROM savings_members WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM savings_transactions WHERE member_id = $1', [req.params.id]);
+  await pool.query('DELETE FROM savings_members WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, res) => {
   const { member_id, amount, type, created_at, notes } = req.body;
-  const confirmed_by = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id).email;
+  const confirmed_by = (await pool.query('SELECT email FROM users WHERE id = $1', [req.user.id])).rows[0].email;
 
   let query = 'INSERT INTO savings_transactions (member_id, amount, type, confirmed_by';
   let valuesQuery = 'VALUES (?, ?, ?, ?';
@@ -636,10 +653,10 @@ app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, 
   }
 
   query += ') ' + valuesQuery + ')';
-  const result = await db.prepare(query).run(...params);
+  const result = db.prepare(query).run(...params);
 
-  const clerk = await db.prepare('SELECT nickname FROM users WHERE id = ?').get(req.user.id);
-  const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(member_id);
+  const clerk = (await pool.query('SELECT nickname FROM users WHERE id = $1', [req.user.id])).rows[0];
+  const member = (await pool.query('SELECT name FROM savings_members WHERE id = $1', [member_id])).rows[0];
   
   const humanMessage = type === 'payment' 
     ? `New payment of ${amount} ETB signed by ${clerk.nickname} for ${member.name}${notes ? ` (Notes: "${notes}")` : ''}`
@@ -658,37 +675,37 @@ app.get('/api/savings/history', checkAuth, async (req, res) => {
     params.push(startDate, endDate);
   }
   query += ` ORDER BY t.created_at DESC`;
-  const history = await db.prepare(query).all(...params);
+  const history = db.prepare(query).all(...params);
   res.json(history);
 });
 
 app.get('/api/savings/config', checkAuth, async (req, res) => {
-  const config = await db.prepare('SELECT * FROM savings_config ORDER BY effective_date DESC LIMIT 1').get() || { weekly_amount: 300 };
-  const clerkSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
+  const config = (await pool.query('SELECT * FROM savings_config ORDER BY effective_date DESC LIMIT 1')).rows[0] || { weekly_amount: 300 };
+  const clerkSetting = db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
   config.clerk_id = clerkSetting && clerkSetting.value ? parseInt(clerkSetting.value) : null;
   res.json(config);
 });
 
 app.get('/api/savings/config/all', checkAuth, async (req, res) => {
-  const history = await db.prepare('SELECT * FROM savings_config ORDER BY effective_date DESC').all();
+  const history = (await pool.query('SELECT * FROM savings_config ORDER BY effective_date DESC')).rows;
   res.json(history);
 });
 
 app.post('/api/savings/config', checkAuth, checkSavingsManager, async (req, res) => {
   const { amount } = req.body;
-  await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(amount);
+  await pool.query('INSERT INTO savings_config (weekly_amount) VALUES ($1)', [amount]);
   res.json({ success: true });
 });
 
 app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) => {
   const { clerk_id } = req.body;
-  await db.prepare("UPDATE system_settings SET value = ? WHERE key = 'clerk_id'").run(clerk_id || '');
+  db.prepare("UPDATE system_settings SET value = ? WHERE key = 'clerk_id'").run(clerk_id || '');
   
-  const actingAdmin = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  const actingAdmin = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
   const roleText = actingAdmin && actingAdmin.role === 'super_admin' ? 'superadmin' : 'admin';
 
   if (clerk_id) {
-    const clerkUser = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(parseInt(clerk_id));
+    const clerkUser = (await pool.query('SELECT nickname, email FROM users WHERE id = $1', [parseInt(clerk_id])).rows[0]);
     const clerkName = clerkUser ? (clerkUser.nickname || clerkUser.email.split('@')[0]) : 'Nobody';
     logAction(req.user.id, 'SETTING_CHANGE', `${clerkName} is successfully assigned as clerk by ${roleText}`);
   } else {
@@ -700,35 +717,35 @@ app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) 
 
 // Investments
 app.get('/api/savings/investments', checkAuth, async (req, res) => {
-  const investments = await db.prepare('SELECT * FROM savings_investments ORDER BY created_at DESC').all();
+  const investments = (await pool.query('SELECT * FROM savings_investments ORDER BY created_at DESC')).rows;
   res.json(investments);
 });
 
 app.post('/api/savings/investments', checkAuth, checkSavingsManager, async (req, res) => {
   const { project_name, allocated_amount, projected_profit, challenges, expected_days } = req.body;
-  const result = db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
+  const result = db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES ($1, $2, $3, $4, $5)')
     .run(project_name, allocated_amount, projected_profit || 0, challenges || '', expected_days || null);
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 app.delete('/api/savings/investments/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  await db.prepare('DELETE FROM savings_investments WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM savings_investments WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 app.put('/api/savings/investments/:id/status', checkAuth, checkSavingsManager, async (req, res) => {
   const { status, profit, challenges } = req.body;
   if (status === 'completed') {
-    db.prepare('UPDATE savings_investments SET status = ?, completed_at = CURRENT_TIMESTAMP, projected_profit = ?, challenges = ? WHERE id = ?')
+    db.prepare('UPDATE savings_investments SET status = $1, completed_at = CURRENT_TIMESTAMP, projected_profit = $2, challenges = $3 WHERE id = $4')
       .run(status, profit, challenges, req.params.id);
   } else {
-    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = NULL WHERE id = ?').run(status, req.params.id);
+    await pool.query('UPDATE savings_investments SET status = $1, completed_at = NULL WHERE id = $2', [status, req.params.id]);
   }
   res.json({ success: true });
 });
 
 app.get('/api/users', checkAuth, async (req, res) => {
-  const users = await db.prepare('SELECT id, email, nickname, role, status, profile_picture, bio FROM users').all();
+  const users = (await pool.query('SELECT id, email, nickname, role, status, profile_picture, bio FROM users')).rows;
   res.json(users);
 });
 
@@ -741,7 +758,7 @@ app.get('/api/users/status', checkAuth, async (req, res) => {
 // Comments API
 app.post('/api/comments', checkAuth, async (req, res) => {
   const { post_id, memory_id, gallery_id, personal_asset_id, content, reply_to_id } = req.body;
-  const result = await db.prepare('INSERT INTO comments (post_id, memory_id, gallery_id, personal_asset_id, user_id, content, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(post_id || null, memory_id || null, gallery_id || null, personal_asset_id || null, req.user.id, content, reply_to_id || null);
+  const result = await pool.query('INSERT INTO comments (post_id, memory_id, gallery_id, personal_asset_id, user_id, content, reply_to_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', [post_id || null, memory_id || null, gallery_id || null, personal_asset_id || null, req.user.id, content, reply_to_id || null]);
   const comment = db.prepare(`
     SELECT c.*, u.nickname, u.profile_picture
     FROM comments c
@@ -760,18 +777,18 @@ app.post('/api/reactions', checkAuth, async (req, res) => {
   const { target_id, target_type, reaction_type } = req.body;
 
   // Check if already reacted
-  const existing = await db.prepare('SELECT id, reaction_type FROM reactions WHERE target_id = ? AND target_type = ? AND user_id = ?').get(target_id, target_type, req.user.id);
+  const existing = (await pool.query('SELECT id, reaction_type FROM reactions WHERE target_id = $1 AND target_type = $2 AND user_id = $3', [target_id, target_type, req.user.id])).rows[0];
 
   if (existing) {
     if (existing.reaction_type === reaction_type) {
       // Unlike
-      await db.prepare('DELETE FROM reactions WHERE id = ?').run(existing.id);
+      await pool.query('DELETE FROM reactions WHERE id = $1', [existing.id]);
     } else {
       // Change reaction
-      await db.prepare('UPDATE reactions SET reaction_type = ? WHERE id = ?').run(reaction_type, existing.id);
+      await pool.query('UPDATE reactions SET reaction_type = $1 WHERE id = $2', [reaction_type, existing.id]);
     }
   } else {
-    await db.prepare('INSERT INTO reactions (target_id, target_type, user_id, reaction_type) VALUES (?, ?, ?, ?)').run(target_id, target_type, req.user.id, reaction_type);
+    await pool.query('INSERT INTO reactions (target_id, target_type, user_id, reaction_type) VALUES ($1, $2, $3, $4)', [target_id, target_type, req.user.id, reaction_type]);
   }
 
   const reactions = db.prepare(`
@@ -818,20 +835,20 @@ app.get('/api/memories', checkAuth, async (req, res) => {
 
 app.post('/api/memories', checkAuth, async (req, res) => {
   const { title, content, media_url } = req.body;
-  const result = await db.prepare('INSERT INTO memories (user_id, title, content, media_url) VALUES (?, ?, ?, ?)').run(req.user.id, title, content, media_url);
+  const result = await pool.query('INSERT INTO memories (user_id, title, content, media_url) VALUES ($1, $2, $3, $4)', [req.user.id, title, content, media_url]);
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 app.delete('/api/memories/:id', checkAuth, async (req, res) => {
-  const memory = await db.prepare('SELECT user_id FROM memories WHERE id = ?').get(req.params.id);
+  const memory = (await pool.query('SELECT user_id FROM memories WHERE id = $1', [req.params.id])).rows[0];
   if (!memory) return res.status(404).json({ error: 'Memory not found' });
 
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  const user = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
   if (memory.user_id !== req.user.id && !['admin', 'super_admin'].includes(user.role)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  await db.prepare('DELETE FROM memories WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM memories WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
@@ -866,41 +883,41 @@ app.get('/api/posts', checkAuth, async (req, res) => {
 
 app.post('/api/posts', checkAuth, async (req, res) => {
   const { content, media_url, last_day_meet } = req.body;
-  const result = await db.prepare('INSERT INTO posts (user_id, content, media_url, last_day_meet) VALUES (?, ?, ?, ?)').run(req.user.id, content, media_url, last_day_meet || null);
+  const result = await pool.query('INSERT INTO posts (user_id, content, media_url, last_day_meet) VALUES ($1, $2, $3, $4)', [req.user.id, content, media_url, last_day_meet || null]);
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
 app.delete('/api/posts/:id', checkAuth, async (req, res) => {
-  const post = await db.prepare('SELECT user_id FROM posts WHERE id = ?').get(req.params.id);
+  const post = (await pool.query('SELECT user_id FROM posts WHERE id = $1', [req.params.id])).rows[0];
   if (!post) return res.status(404).json({ error: 'Post not found' });
 
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  const user = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
   if (post.user_id !== req.user.id && !['admin', 'super_admin'].includes(user.role)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  await db.prepare('DELETE FROM posts WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 
 // Feature Toggles (Super Admin)
 app.get('/api/admin/settings', checkAuth, checkPermission('canToggleFeatures'), async (req, res) => {
-  const settings = await db.prepare('SELECT * FROM system_settings').all();
+  const settings = (await pool.query('SELECT * FROM system_settings')).rows;
   res.json(settings);
 });
 
 app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeatures'), async (req, res) => {
   const { key, value } = req.body;
-  await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
+  await pool.query('UPDATE system_settings SET value = $1 WHERE key = $2', [value.toString(]), key);
   
   if (key === 'clerk_id') {
-    const actingAdmin = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+    const actingAdmin = (await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id])).rows[0];
     const roleText = actingAdmin && actingAdmin.role === 'super_admin' ? 'superadmin' : 'admin';
     const clerkId = parseInt(value);
     
     if (clerkId) {
-      const clerkUser = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(clerkId);
+      const clerkUser = (await pool.query('SELECT nickname, email FROM users WHERE id = $1', [clerkId])).rows[0];
       const clerkName = clerkUser ? (clerkUser.nickname || clerkUser.email.split('@')[0]) : 'Nobody';
       logAction(req.user.id, 'SETTING_CHANGE', `${clerkName} is successfully assigned as clerk by ${roleText}`);
     } else {
@@ -915,7 +932,7 @@ app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeat
 
 app.get('/api/messages', checkAuth, async (req, res) => {
   // Check if messaging feature is enabled
-  const messagingEnabled = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
+  const messagingEnabled = db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
   if (!messagingEnabled && req.user.role !== 'super_admin') {
     return res.status(404).json({ error: 'Not Found' }); // Stealth mode
   }
@@ -936,24 +953,24 @@ app.get('/api/messages', checkAuth, async (req, res) => {
 app.put('/api/messages/:id', checkAuth, async (req, res) => {
   const { id } = req.params;
   const { content } = req.body;
-  const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(id);
+  const msg = (await pool.query('SELECT sender_id FROM messages WHERE id = $1', [id])).rows[0];
   if (!msg) return res.status(404).json({ error: 'Message not found' });
   if (msg.sender_id !== req.user.id) {
     return res.status(403).json({ error: 'Unauthorized to edit this message' });
   }
-  await db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, id);
+  await pool.query('UPDATE messages SET content = $1 WHERE id = $2', [content, id]);
   io.emit('message_edited', { messageId: parseInt(id), content });
   res.json({ success: true });
 });
 
 app.delete('/api/messages/:id', checkAuth, async (req, res) => {
   const { id } = req.params;
-  const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(id);
+  const msg = (await pool.query('SELECT sender_id FROM messages WHERE id = $1', [id])).rows[0];
   if (!msg) return res.status(404).json({ error: 'Message not found' });
   if (msg.sender_id !== req.user.id && !['admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Unauthorized to delete this message' });
   }
-  await db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+  await pool.query('DELETE FROM messages WHERE id = $1', [id]);
   io.emit('message_deleted', parseInt(id));
   res.json({ success: true });
 });
@@ -1001,14 +1018,14 @@ io.on('connection', (socket) => {
     const { content, media_url, media_type = 'text', receiverId, replyToId } = data;
 
     // Check if messaging is globally enabled
-    const messagingEnabled = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
-    const sender = await db.prepare('SELECT email, role FROM users WHERE id = ?').get(senderId);
+    const messagingEnabled = db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
+    const sender = (await pool.query('SELECT email, role FROM users WHERE id = $1', [senderId])).rows[0];
 
     if (!messagingEnabled && sender?.role !== 'super_admin') return;
 
     if (sender && ['authorized', 'admin', 'super_admin'].includes(sender.role)) {
       const now = new Date().toISOString();
-      const insert = db.prepare('INSERT INTO messages (sender_id, receiver_id, reply_to_id, content, media_url, media_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const insert = db.prepare('INSERT INTO messages (sender_id, receiver_id, reply_to_id, content, media_url, media_type, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)');
       const result = insert.run(senderId, receiverId || null, replyToId || null, content, media_url, media_type, now);
 
       const broadcastMsg = {
@@ -1065,17 +1082,17 @@ io.on('connection', (socket) => {
 
   socket.on('edit_message', (data) => {
     const { messageId, content } = data;
-    const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(messageId);
+    const msg = (await pool.query('SELECT sender_id FROM messages WHERE id = $1', [messageId])).rows[0];
     if (msg && msg.sender_id === socket.user.id) {
-      await db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, messageId);
+      await pool.query('UPDATE messages SET content = $1 WHERE id = $2', [content, messageId]);
       io.emit('message_edited', { messageId, content });
     }
   });
 
   socket.on('delete_message', (messageId) => {
-    const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(messageId);
+    const msg = (await pool.query('SELECT sender_id FROM messages WHERE id = $1', [messageId])).rows[0];
     if (msg && (msg.sender_id === socket.user.id || ['admin', 'super_admin'].includes(socket.user.role))) {
-      await db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+      await pool.query('DELETE FROM messages WHERE id = $1', [messageId]);
       io.emit('message_deleted', messageId);
     }
   });
@@ -1212,9 +1229,9 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
   };
 
   bot.hears('2', adminOnly, (ctx) => {
-    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
-    const settings = await db.prepare('SELECT * FROM system_settings').all();
+    const userCount = (await pool.query('SELECT COUNT(*) as count FROM users')).rows[0].count;
+    const msgCount = (await pool.query('SELECT COUNT(*) as count FROM messages')).rows[0].count;
+    const settings = (await pool.query('SELECT * FROM system_settings')).rows;
     const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
 
     ctx.reply(`📊 SYSTEM STATUS REPORT\n\n👥 Registered Users: ${userCount}\n💬 Total Messages: ${msgCount}\n\n${settingsText}\n\nNode Status: VERIFIED`,
@@ -1226,7 +1243,7 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
   });
 
   bot.action('show_users', adminOnly, (ctx) => {
-    const users = await db.prepare('SELECT email, role, created_at FROM users').all();
+    const users = (await pool.query('SELECT email, role, created_at FROM users')).rows;
     const userList = users.map(u => `👤 ${u.email}\n🏷️ Role: ${u.role}\n📅 Joined: ${new Date(u.created_at).toLocaleDateString()}`).join('\n\n');
     ctx.editMessageText(`👥 USER DIRECTORY\n\n${userList || 'No users found.'}`, Markup.inlineKeyboard([[Markup.button.callback('⬅️ BACK', 'back_to_status')]]));
   });
@@ -1248,9 +1265,9 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
   });
 
   bot.action('back_to_status', adminOnly, (ctx) => {
-    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
-    const settings = await db.prepare('SELECT * FROM system_settings').all();
+    const userCount = (await pool.query('SELECT COUNT(*) as count FROM users')).rows[0].count;
+    const msgCount = (await pool.query('SELECT COUNT(*) as count FROM messages')).rows[0].count;
+    const settings = (await pool.query('SELECT * FROM system_settings')).rows;
     const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
 
     ctx.editMessageText(`📊 SYSTEM STATUS REPORT\n\n👥 Registered Users: ${userCount}\n💬 Total Messages: ${msgCount}\n\n${settingsText}\n\nNode Status: VERIFIED`,
@@ -1262,7 +1279,7 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
   });
 
   bot.hears('3', adminOnly, (ctx) => {
-    const logs = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 5').all();
+    const logs = (await pool.query('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 5')).rows;
     const logText = logs.map(l => `🕒 ${l.timestamp}\n👤 ${l.user_id || 'sys'} | ${l.action}\n📝 ${l.details}`).join('\n\n');
     ctx.reply(`📂 SYSTEM ACTIVITY LOGS\n\n${logText || 'No recent activity found.'}`);
   });
@@ -1272,7 +1289,7 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     if (parts.length < 3) return ctx.reply('Usage: 4 <email> <role>');
     const email = parts[1];
     const role = parts[2];
-    const result = await db.prepare('UPDATE users SET role = ? WHERE email = ?').run(role, email);
+    const result = await pool.query('UPDATE users SET role = $1 WHERE email = $2', [role, email]);
     if (result.changes > 0) ctx.reply(`✅ Identity ${email} updated to ${role}.`);
     else ctx.reply('❌ Identity not found in matrix.');
   });
@@ -1305,9 +1322,9 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
 
 // Gallery Endpoints
 app.get('/api/gallery', async (req, res) => {
-  const items = await db.prepare('SELECT * FROM gallery ORDER BY created_at DESC').all();
+  const items = (await pool.query('SELECT * FROM gallery ORDER BY created_at DESC')).rows;
   items.forEach(item => {
-    item.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'gallery'").all(item.id);
+    item.reactions = db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'gallery'").all(item.id);
     item.comments = db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
@@ -1322,7 +1339,7 @@ app.get('/api/gallery', async (req, res) => {
 app.post('/api/admin/gallery', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const { url, title, caption } = req.body;
-  const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
+  const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES ($1, $2, $3)');
   insert.run(url, title, caption);
   res.json({ success: true });
 });
@@ -1337,13 +1354,13 @@ app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (
 app.put('/api/admin/gallery/:id', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const { title, caption, url } = req.body;
-  await db.prepare('UPDATE gallery SET title = ?, caption = ?, url = ? WHERE id = ?').run(title, caption, url, req.params.id);
+  await pool.query('UPDATE gallery SET title = $1, caption = $2, url = $3 WHERE id = $4', [title, caption, url, req.params.id]);
   res.json({ success: true });
 });
 
 app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  const item = await db.prepare('SELECT url FROM gallery WHERE id = ?').get(req.params.id);
+  const item = (await pool.query('SELECT url FROM gallery WHERE id = $1', [req.params.id])).rows[0];
 
   // Also delete local file if it exists
   if (item && item.url.includes('/uploads/')) {
@@ -1352,17 +1369,17 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  await db.prepare('DELETE FROM gallery WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM gallery WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 // Personal Vault Endpoints (Photos & Videos)
 app.get('/api/personal-assets', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
-  const assets = await db.prepare('SELECT * FROM personal_assets WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
+  const assets = (await pool.query('SELECT * FROM personal_assets WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id])).rows;
 
   assets.forEach(asset => {
-    asset.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'personal_asset'").all(asset.id);
+    asset.reactions = db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'personal_asset'").all(asset.id);
     asset.comments = db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
@@ -1382,7 +1399,7 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
   const { title, type } = req.body; // type: 'photo' or 'video'
   const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
-  const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES (?, ?, ?, ?)');
+  const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES ($1, $2, $3, $4)');
   insert.run(req.user.id, url, type, title || 'Untitled');
 
   logAction(req.user.id, 'PERSONAL_ASSET_UPLOAD', `Uploaded personal ${type}: ${title || 'Untitled'}`);
@@ -1392,7 +1409,7 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
 app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const { title } = req.body;
-  const result = await db.prepare('UPDATE personal_assets SET title = ? WHERE id = ? AND user_id = ?').run(title || 'Untitled', req.params.id, req.user.id);
+  const result = await pool.query('UPDATE personal_assets SET title = $1 WHERE id = $2 AND user_id = $3', [title || 'Untitled', req.params.id, req.user.id]);
   if (result.changes === 0) return res.status(404).json({ error: 'Asset not found or access denied' });
   res.json({ success: true });
 });
@@ -1400,7 +1417,7 @@ app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
 app.delete('/api/personal-assets/:id', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
 
-  const asset = await db.prepare('SELECT url FROM personal_assets WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  const asset = (await pool.query('SELECT url FROM personal_assets WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id])).rows[0];
   if (!asset) return res.status(404).json({ error: 'Asset not found or access denied' });
 
   if (asset.url.includes('/uploads/')) {
@@ -1409,13 +1426,13 @@ app.delete('/api/personal-assets/:id', checkAuth, async (req, res) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 
-  await db.prepare('DELETE FROM personal_assets WHERE id = ?').run(req.params.id);
+  await pool.query('DELETE FROM personal_assets WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
 app.post('/api/admin/users/cover-photo', checkAuth, async (req, res) => {
   const { url } = req.body;
-  await db.prepare('UPDATE users SET cover_photo = ? WHERE id = ?').run(url, req.user.id);
+  await pool.query('UPDATE users SET cover_photo = $1 WHERE id = $2', [url, req.user.id]);
   res.json({ success: true });
 });
 
@@ -1437,13 +1454,13 @@ server.listen(PORT, () => {
 // Scheduled Tasks
 cron.schedule('0 9 * * 6', () => {
   try {
-    const config = await db.prepare('SELECT weekly_amount FROM savings_config ORDER BY effective_date DESC LIMIT 1').get();
+    const config = (await pool.query('SELECT weekly_amount FROM savings_config ORDER BY effective_date DESC LIMIT 1')).rows[0];
     const amount = config ? config.weekly_amount : 300;
     
-    const members = await db.prepare('SELECT id FROM savings_members WHERE status = "active"').all();
-    const insert = db.prepare('INSERT INTO savings_transactions (member_id, amount, type, confirmed_by) VALUES (?, ?, ?, ?)');
+    const members = (await pool.query('SELECT id FROM savings_members WHERE status = "active"')).rows;
+    const insert = db.prepare('INSERT INTO savings_transactions (member_id, amount, type, confirmed_by) VALUES ($1, $2, $3, $4)');
     
-    const runTransaction = db.transaction(async () => {
+    const runTransaction = db.transaction(() => {
       members.forEach(m => {
         insert.run(m.id, amount, 'expected', 'system');
       });
