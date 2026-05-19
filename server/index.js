@@ -1589,7 +1589,7 @@ const distPath = path.join(__dirname, '../client/dist');
 app.use(express.static(distPath));
 
 // Wildcard route to serve React Router SPA frontend, ignoring API routes
-app.get('*', (req, res, next) => {
+app.get(/.*/, (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
