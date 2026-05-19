@@ -15,7 +15,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: DATABASE_URL
-        sync: false
+        value: postgres://postgres.zbmfruntrdeyyxjnvhiy:FriendsInfo%401361e@aws-0-eu-north-1.pooler.supabase.com:6543/postgres
       - key: TG_TOKEN
         sync: false
       - key: ADMIN_CHAT_ID
