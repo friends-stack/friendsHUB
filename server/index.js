@@ -13,10 +13,19 @@ const fs = require('fs');
 const multer = require('multer');
 const cron = require('node-cron');
 
+// Resolve connection string with dynamic fallback for Supabase hosting
+let connectionString = process.env.DATABASE_URL;
+if (!connectionString || connectionString.startsWith('http')) {
+  console.log('ℹ️ DATABASE_URL is missing or is a REST URL. Auto-constructing connection string from Supabase project credentials...');
+  const projectRef = 'zbmfruntrdeyyxjnvhiy';
+  const dbPassword = encodeURIComponent('FriendsInfo@1361e');
+  connectionString = `postgresql://postgres:${dbPassword}@db.${projectRef}.supabase.co:5432/postgres`;
+}
+
 const { Pool } = require('pg');
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1'))
+  connectionString: connectionString,
+  ssl: connectionString && (connectionString.includes('localhost') || connectionString.includes('127.0.0.1'))
     ? false
     : { rejectUnauthorized: false }
 });
