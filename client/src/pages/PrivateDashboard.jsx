@@ -845,6 +845,11 @@ const PrivateDashboard = ({ user }) => {
           .glass-card { padding: 1rem !important; }
           .dashboard-section { padding: 1rem !important; }
           .chat-input-form { margin-bottom: 70px !important; }
+          .chat-message-bubble-wrapper { max-width: 90% !important; }
+        }
+        .chat-input-field-container:focus-within {
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15) !important;
         }
         .mobile-bottom-nav { 
           display: none; 
@@ -1470,6 +1475,7 @@ const PrivateDashboard = ({ user }) => {
                     <div 
                       key={i} 
                       id={`msg-${msg.id}`}
+                      className="chat-message-bubble-wrapper"
                       style={{ 
                         alignSelf: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'flex-end' : 'flex-start',
                         maxWidth: '75%',
@@ -1802,38 +1808,55 @@ const PrivateDashboard = ({ user }) => {
                     <ImageIcon size={22} />
                   </button>
                   
-                  <input 
-                    type="text" 
-                    placeholder="Type a message..." 
-                    style={{ 
-                      flex: 1,
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '24px',
-                      outline: 'none',
-                      padding: '0.85rem 1.25rem',
-                      fontSize: '0.95rem',
-                      color: '#1e293b',
-                      marginBottom: 0
-                    }}
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                  />
-                  <button type="submit" style={{ 
-                    background: '#93c5fd', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '16px',
-                    width: '48px',
-                    height: '48px',
-                    cursor: 'pointer',
+                  <div style={{
+                    flex: 1,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '24px',
+                    padding: '3px 6px 3px 16px',
                     transition: 'all 0.2s',
-                  }}>
-                    <Send size={20} />
-                  </button>
+                  }}
+                  className="chat-input-field-container"
+                  >
+                    <input 
+                      type="text" 
+                      placeholder="Type a message..." 
+                      style={{ 
+                        flex: 1,
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: '0.95rem',
+                        color: '#1e293b',
+                        padding: '0.65rem 0',
+                        marginBottom: 0
+                      }}
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                    />
+                    <button type="submit" style={{ 
+                      background: 'var(--primary)', 
+                      color: 'white', 
+                      border: 'none', 
+                      borderRadius: '50%',
+                      width: '38px',
+                      height: '38px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      flexShrink: 0,
+                      marginLeft: '8px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      <Send size={16} />
+                    </button>
+                  </div>
                 </form>
               </motion.div>
             )}
