@@ -2026,9 +2026,6 @@ const PrivateDashboard = ({ user }) => {
               </motion.div>
             )}
 
-            {activeTab === 'logs' && (
-              <SavingsTracker user={user} />
-            )}
 
             {activeTab === 'gallery' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
