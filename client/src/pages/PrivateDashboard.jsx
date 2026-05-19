@@ -838,7 +838,8 @@ const PrivateDashboard = ({ user }) => {
           .main-content { padding: 0.5rem !important; height: calc(100vh - 70px) !important; width: 100% !important; }
           .mobile-bottom-nav { display: flex !important; }
           .grid { grid-template-columns: 1fr !important; }
-          .dashboard-header { padding: 1rem !important; gap: 0.75rem; flex-wrap: wrap; }
+          .dashboard-header { padding: 0.75rem 1rem !important; gap: 0.5rem !important; flex-wrap: nowrap !important; justify-content: flex-start !important; }
+          .header-logout-btn { display: none !important; }
           .mobile-menu-toggle { display: flex !important; }
           .tab-buttons-container { overflow-x: auto; white-space: nowrap; padding-bottom: 0.5rem; }
           .glass-card { padding: 1rem !important; }
@@ -1335,7 +1336,7 @@ const PrivateDashboard = ({ user }) => {
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'nowrap', minWidth: 0 }}>
             <button 
               className="mobile-menu-toggle"
               onClick={() => setMobileMenuOpen(true)}
@@ -1358,25 +1359,26 @@ const PrivateDashboard = ({ user }) => {
               <ArrowLeft size={24} color="var(--text)" />
             </button>
             {activeTab === 'messages' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ 
-                  width: '44px', 
-                  height: '44px', 
-                  borderRadius: '50%', 
-                  background: '#8b5cf6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontWeight: 600,
-                  fontSize: '1.1rem'
-                }}>
-                  G
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'nowrap' }}>
+                  <div style={{ 
+                    width: '40px', 
+                    height: '40px', 
+                    borderRadius: '50%', 
+                    background: '#8b5cf6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    flexShrink: 0
+                  }}>
+                    G
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#1e293b', whiteSpace: 'nowrap' }}>Friends Group</h2>
+                  </div>
                 </div>
-                <div>
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#1e293b' }}>Friends Group</h2>
-                </div>
-              </div>
             ) : (
               <div>
                 <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>
@@ -1391,6 +1393,7 @@ const PrivateDashboard = ({ user }) => {
           <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
 
             <button 
+              className="header-logout-btn"
               onClick={handleLogout}
               style={{
                 display: 'flex',
@@ -1421,19 +1424,42 @@ const PrivateDashboard = ({ user }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                style={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}
               >
+                {/* Visual Graphic Banner Card representing focal point */}
+                <div style={{
+                  height: '130px',
+                  margin: '0.75rem 1rem 0',
+                  borderRadius: '16px',
+                  backgroundImage: 'url("/chat-bg.jpg")',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  position: 'relative',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  overflow: 'hidden',
+                  flexShrink: 0
+                }}>
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.75) 0%, rgba(15, 23, 42, 0.1) 100%)'
+                  }} />
+                  <div style={{ position: 'absolute', bottom: '1rem', left: '1.25rem', color: 'white' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.4)', letterSpacing: '0.5px' }}>Friends Circle</h3>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', opacity: 0.85, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>Real-time Internal Pulse Stream</p>
+                  </div>
+                </div>
+
                 <div 
                   ref={activeTab === 'messages' ? contentRef : null}
                   style={{ 
                     flex: 1, 
                     overflowY: 'auto', 
-                  padding: '2rem', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '1.5rem', 
-                  background: 'linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)), url("/chat-bg.jpg") center/cover no-repeat' 
-                }}>
+                    padding: '1.5rem', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '1.25rem', 
+                    background: '#f8fafc'
+                  }}>
                   {messages.filter(msg => {
                     const sId = Number(msg.sender_id || msg.senderId);
                     const rId = msg.receiver_id || msg.receiverId === undefined ? null : Number(msg.receiver_id || msg.receiverId);
@@ -1448,7 +1474,7 @@ const PrivateDashboard = ({ user }) => {
                         maxWidth: '75%',
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'stretch',
+                        alignItems: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'flex-end' : 'flex-start',
                         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                         transform: highlightedMsgId === msg.id ? 'scale(1.05)' : 'scale(1)',
                         zIndex: highlightedMsgId === msg.id ? 10 : 1,
@@ -1731,11 +1757,14 @@ const PrivateDashboard = ({ user }) => {
                 <form onSubmit={handleSendMessage} style={{ 
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '1rem',
-                  background: 'none',
-                  padding: '1rem 1.5rem',
+                  gap: '0.75rem',
+                  background: '#ffffff',
+                  padding: '0.75rem 1.25rem',
                   borderTop: '1px solid #e2e8f0',
-                  backgroundColor: '#ffffff'
+                  boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
+                  position: 'relative',
+                  zIndex: 2,
+                  flexShrink: 0
                 }}>
                   <button 
                     type="button" 
@@ -1801,6 +1830,63 @@ const PrivateDashboard = ({ user }) => {
                     <Send size={20} />
                   </button>
                 </form>
+
+                {/* Floating up/down navigation pill inside messages history */}
+                <div style={{ 
+                  position: 'absolute', 
+                  bottom: '80px', 
+                  right: '1rem', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '0', 
+                  zIndex: 10,
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(226, 232, 240, 0.8)',
+                  borderRadius: '24px',
+                  padding: '4px',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
+                }}>
+                  <motion.button 
+                    whileHover={{ color: 'var(--primary)', scale: 1.2 }}
+                    onClick={scrollToTop}
+                    style={{ 
+                      width: '32px', 
+                      height: '32px', 
+                      background: 'none', 
+                      border: 'none', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      transition: 'color 0.2s'
+                    }}
+                    title="Scroll to Top"
+                  >
+                    <ArrowUp size={16} />
+                  </motion.button>
+                  <div style={{ height: '1px', background: 'rgba(0,0,0,0.06)', margin: '2px 6px' }} />
+                  <motion.button 
+                    whileHover={{ color: 'var(--primary)', scale: 1.2 }}
+                    onClick={scrollToBottom}
+                    style={{ 
+                      width: '32px', 
+                      height: '32px', 
+                      background: 'none', 
+                      border: 'none', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      cursor: 'pointer',
+                      color: '#64748b',
+                      transition: 'color 0.2s'
+                    }}
+                    title="Scroll to Bottom"
+                  >
+                    <ArrowDown size={16} />
+                  </motion.button>
+                </div>
               </motion.div>
             )}
 
@@ -2488,60 +2574,7 @@ const PrivateDashboard = ({ user }) => {
       )}
 
       {/* Mobile Bottom Nav */}
-      {/* Scroll to Top/Bottom Buttons */}
-      <div style={{ 
-        position: 'fixed', 
-        bottom: '100px', 
-        right: '1.5rem', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '0', 
-        zIndex: 1000,
-        background: 'rgba(255, 255, 255, 0.05)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '30px',
-        padding: '4px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
-      }}>
-        <motion.button 
-          whileHover={{ color: 'var(--primary)', scale: 1.2 }}
-          onClick={scrollToTop}
-          style={{ 
-            width: '36px', 
-            height: '36px', 
-            background: 'none', 
-            border: 'none', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            transition: 'color 0.2s'
-          }}
-        >
-          <ArrowUp size={18} />
-        </motion.button>
-        <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '2px 6px' }} />
-        <motion.button 
-          whileHover={{ color: 'var(--primary)', scale: 1.2 }}
-          onClick={scrollToBottom}
-          style={{ 
-            width: '36px', 
-            height: '36px', 
-            background: 'none', 
-            border: 'none', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            transition: 'color 0.2s'
-          }}
-        >
-          <ArrowDown size={18} />
-        </motion.button>
-      </div>
+
 
       <div className="mobile-bottom-nav">
         <button onClick={() => setActiveTab('messages')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'messages' ? 'var(--primary)' : 'var(--text-muted)' }}>
