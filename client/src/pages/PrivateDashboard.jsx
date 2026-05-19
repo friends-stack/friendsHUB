@@ -845,9 +845,10 @@ const PrivateDashboard = ({ user }) => {
           .glass-card { padding: 1rem !important; }
           .dashboard-section { padding: 1rem !important; }
           .chat-input-form { margin-bottom: 70px !important; }
+          .chat-messages-container { padding: 1rem 0.5rem !important; }
           .chat-message-bubble-wrapper { 
-            width: 88% !important; 
-            max-width: 88% !important; 
+            width: 95% !important; 
+            max-width: 95% !important; 
           }
         }
         .chat-input-field-container:focus-within {
@@ -1460,6 +1461,7 @@ const PrivateDashboard = ({ user }) => {
 
                 <div 
                   ref={activeTab === 'messages' ? contentRef : null}
+                  className="chat-messages-container"
                   style={{ 
                     flex: 1, 
                     overflowY: 'auto', 
