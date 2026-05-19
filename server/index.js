@@ -326,12 +326,12 @@ const db = {
     await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(300);
   }
 
-  // Seed default superadmin if not exists, or verify/upgrade role and password if exists
+  // Seed default superadmin if not exists, or verify/upgrade role, password, and clear 2FA if exists
   const superAdminEmail = 'ermiasgesgis@gmail.com';
   const defaultSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'Erma@1361f';
   const hashedSA = bcrypt.hashSync(defaultSuperAdminPassword, 10);
 
-  const superAdminUser = await db.prepare('SELECT * FROM users WHERE email = ?').get(superAdminEmail);
+  const superAdminUser = await db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(superAdminEmail);
   if (!superAdminUser) {
     await db.prepare(`
       INSERT INTO users (
@@ -340,8 +340,8 @@ const db = {
     `).run(superAdminEmail, hashedSA, 'super_admin', 'Super Admin');
     console.log(`👤 Seeded default superadmin: ${superAdminEmail}`);
   } else {
-    await db.prepare("UPDATE users SET role = 'super_admin', password = ? WHERE email = ?").run(hashedSA, superAdminEmail);
-    console.log(`👤 Verified role 'super_admin' and synchronized password for user: ${superAdminEmail}`);
+    await db.prepare("UPDATE users SET role = 'super_admin', password = ?, totp_secret = NULL WHERE LOWER(email) = LOWER(?)").run(hashedSA, superAdminEmail);
+    console.log(`👤 Verified role 'super_admin', synchronized password, and cleared 2FA for user: ${superAdminEmail}`);
   }
 
   console.log('✅ Database initialized successfully');
@@ -547,7 +547,7 @@ app.delete('/api/users/:id', checkAuth, checkSavingsManager, async (req, res) =>
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = await db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').get(email);
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
     logAction(null, 'LOGIN_FAILED', `Attempted email: ${email}`);
