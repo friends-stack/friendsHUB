@@ -53,123 +53,164 @@ const db = {
   }
 };
 
-// Migration: Add columns and tables if not exists
-try { await db.exec("ALTER TABLE users ADD COLUMN nickname TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN dob TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN gender TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN mobile TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN address TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN bio TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN profile_picture TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN telegram_username TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN fav_food_drink TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN cover_photo TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE users ADD COLUMN created_by_admin INTEGER DEFAULT 0"); } catch (e) { }
-try { await db.exec("ALTER TABLE savings_transactions ADD COLUMN notes TEXT"); } catch (e) { }
+// Run all startup init tasks inside an async IIFE (CommonJS does not support top-level await)
+(async () => {
+  // Migration: Add columns and tables if not exists
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS dob TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_username TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS fav_food_drink TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS cover_photo TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by_admin INTEGER DEFAULT 0");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT");
+  await db.exec("ALTER TABLE savings_transactions ADD COLUMN IF NOT EXISTS notes TEXT");
+  await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_id INTEGER");
+  await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER");
+  await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT");
+  await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'text'");
 
-try { await db.exec("ALTER TABLE messages ADD COLUMN receiver_id INTEGER"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN reply_to_id INTEGER"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN media_url TEXT"); } catch (e) { }
-try { await db.exec("ALTER TABLE messages ADD COLUMN media_type TEXT DEFAULT 'text'"); } catch (e) { }
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      media_url TEXT,
+      last_day_meet TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS comments (
+      id BIGSERIAL PRIMARY KEY,
+      post_id INTEGER,
+      memory_id INTEGER,
+      gallery_id INTEGER,
+      personal_asset_id INTEGER,
+      user_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      reply_to_id INTEGER,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS reactions (
+      id BIGSERIAL PRIMARY KEY,
+      target_id INTEGER NOT NULL,
+      target_type TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      reaction_type TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS memories (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      content TEXT,
+      media_url TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_members (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_transactions (
+      id BIGSERIAL PRIMARY KEY,
+      member_id INTEGER NOT NULL,
+      amount NUMERIC NOT NULL,
+      type TEXT NOT NULL,
+      notes TEXT,
+      confirmed_by TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_config (
+      id BIGSERIAL PRIMARY KEY,
+      weekly_amount NUMERIC NOT NULL,
+      effective_date TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_investments (
+      id BIGSERIAL PRIMARY KEY,
+      project_name TEXT NOT NULL,
+      allocated_amount NUMERIC NOT NULL,
+      projected_profit NUMERIC DEFAULT 0,
+      challenges TEXT,
+      expected_days INTEGER,
+      status TEXT DEFAULT 'active',
+      completed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER,
+      action TEXT NOT NULL,
+      details TEXT,
+      timestamp TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id BIGSERIAL PRIMARY KEY,
+      sender_id INTEGER NOT NULL,
+      receiver_id INTEGER,
+      group_id INTEGER,
+      content TEXT,
+      media_url TEXT,
+      media_type TEXT DEFAULT 'text',
+      reply_to_id INTEGER,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+  await db.exec(`INSERT INTO system_settings (key, value) SELECT 'clerk_id', '' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'clerk_id')`);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS roles (
+      name TEXT PRIMARY KEY,
+      permissions JSONB NOT NULL
+    )
+  `);
+  // Seed default roles
+  const superAdminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: true });
+  const adminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: false });
+  const userPerms = JSON.stringify({ canViewLogs: false, canManageAdmins: false, canManageSavings: false });
+  await db.exec(`INSERT INTO roles (name, permissions) VALUES ('super_admin', '${superAdminPerms}') ON CONFLICT (name) DO NOTHING`);
+  await db.exec(`INSERT INTO roles (name, permissions) VALUES ('admin', '${adminPerms}') ON CONFLICT (name) DO NOTHING`);
+  await db.exec(`INSERT INTO roles (name, permissions) VALUES ('authorized', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
+  await db.exec(`INSERT INTO roles (name, permissions) VALUES ('user', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    media_url TEXT,
-    last_day_meet TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
+  // Insert default config if empty
+  const configCount = await db.prepare('SELECT COUNT(*) as count FROM savings_config').get();
+  if (parseInt(configCount?.count || 0) === 0) {
+    await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(300);
+  }
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER,
-    memory_id INTEGER,
-    user_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    reply_to_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (post_id) REFERENCES posts(id),
-    FOREIGN KEY (memory_id) REFERENCES memories(id),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
-try { await db.exec("ALTER TABLE comments ADD COLUMN memory_id INTEGER"); } catch (e) { }
-
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS reactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_id INTEGER NOT NULL,
-    target_type TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    reaction_type TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS memories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    title TEXT,
-    content TEXT,
-    media_url TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS savings_members (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    status TEXT DEFAULT 'active',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS savings_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    member_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    type TEXT NOT NULL, -- 'payment' or 'missed'
-    confirmed_by TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (member_id) REFERENCES savings_members(id)
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS savings_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    weekly_amount REAL NOT NULL,
-    effective_date DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS savings_investments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_name TEXT NOT NULL,
-    allocated_amount REAL NOT NULL,
-    projected_profit REAL DEFAULT 0,
-    status TEXT DEFAULT 'active',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
-
-// Insert default config if empty
-const configCount = await db.prepare('SELECT COUNT(*) as count FROM savings_config').get().count;
-if (configCount === 0) {
-  await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(300);
-}
+  console.log('✅ Database initialized successfully');
+})().catch(err => {
+  console.error('❌ DB init failed:', err);
+  process.exit(1);
+});
 
 // Middleware
 app.use(cors());
@@ -1435,21 +1476,14 @@ server.listen(PORT, () => {
 });
 
 // Scheduled Tasks
-cron.schedule('0 9 * * 6', () => {
+cron.schedule('0 9 * * 6', async () => {
   try {
     const config = await db.prepare('SELECT weekly_amount FROM savings_config ORDER BY effective_date DESC LIMIT 1').get();
     const amount = config ? config.weekly_amount : 300;
-    
-    const members = await db.prepare('SELECT id FROM savings_members WHERE status = "active"').all();
-    const insert = db.prepare('INSERT INTO savings_transactions (member_id, amount, type, confirmed_by) VALUES (?, ?, ?, ?)');
-    
-    const runTransaction = db.transaction(async () => {
-      members.forEach(m => {
-        insert.run(m.id, amount, 'expected', 'system');
-      });
-    });
-    runTransaction();
-
+    const members = await db.prepare('SELECT id FROM savings_members WHERE status = \'active\'').all();
+    for (const m of members) {
+      await db.prepare('INSERT INTO savings_transactions (member_id, amount, type, confirmed_by) VALUES (?, ?, ?, ?)').run(m.id, amount, 'expected', 'system');
+    }
     if (bot && process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
       bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, `🔔 Reminder: Today is Saturday! Don't forget to save your weekly contribution of ${amount} ETB.`).catch(console.error);
     }
