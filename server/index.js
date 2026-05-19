@@ -326,6 +326,23 @@ const db = {
     await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(300);
   }
 
+  // Seed default superadmin if not exists, or verify/upgrade role to super_admin if exists
+  const superAdminEmail = 'ermiasgesgis@gmail.com';
+  const superAdminUser = await db.prepare('SELECT * FROM users WHERE email = ?').get(superAdminEmail);
+  if (!superAdminUser) {
+    const defaultSuperAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'Erma@1361f';
+    const hashedSA = bcrypt.hashSync(defaultSuperAdminPassword, 10);
+    await db.prepare(`
+      INSERT INTO users (
+        email, password, role, nickname, created_by_admin, status
+      ) VALUES (?, ?, ?, ?, 1, 'active')
+    `).run(superAdminEmail, hashedSA, 'super_admin', 'Super Admin');
+    console.log(`👤 Seeded default superadmin: ${superAdminEmail}`);
+  } else {
+    await db.prepare("UPDATE users SET role = 'super_admin' WHERE email = ?").run(superAdminEmail);
+    console.log(`👤 Verified role 'super_admin' for user: ${superAdminEmail}`);
+  }
+
   console.log('✅ Database initialized successfully');
 })().catch(err => {
   console.error('❌ DB init failed:', err);
