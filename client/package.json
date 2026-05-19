@@ -17,9 +17,8 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.1",
-    "socket.io-client": "^4.8.3"
-  },
-  "devDependencies": {
+    "socket.io-client": "^4.8.3",
     "vite": "^8.0.8"
-  }
+  },
+  "devDependencies": {}
 }
