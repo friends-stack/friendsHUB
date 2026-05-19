@@ -2056,7 +2056,7 @@ const PrivateDashboard = ({ user }) => {
                       </div>
                     </div>
 
-                    <button type="submit" className="btn-primary memory-publish-btn" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>Publish to Carousel</button>
+                    <button type="submit" className="btn-primary memory-publish-btn" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>post Gallery</button>
                   </form>
                 </div>
 

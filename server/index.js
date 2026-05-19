@@ -316,6 +316,15 @@ const db = {
     )
   `);
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS gallery (
+      id BIGSERIAL PRIMARY KEY,
+      url TEXT NOT NULL,
+      title TEXT,
+      caption TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       name TEXT PRIMARY KEY,
       permissions JSONB NOT NULL
@@ -1631,6 +1640,12 @@ app.get(/.*/, (req, res, next) => {
     console.error('❌ index.html not found at path:', indexPath);
     res.status(404).send('Frontend build not found. Please verify the build step.');
   }
+});
+
+// Global unhandled error logging middleware
+app.use((err, req, res, next) => {
+  console.error('💥 Unhandled Server Error:', err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
 const PORT = process.env.PORT || 5000;
