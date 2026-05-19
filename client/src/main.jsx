@@ -22,6 +22,47 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Helper to recursively rewrite backend URLs in response payloads to the active hosting context
+const rewriteUrls = (data) => {
+  if (!data) return data;
+  if (typeof data === 'string') {
+    if (data.startsWith('http://localhost:5000')) {
+      const isProd = import.meta.env.PROD;
+      const isLocalIp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isProd) {
+        return data.replace('http://localhost:5000', window.location.origin);
+      } else if (isLocalIp) {
+        return data.replace('http://localhost:5000', `${window.location.protocol}//${window.location.hostname}:5000`);
+      }
+    }
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map(rewriteUrls);
+  }
+  if (typeof data === 'object') {
+    const copy = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        copy[key] = rewriteUrls(data[key]);
+      }
+    }
+    return copy;
+  }
+  return data;
+};
+
+// Response interceptor to rewrite backend media links to active origins
+axios.interceptors.response.use(
+  (response) => {
+    if (response.data) {
+      response.data = rewriteUrls(response.data);
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Global axios interceptor: auto-logout if token is expired (401)
 axios.interceptors.response.use(
   (response) => response,
