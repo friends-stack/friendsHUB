@@ -1585,11 +1585,21 @@ app.post('/api/admin/users/cover-photo', checkAuth, async (req, res) => {
 
 
 // Serve compiled frontend assets in production
-app.use(express.static(path.join(__dirname, '../client/dist')));
+const distPath = path.join(__dirname, '../client/dist');
+app.use(express.static(distPath));
 
-// Wildcard route to serve React Router SPA frontend
-app.get(/.*/, async (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+// Wildcard route to serve React Router SPA frontend, ignoring API routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error('❌ index.html not found at path:', indexPath);
+    res.status(404).send('Frontend build not found. Please verify the build step.');
+  }
 });
 
 const PORT = process.env.PORT || 5000;
