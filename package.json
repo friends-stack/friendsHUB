@@ -4,10 +4,8 @@
   "description": "Friends Info App Monorepo",
   "main": "server/index.js",
   "scripts": {
-    "install-all": "npm install --prefix client && npm install --prefix server",
-    "build-client": "npm run build --prefix client",
     "start": "node server/index.js",
-    "build": "npm run install-all && npm run build-client"
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
   },
   "keywords": [],
   "author": "",
