@@ -306,6 +306,16 @@ const db = {
   `);
   await db.exec(`INSERT INTO system_settings (key, value) SELECT 'clerk_id', '' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'clerk_id')`);
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS personal_assets (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      url TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       name TEXT PRIMARY KEY,
       permissions JSONB NOT NULL
@@ -410,7 +420,8 @@ const checkSavingsManager = async (req, res, next) => {
 // Generic Image Upload for all authenticated users
 app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const fileUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ url: fileUrl });
 });
 
@@ -1511,7 +1522,8 @@ app.post('/api/admin/gallery', checkAuth, async (req, res) => {
 // Single image upload endpoint
 app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const fileUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ url: fileUrl });
 });
 
@@ -1561,7 +1573,8 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { title, type } = req.body; // type: 'photo' or 'video'
-  const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const url = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
   const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES (?, ?, ?, ?)');
   await insert.run(req.user.id, url, type, title || 'Untitled');

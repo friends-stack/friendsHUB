@@ -10,7 +10,7 @@ import {
 import { AnimatePresence } from 'framer-motion';
 
 
-const ProfilePage = ({ currentUser, userId }) => {
+const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
   const { id: paramId } = useParams();
   const id = paramId || userId;
   const navigate = useNavigate();
@@ -54,6 +54,9 @@ const ProfilePage = ({ currentUser, userId }) => {
       setProfile(data);
       setEditData(data);
       setLoading(false);
+      if (onProfileUpdate && Number(currentUser?.id) === Number(data.id)) {
+        onProfileUpdate(data);
+      }
     } catch (err) {
       console.error(err);
       setLoading(false);

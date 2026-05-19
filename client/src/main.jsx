@@ -7,9 +7,15 @@ import axios from 'axios'
 // Request interceptor: dynamically swap localhost backend endpoint with the current host origin in production
 axios.interceptors.request.use(
   (config) => {
-    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    if (isProduction && config.url && config.url.startsWith('http://localhost:5000')) {
-      config.url = config.url.replace('http://localhost:5000', window.location.origin);
+    const isProd = import.meta.env.PROD;
+    const isLocalIp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    
+    if (config.url && config.url.startsWith('http://localhost:5000')) {
+      if (isProd) {
+        config.url = config.url.replace('http://localhost:5000', window.location.origin);
+      } else if (isLocalIp) {
+        config.url = config.url.replace('http://localhost:5000', `${window.location.protocol}//${window.location.hostname}:5000`);
+      }
     }
     return config;
   },

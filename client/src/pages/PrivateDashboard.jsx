@@ -1334,7 +1334,12 @@ const PrivateDashboard = ({ user }) => {
       {/* Main Content */}
       {activeTab === 'profile' ? (
         <div ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', height: '100vh' }}>
-          <ProfilePage currentUser={user} userId={user.id} />
+          <ProfilePage currentUser={user} userId={user.id} onProfileUpdate={(updatedUser) => {
+            if (setUser) {
+              setUser(updatedUser);
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+          }} />
         </div>
       ) : (
       <main ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1655,33 +1660,50 @@ const PrivateDashboard = ({ user }) => {
                                 </a>
                               </div>
                             ) : (
-                              <a 
-                                href={msg.media_url} 
-                                onClick={(e) => handleDownloadFile(e, msg.media_url, getOriginalFileName(msg.media_url) || 'attached_document')}
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  gap: '0.75rem', 
-                                  padding: '0.75rem 1rem', 
-                                  background: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.15)' : '#f1f5f9', 
-                                  borderRadius: '12px', 
-                                  color: 'inherit', 
-                                  textDecoration: 'none',
-                                  marginTop: '0.5rem',
-                                  marginBottom: '0.5rem',
-                                  border: '1px solid rgba(0,0,0,0.05)',
-                                  wordBreak: 'break-all'
-                                }}
-                              >
-                                <Paperclip size={18} />
-                                <div style={{ flex: 1, overflow: 'hidden' }}>
-                                  <div style={{ fontWeight: 600, fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                    {getOriginalFileName(msg.media_url) || 'Attached File'}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                                <a 
+                                  href={msg.media_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.75rem', 
+                                    padding: '0.75rem 1rem', 
+                                    background: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.15)' : '#f1f5f9', 
+                                    borderRadius: '12px', 
+                                    color: 'inherit', 
+                                    textDecoration: 'none',
+                                    flex: 1,
+                                    border: '1px solid rgba(0,0,0,0.05)',
+                                    wordBreak: 'break-all'
+                                  }}
+                                >
+                                  <Paperclip size={18} />
+                                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ fontWeight: 600, fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                      {getOriginalFileName(msg.media_url) || 'Attached File'}
+                                    </div>
                                   </div>
-                                </div>
-                              </a>
+                                </a>
+                                <button 
+                                  onClick={(e) => handleDownloadFile(e, msg.media_url, getOriginalFileName(msg.media_url) || 'attached_document')}
+                                  style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    padding: '8px', 
+                                    borderRadius: '50%', 
+                                    background: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.15)' : '#f1f5f9', 
+                                    color: 'inherit',
+                                    cursor: 'pointer',
+                                    border: 'none'
+                                  }}
+                                  title="Download file"
+                                >
+                                  <Download size={14} />
+                                </button>
+                              </div>
                             )
                           )}
                           {editingMessageId === msg.id ? (
@@ -1896,9 +1918,9 @@ const PrivateDashboard = ({ user }) => {
                     <input name="email" placeholder="Email Address" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
                     <input name="nickname" placeholder="Full Name" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
                     <input name="password" type="password" placeholder="Secure Password" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
-                    <select name="role" className="input-field" style={{ width: '150px', marginBottom: 0 }}>
+                    <select name="role" className="input-field" style={{ width: '150px', marginBottom: 0 }} defaultValue="authorized">
                       {user.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
-                      <option value="admin">Admin</option>
+                      {user.role === 'super_admin' && <option value="admin">Admin</option>}
                       <option value="authorized">Authorized</option>
                       <option value="user">Guest</option>
                     </select>
