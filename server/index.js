@@ -101,7 +101,14 @@ class Statement {
 const db = {
   prepare: (sql) => new Statement(sql),
   exec: async (sql) => {
-    try { await pool.query(sql); } catch(e) {}
+    try {
+      await pool.query(sql);
+    } catch(e) {
+      console.error(`⚠️ DB Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
+      if (e.code === '28P01' || e.code === 'ECONNREFUSED' || e.message.includes('connect')) {
+        throw e;
+      }
+    }
   },
   transaction: (fn) => {
     return async (...args) => {
@@ -123,6 +130,37 @@ const db = {
 
 // Run all startup init tasks inside an async IIFE (CommonJS does not support top-level await)
 (async () => {
+  // 1. Create roles and users tables first to prevent migration chicken-and-egg errors
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS roles (
+      name TEXT PRIMARY KEY,
+      permissions JSONB NOT NULL
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL REFERENCES roles(name),
+      nickname TEXT,
+      dob TEXT,
+      gender TEXT,
+      mobile TEXT,
+      address TEXT,
+      bio TEXT,
+      profile_picture TEXT,
+      telegram_username TEXT,
+      fav_food_drink TEXT,
+      cover_photo TEXT,
+      created_by_admin INTEGER DEFAULT 0,
+      totp_secret TEXT,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+
   // Migration: Add columns and tables if not exists
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS dob TEXT");
