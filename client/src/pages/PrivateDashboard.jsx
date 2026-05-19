@@ -1426,7 +1426,14 @@ const PrivateDashboard = ({ user }) => {
           </div>
         </header>
 
-        <section className="dashboard-section" style={{ flex: 1, padding: '2rem 3rem', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <section className="dashboard-section" style={{ 
+          flex: 1, 
+          padding: '2rem 3rem', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          minHeight: 0,
+          overflowY: activeTab === 'messages' ? 'hidden' : 'auto'
+        }}>
           <AnimatePresence mode="wait">
             {activeTab === 'messages' && (
               <motion.div 
@@ -1868,7 +1875,7 @@ const PrivateDashboard = ({ user }) => {
 
             {/* (Admin tabs logs/users/settings logic similar to before) */}
             {activeTab === 'users' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem', flex: 1, overflowY: 'auto', paddingRight: '6px' }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
                   <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <UserPlus size={20} color="var(--accent)" /> Enroll New Identity
@@ -2004,7 +2011,7 @@ const PrivateDashboard = ({ user }) => {
 
 
             {activeTab === 'gallery' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem', flex: 1, overflowY: 'auto', paddingRight: '6px' }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
                   <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <ImageIcon size={20} color="var(--accent)" /> Add New Memory
@@ -2220,7 +2227,7 @@ const PrivateDashboard = ({ user }) => {
             )}
 
             {activeTab === 'vault' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem', flex: 1, overflowY: 'auto', paddingRight: '6px' }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
                   <div className="vault-header-row">
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -2408,7 +2415,7 @@ const PrivateDashboard = ({ user }) => {
             )}
 
             {activeTab === 'admin' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ maxWidth: '650px', flex: 1, overflowY: 'auto', paddingRight: '6px' }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ maxWidth: '650px' }}>
                 <div className="glass-card" style={{ padding: '2.5rem', background: 'white', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.06)' }}>
                   <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     ⚙️ Core System Settings
@@ -2536,7 +2543,7 @@ const PrivateDashboard = ({ user }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '6px' }}
+                style={{ flex: 1, minHeight: 0 }}
               >
                 <SavingsTracker user={user} />
               </motion.div>
