@@ -844,6 +844,7 @@ const PrivateDashboard = ({ user }) => {
           .tab-buttons-container { overflow-x: auto; white-space: nowrap; padding-bottom: 0.5rem; }
           .glass-card { padding: 1rem !important; }
           .dashboard-section { padding: 1rem !important; }
+          .chat-input-form { margin-bottom: 70px !important; }
         }
         .mobile-bottom-nav { 
           display: none; 
@@ -1754,18 +1755,22 @@ const PrivateDashboard = ({ user }) => {
                   </div>
                 )}
 
-                <form onSubmit={handleSendMessage} style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  background: '#ffffff',
-                  padding: '0.75rem 1.25rem',
-                  borderTop: '1px solid #e2e8f0',
-                  boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
-                  position: 'relative',
-                  zIndex: 2,
-                  flexShrink: 0
-                }}>
+                <form 
+                  className="chat-input-form"
+                  onSubmit={handleSendMessage} 
+                  style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    background: '#ffffff',
+                    padding: '0.75rem 1.25rem',
+                    borderTop: '1px solid #e2e8f0',
+                    boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
+                    position: 'relative',
+                    zIndex: 2,
+                    flexShrink: 0
+                  }}
+                >
                   <button 
                     type="button" 
                     onClick={() => fileInputRef.current?.click()} 
@@ -1830,63 +1835,6 @@ const PrivateDashboard = ({ user }) => {
                     <Send size={20} />
                   </button>
                 </form>
-
-                {/* Floating up/down navigation pill inside messages history */}
-                <div style={{ 
-                  position: 'absolute', 
-                  bottom: '80px', 
-                  right: '1rem', 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '0', 
-                  zIndex: 10,
-                  background: 'rgba(255, 255, 255, 0.85)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(226, 232, 240, 0.8)',
-                  borderRadius: '24px',
-                  padding: '4px',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
-                }}>
-                  <motion.button 
-                    whileHover={{ color: 'var(--primary)', scale: 1.2 }}
-                    onClick={scrollToTop}
-                    style={{ 
-                      width: '32px', 
-                      height: '32px', 
-                      background: 'none', 
-                      border: 'none', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      cursor: 'pointer',
-                      color: '#64748b',
-                      transition: 'color 0.2s'
-                    }}
-                    title="Scroll to Top"
-                  >
-                    <ArrowUp size={16} />
-                  </motion.button>
-                  <div style={{ height: '1px', background: 'rgba(0,0,0,0.06)', margin: '2px 6px' }} />
-                  <motion.button 
-                    whileHover={{ color: 'var(--primary)', scale: 1.2 }}
-                    onClick={scrollToBottom}
-                    style={{ 
-                      width: '32px', 
-                      height: '32px', 
-                      background: 'none', 
-                      border: 'none', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      cursor: 'pointer',
-                      color: '#64748b',
-                      transition: 'color 0.2s'
-                    }}
-                    title="Scroll to Bottom"
-                  >
-                    <ArrowDown size={16} />
-                  </motion.button>
-                </div>
               </motion.div>
             )}
 
