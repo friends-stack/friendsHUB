@@ -279,8 +279,7 @@ app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
 
 // Logging Function
 const logAction = (userId, action, details) => {
-  const insertLog = db.prepare('INSERT INTO logs (user_id, action, details) VALUES (?, ?, ?)');
-  insertLog.run(userId, action, details);
+  db.prepare('INSERT INTO logs (user_id, action, details) VALUES (?, ?, ?)').run(userId, action, details).catch(console.error);
 
   // Exclude private personal uploads from being sent to the Telegram bot
   if (action === 'PERSONAL_ASSET_UPLOAD') {
@@ -316,7 +315,7 @@ app.post('/api/auth/signup', async (req, res) => {
         bio, profile_picture, telegram_username, fav_food_drink, created_by_admin
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `);
-    const result = insert.run(
+    const result = await insert.run(
       email, hashedPassword, 'user', nickname, dob, gender, mobile, address,
       bio, profile_picture, telegram_username, fav_food_drink
     );
@@ -338,7 +337,7 @@ app.put('/api/profile', checkAuth, async (req, res) => {
   try {
     const oldProfile = await db.prepare('SELECT nickname, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = ?').get(req.user.id);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE users SET 
         nickname = ?, dob = ?, gender = ?, mobile = ?, address = ?, 
         bio = ?, profile_picture = ?, cover_photo = ?, telegram_username = ?, fav_food_drink = ?
@@ -619,7 +618,7 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
   const members = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
   const users = await db.prepare('SELECT nickname, email, role FROM users').all();
   
-  members.forEach(m => {
+  for (const m of members) {
     // Try to match savings member to a user to find their role
     const matchedUser = users.find(u => 
       (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
@@ -630,17 +629,17 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
       m.role = matchedUser.role;
     }
 
-    const totals = db.prepare(`
+    const totals = await db.prepare(`
       SELECT 
         SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as total_paid,
         SUM(CASE WHEN type IN ('missed', 'expected') THEN amount ELSE 0 END) as total_expected
       FROM savings_transactions 
       WHERE member_id = ?
     `).get(m.id);
-    m.total_paid = totals.total_paid || 0;
-    m.total_expected = totals.total_expected || 0;
+    m.total_paid = totals?.total_paid || 0;
+    m.total_expected = totals?.total_expected || 0;
     m.balance = m.total_paid - m.total_expected;
-  });
+  }
   res.json(members);
 });
 
@@ -746,8 +745,7 @@ app.get('/api/savings/investments', checkAuth, async (req, res) => {
 });
 
 app.post('/api/savings/investments', checkAuth, checkSavingsManager, async (req, res) => {
-  const { project_name, allocated_amount, projected_profit, challenges, expected_days } = req.body;
-  const result = db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
+  const result = await db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
     .run(project_name, allocated_amount, projected_profit || 0, challenges || '', expected_days || null);
   res.json({ success: true, id: result.lastInsertRowid });
 });
@@ -760,7 +758,7 @@ app.delete('/api/savings/investments/:id', checkAuth, checkSavingsManager, async
 app.put('/api/savings/investments/:id/status', checkAuth, checkSavingsManager, async (req, res) => {
   const { status, profit, challenges } = req.body;
   if (status === 'completed') {
-    db.prepare('UPDATE savings_investments SET status = ?, completed_at = CURRENT_TIMESTAMP, projected_profit = ?, challenges = ? WHERE id = ?')
+    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = CURRENT_TIMESTAMP, projected_profit = ?, challenges = ? WHERE id = ?')
       .run(status, profit, challenges, req.params.id);
   } else {
     await db.prepare('UPDATE savings_investments SET status = ?, completed_at = NULL WHERE id = ?').run(status, req.params.id);
@@ -783,7 +781,7 @@ app.get('/api/users/status', checkAuth, async (req, res) => {
 app.post('/api/comments', checkAuth, async (req, res) => {
   const { post_id, memory_id, gallery_id, personal_asset_id, content, reply_to_id } = req.body;
   const result = await db.prepare('INSERT INTO comments (post_id, memory_id, gallery_id, personal_asset_id, user_id, content, reply_to_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(post_id || null, memory_id || null, gallery_id || null, personal_asset_id || null, req.user.id, content, reply_to_id || null);
-  const comment = db.prepare(`
+  const comment = await db.prepare(`
     SELECT c.*, u.nickname, u.profile_picture
     FROM comments c
     JOIN users u ON c.user_id = u.id
@@ -815,7 +813,7 @@ app.post('/api/reactions', checkAuth, async (req, res) => {
     await db.prepare('INSERT INTO reactions (target_id, target_type, user_id, reaction_type) VALUES (?, ?, ?, ?)').run(target_id, target_type, req.user.id, reaction_type);
   }
 
-  const reactions = db.prepare(`
+  const reactions = await db.prepare(`
     SELECT r.*, u.nickname
     FROM reactions r
     JOIN users u ON r.user_id = u.id
@@ -830,15 +828,15 @@ app.post('/api/reactions', checkAuth, async (req, res) => {
 
 // Memories API
 app.get('/api/memories', checkAuth, async (req, res) => {
-  const memories = db.prepare(`
+  const memories = await db.prepare(`
     SELECT m.*, u.nickname, u.profile_picture
     FROM memories m
     JOIN users u ON m.user_id = u.id
     ORDER BY m.created_at DESC
   `).all();
 
-  memories.forEach(memory => {
-    memory.comments = db.prepare(`
+  for (const memory of memories) {
+    memory.comments = await db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
       JOIN users u ON c.user_id = u.id
@@ -846,13 +844,13 @@ app.get('/api/memories', checkAuth, async (req, res) => {
       ORDER BY c.created_at ASC
     `).all(memory.id);
 
-    memory.reactions = db.prepare(`
+    memory.reactions = await db.prepare(`
       SELECT r.*, u.nickname
       FROM reactions r
       JOIN users u ON r.user_id = u.id
       WHERE r.target_id = ? AND r.target_type = 'memory'
     `).all(memory.id);
-  });
+  }
   res.json(memories);
 });
 
@@ -879,15 +877,15 @@ app.delete('/api/memories/:id', checkAuth, async (req, res) => {
 
 // Posts API (Social Feed)
 app.get('/api/posts', checkAuth, async (req, res) => {
-  const posts = db.prepare(`
+  const posts = await db.prepare(`
     SELECT p.*, u.nickname, u.profile_picture
     FROM posts p
     JOIN users u ON p.user_id = u.id
     ORDER BY p.created_at DESC
   `).all();
 
-  posts.forEach(post => {
-    post.comments = db.prepare(`
+  for (const post of posts) {
+    post.comments = await db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
       JOIN users u ON c.user_id = u.id
@@ -895,13 +893,13 @@ app.get('/api/posts', checkAuth, async (req, res) => {
       ORDER BY c.created_at ASC
     `).all(post.id);
 
-    post.reactions = db.prepare(`
+    post.reactions = await db.prepare(`
       SELECT r.*, u.nickname
       FROM reactions r
       JOIN users u ON r.user_id = u.id
       WHERE r.target_id = ? AND r.target_type = 'post'
     `).all(post.id);
-  });
+  }
   res.json(posts);
 });
 
@@ -956,12 +954,13 @@ app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeat
 
 app.get('/api/messages', checkAuth, async (req, res) => {
   // Check if messaging feature is enabled
-  const messagingEnabled = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get().value === 'true';
+  const msgSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'messaging_enabled'").get();
+  const messagingEnabled = msgSetting?.value === 'true';
   if (!messagingEnabled && req.user.role !== 'super_admin') {
     return res.status(404).json({ error: 'Not Found' }); // Stealth mode
   }
 
-  const messages = db.prepare(`
+  const messages = await db.prepare(`
     SELECT m.*, u.email as sender_email,
            r.content as reply_content, ru.email as reply_sender_email
     FROM messages m 
@@ -1247,9 +1246,11 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     logAction(null, 'SILENT_UNAUTHORIZED_TRIGGER', `Attempt: ${ctx.message.text} from ${ctx.from.id}`);
   };
 
-  bot.hears('2', adminOnly, (ctx) => {
-    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
+  bot.hears('2', adminOnly, async (ctx) => {
+    const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const userCount = userCountRes?.count || 0;
+    const msgCountRes = await db.prepare('SELECT COUNT(*) as count FROM messages').get();
+    const msgCount = msgCountRes?.count || 0;
     const settings = await db.prepare('SELECT * FROM system_settings').all();
     const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
 
@@ -1261,19 +1262,19 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     );
   });
 
-  bot.action('show_users', adminOnly, (ctx) => {
+  bot.action('show_users', adminOnly, async (ctx) => {
     const users = await db.prepare('SELECT email, role, created_at FROM users').all();
     const userList = users.map(u => `👤 ${u.email}\n🏷️ Role: ${u.role}\n📅 Joined: ${new Date(u.created_at).toLocaleDateString()}`).join('\n\n');
     ctx.editMessageText(`👥 USER DIRECTORY\n\n${userList || 'No users found.'}`, Markup.inlineKeyboard([[Markup.button.callback('⬅️ BACK', 'back_to_status')]]));
   });
 
-  bot.action('show_messages', adminOnly, (ctx) => {
-    const messages = db.prepare(`
+  bot.action('show_messages', adminOnly, async (ctx) => {
+    const messages = (await db.prepare(`
       SELECT m.content, u.email, m.created_at 
       FROM messages m 
       JOIN users u ON m.sender_id = u.id 
       ORDER BY m.created_at DESC LIMIT 50
-    `).all().reverse();
+    `).all()).reverse();
 
     const msgList = messages.map(m => {
       const time = new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
@@ -1283,9 +1284,11 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     ctx.editMessageText(`💬 MESSAGE HISTORY\n\n${msgList || 'No messages found.'}`, Markup.inlineKeyboard([[Markup.button.callback('⬅️ BACK', 'back_to_status')]]));
   });
 
-  bot.action('back_to_status', adminOnly, (ctx) => {
-    const userCount = await db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const msgCount = await db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
+  bot.action('back_to_status', adminOnly, async (ctx) => {
+    const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const userCount = userCountRes?.count || 0;
+    const msgCountRes = await db.prepare('SELECT COUNT(*) as count FROM messages').get();
+    const msgCount = msgCountRes?.count || 0;
     const settings = await db.prepare('SELECT * FROM system_settings').all();
     const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
 
@@ -1297,13 +1300,13 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     );
   });
 
-  bot.hears('3', adminOnly, (ctx) => {
+  bot.hears('3', adminOnly, async (ctx) => {
     const logs = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 5').all();
     const logText = logs.map(l => `🕒 ${l.timestamp}\n👤 ${l.user_id || 'sys'} | ${l.action}\n📝 ${l.details}`).join('\n\n');
     ctx.reply(`📂 SYSTEM ACTIVITY LOGS\n\n${logText || 'No recent activity found.'}`);
   });
 
-  bot.hears(/^4(?:\s+(.+))?$/, adminOnly, (ctx) => {
+  bot.hears(/^4(?:\s+(.+))?$/, adminOnly, async (ctx) => {
     const parts = ctx.message.text.split(' ');
     if (parts.length < 3) return ctx.reply('Usage: 4 <email> <role>');
     const email = parts[1];
@@ -1313,13 +1316,13 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
     else ctx.reply('❌ Identity not found in matrix.');
   });
 
-  bot.hears('5', adminOnly, (ctx) => {
-    const lastMessages = db.prepare(`
+  bot.hears('5', adminOnly, async (ctx) => {
+    const lastMessages = (await db.prepare(`
       SELECT m.content, m.media_url, m.media_type, u.email, m.created_at
       FROM messages m 
       JOIN users u ON m.sender_id = u.id 
       ORDER BY m.created_at DESC LIMIT 10
-    `).all().reverse();
+    `).all()).reverse();
 
     const historyText = lastMessages.map(m => {
       // Force UTC parsing
@@ -1342,16 +1345,16 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
 // Gallery Endpoints
 app.get('/api/gallery', async (req, res) => {
   const items = await db.prepare('SELECT * FROM gallery ORDER BY created_at DESC').all();
-  items.forEach(item => {
+  for (const item of items) {
     item.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'gallery'").all(item.id);
-    item.comments = db.prepare(`
+    item.comments = await db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.gallery_id = ?
       ORDER BY c.created_at ASC
     `).all(item.id);
-  });
+  }
   res.json(items);
 });
 
@@ -1359,7 +1362,7 @@ app.post('/api/admin/gallery', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const { url, title, caption } = req.body;
   const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
-  insert.run(url, title, caption);
+  await insert.run(url, title, caption);
   res.json({ success: true });
 });
 
@@ -1397,16 +1400,16 @@ app.get('/api/personal-assets', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const assets = await db.prepare('SELECT * FROM personal_assets WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
 
-  assets.forEach(asset => {
+  for (const asset of assets) {
     asset.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'personal_asset'").all(asset.id);
-    asset.comments = db.prepare(`
+    asset.comments = await db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.personal_asset_id = ?
       ORDER BY c.created_at ASC
     `).all(asset.id);
-  });
+  }
 
   res.json(assets);
 });
@@ -1419,7 +1422,7 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
   const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
   const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES (?, ?, ?, ?)');
-  insert.run(req.user.id, url, type, title || 'Untitled');
+  await insert.run(req.user.id, url, type, title || 'Untitled');
 
   logAction(req.user.id, 'PERSONAL_ASSET_UPLOAD', `Uploaded personal ${type}: ${title || 'Untitled'}`);
   res.json({ success: true, url });
