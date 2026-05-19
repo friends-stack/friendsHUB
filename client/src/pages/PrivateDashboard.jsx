@@ -2336,14 +2336,6 @@ const PrivateDashboard = ({ user }) => {
                               </div>
                             </div>
                           )}
-                          {(user.role === 'admin' || user.role === 'super_admin') && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeletePersonalAsset(asset.id); }}
-                              style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#ef4444', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
                         </div>
                         
                         <div style={{ padding: '1rem', textAlign: 'center', flex: 1 }}>

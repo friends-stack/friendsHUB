@@ -26,16 +26,26 @@ axios.interceptors.request.use(
 const rewriteUrls = (data) => {
   if (!data) return data;
   if (typeof data === 'string') {
-    if (data.startsWith('http://localhost:5000')) {
+    let rewritten = data;
+    
+    // 1. Automatically elevate http to https under secure contexts to avoid mixed-content media blockages
+    if (window.location.protocol === 'https:' && rewritten.startsWith('http://')) {
+      rewritten = rewritten.replace('http://', 'https://');
+    }
+    
+    // 2. Dynamically replace localhost target host with the correct active runtime target
+    if (rewritten.startsWith('http://localhost:5000') || rewritten.startsWith('https://localhost:5000')) {
       const isProd = import.meta.env.PROD;
       const isLocalIp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const targetPrefix = rewritten.startsWith('https://') ? 'https://localhost:5000' : 'http://localhost:5000';
+      
       if (isProd) {
-        return data.replace('http://localhost:5000', window.location.origin);
+        return rewritten.replace(targetPrefix, window.location.origin);
       } else if (isLocalIp) {
-        return data.replace('http://localhost:5000', `${window.location.protocol}//${window.location.hostname}:5000`);
+        return rewritten.replace(targetPrefix, `${window.location.protocol}//${window.location.hostname}:5000`);
       }
     }
-    return data;
+    return rewritten;
   }
   if (Array.isArray(data)) {
     return data.map(rewriteUrls);
