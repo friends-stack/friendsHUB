@@ -470,11 +470,11 @@ const MessagingPage = ({ user }) => {
       <style>{`
         @media (max-width: 768px) {
           .chat-sidebar { 
-            display: ${activeContact && activeContact.id !== -1 ? 'none' : 'flex'} !important; 
+            display: ${activeContact ? 'none' : 'flex'} !important; 
             width: 100% !important; 
           }
           .chat-area { 
-            display: ${activeContact && activeContact.id !== -1 ? 'flex' : 'none'} !important; 
+            display: ${activeContact ? 'flex' : 'none'} !important; 
           }
           .chat-header-mobile-back { display: block !important; }
           .call-overlay-content { width: 100% !important; height: 100% !important; border-radius: 0 !important; }

@@ -835,10 +835,30 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
     : luxuryProperties.filter(p => p.type === selectedFilter);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b' }}>
+    <div className="public-dashboard-container" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b' }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .public-dashboard-container { flex-direction: column !important; }
+          .public-sidebar { 
+            width: 100% !important; 
+            height: auto !important; 
+            position: static !important; 
+            padding: 1.5rem !important;
+            border-right: none !important;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          .public-main { padding: 1rem !important; }
+          .public-header { flex-direction: column !important; gap: 1rem !important; align-items: stretch !important; }
+          .public-search-wrapper { width: 100% !important; }
+          .footer-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
+          .insights-grid { grid-template-columns: 1fr !important; }
+          .details-specs-grid { grid-template-columns: 1fr 1fr !important; }
+          .calc-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
 
       {/* Sidebar */}
-      <aside style={{
+      <aside className="public-sidebar" style={{
         width: '280px',
         background: 'white',
         borderRight: '1px solid #e2e8f0',
@@ -864,11 +884,11 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, padding: '2rem 4rem', maxWidth: '1400px', margin: '0 auto' }}>
+      <main className="public-main" style={{ flex: 1, padding: '2rem 4rem', maxWidth: '1400px', margin: '0 auto' }}>
 
         {/* Header Area */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-          <div style={{ position: 'relative', width: '400px' }}>
+        <div className="public-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
+          <div className="public-search-wrapper" style={{ position: 'relative', width: '400px' }}>
             <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
@@ -1005,7 +1025,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </div>
 
             {/* Property Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '3rem', marginBottom: '4rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '3rem', marginBottom: '4rem' }}>
               {filteredProperties.map(property => (
                 <PropertyCard
                   key={property.id}
@@ -1016,7 +1036,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </div>
 
             {/* Footer info for decoy */}
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '3rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4rem', paddingBottom: '5rem' }}>
+            <div className="footer-grid" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '3rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4rem', paddingBottom: '5rem' }}>
               <div>
                 <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', color: '#0f172a' }}>Investment Insights</h4>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.6 }}>Real-time market data for the Ethiopian luxury real estate sector. Updated weekly with verified valuation metrics.</p>
@@ -1042,7 +1062,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                   <p style={{ color: '#64748b', fontSize: '1.05rem', margin: 0 }}>Explore handpicked groups of our most prestigious estates tailored to unique lifestyles.</p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2.5rem', marginBottom: '4rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '2.5rem', marginBottom: '4rem' }}>
                   {luxuryCollections.map(collection => (
                     <motion.div
                       key={collection.id}
@@ -1122,7 +1142,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                   <p style={{ color: '#64748b', fontSize: '1.05rem', margin: 0 }}>{selectedCollection.tagline}</p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '3rem', marginBottom: '4rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '3rem', marginBottom: '4rem' }}>
                   {luxuryProperties
                     .filter(p => selectedCollection.propertyIds.includes(p.id))
                     .map(property => (
@@ -1146,7 +1166,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </div>
 
             {/* Insights Market Indicator Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '4rem' }}>
+            <div className="insights-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '2rem', marginBottom: '4rem' }}>
               {[
                 { title: 'Average Portfolio Price', value: '285,000,000 ETB', trend: '+12.4% this quarter', desc: 'Reflects high-growth premium residential developments across Bole, CMC, and Hawassa.' },
                 { title: 'Year-on-Year Growth', value: '18.2%', trend: '+3.1% YoY', desc: 'Driven by robust international corporate leasing demand and premium land valuation spikes.' },
@@ -1183,7 +1203,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             }}>
               <h3 style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0 0 1.5rem' }}>Holding Valuation Calculator</h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem' }}>
+              <div className="calc-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem' }}>
                 {/* Sliders Input Area */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                   <div>
@@ -1421,7 +1441,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               </div>
 
               {/* Specs Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: '20px', marginBottom: '2rem' }}>
+              <div className="details-specs-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: '20px', marginBottom: '2rem' }}>
                 {selectedProperty.type === 'Commercial' ? (
                   <>
                     <div style={{ textAlign: 'center' }}>

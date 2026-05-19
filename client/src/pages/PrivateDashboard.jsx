@@ -850,6 +850,93 @@ const PrivateDashboard = ({ user }) => {
           height: 70px; background: white; border-top: 1px solid var(--border);
           z-index: 1000; justify-content: space-around; align-items: center; padding: 0 1rem;
         }
+
+        /* Responsive Vault Elements */
+        .vault-header-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 2rem;
+        }
+        .add-asset-form {
+          display: flex;
+          gap: 1rem;
+          align-items: flex-end;
+          background: #f8fafc;
+          padding: 1.5rem;
+          border-radius: 16px;
+          margin-bottom: 2rem;
+        }
+        @media (max-width: 768px) {
+          .vault-header-row {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 1rem !important;
+          }
+          .vault-header-row > div {
+            width: 100% !important;
+            justify-content: space-between !important;
+          }
+          .vault-header-row button {
+            flex: 1 !important;
+            text-align: center !important;
+          }
+          .add-asset-form {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 1rem !important;
+          }
+        }
+
+        /* Responsive Enroll Form */
+        .enroll-form {
+          display: flex;
+          gap: 1rem;
+          flex-wrap: wrap;
+        }
+        @media (max-width: 768px) {
+          .enroll-form {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 1rem !important;
+          }
+          .enroll-form input, .enroll-form select {
+            width: 100% !important;
+            flex: none !important;
+          }
+          .enroll-form select {
+            width: 100% !important;
+          }
+        }
+
+        /* Responsive Memory elements */
+        .memory-row-inputs {
+          display: flex;
+          gap: 1rem;
+        }
+        .memory-upload-container {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+        }
+        @media (max-width: 768px) {
+          .memory-row-inputs {
+            flex-direction: column !important;
+            gap: 0.75rem !important;
+          }
+          .memory-upload-container {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 1rem !important;
+          }
+          .memory-upload-divider {
+            display: none !important;
+          }
+          .memory-publish-btn {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+        }
       `}</style>
       
       {/* Share Modal */}
@@ -1736,7 +1823,7 @@ const PrivateDashboard = ({ user }) => {
                       fetchUsers();
                       showToast('New user enrolled successfully');
                     } catch (err) { showToast(err.response?.data?.error || 'System rejection'); }
-                  }} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  }} className="enroll-form">
                     <input name="email" placeholder="Email Address" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
                     <input name="nickname" placeholder="Full Name" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
                     <input name="password" type="password" placeholder="Secure Password" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
@@ -1755,98 +1842,100 @@ const PrivateDashboard = ({ user }) => {
                 </div>
 
                 <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(15, 23, 42, 0.02)', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>IDENTITY</th>
-                        <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>ROLE</th>
-                        <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>STATUS</th>
-                        <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((u) => (
-                        <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '1.25rem 2rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <div style={{ fontWeight: 600 }}>{u.nickname || u.email.split('@')[0]}</div>
-                              {u.role === 'super_admin' && (
-                                <span style={{ background: 'linear-gradient(135deg, #0575e6, #00f2fe)', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Owner</span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email}</div>
-                          </td>
-                          <td style={{ padding: '1.25rem 2rem' }}>
-                            <select 
-                              value={u.role} 
-                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                              disabled={
-                                // If target user is a Super Admin: only they themselves can change their role (e.g. to demote)
-                                u.role === 'super_admin'
-                                  ? u.email !== user.email
-                                  : (u.email === user.email) // Regular users/admins cannot change their own role
-                              }
-                              style={{ 
-                                padding: '0.25rem 0.5rem', 
-                                borderRadius: '4px', 
-                                border: '1px solid var(--border)', 
-                                fontSize: '0.85rem',
-                                background: (u.role === 'super_admin' && u.email !== user.email) ? '#f8fafc' : 'white',
-                                cursor: (u.role === 'super_admin' && u.email !== user.email) ? 'not-allowed' : 'default'
-                              }}
-                            >
-                              {/* Only show Super Admin option if current logged-in user is a Super Admin or target user is already a Super Admin */}
-                              {(user.role === 'super_admin' || u.role === 'super_admin') && (
-                                <option value="super_admin">Super Admin</option>
-                              )}
-                              <option value="admin">Admin</option>
-                              <option value="authorized">Authorized</option>
-                              <option value="user">User</option>
-                            </select>
-                          </td>
-                          <td style={{ padding: '1.25rem 2rem' }}>
-                             <span style={{ 
-                               padding: '0.25rem 0.75rem', 
-                               background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
-                               color: u.status === 'active' ? 'var(--success)' : '#ef4444',
-                               borderRadius: '100px',
-                               fontSize: '0.7rem',
-                               fontWeight: 700,
-                               textTransform: 'uppercase'
-                             }}>
-                               {u.status}
-                             </span>
-                          </td>
-                          <td style={{ padding: '1.25rem 2rem', textAlign: 'right' }}>
-                            {u.email !== user.email && u.role !== 'super_admin' && (
-                              <button 
-                                onClick={() => {
-                                  setVisualConfirm({
-                                    isOpen: true,
-                                    title: 'Remove Identity',
-                                    message: `Are you sure you want to permanently remove ${u.nickname || u.email}? This cannot be undone.`,
-                                    onConfirm: async () => {
-                                      try {
-                                        await axios.delete(`http://localhost:5000/api/admin/users/${u.id}`, {
-                                          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-                                        });
-                                        fetchUsers();
-                                        showToast('Identity redacted');
-                                        setVisualConfirm(prev => ({ ...prev, isOpen: false }));
-                                      } catch (err) { showToast('Deletion rejected'); }
-                                    }
-                                  });
-                                }}
-                                style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
-                              >
-                                Terminate
-                              </button>
-                            )}
-                          </td>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                    <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(15, 23, 42, 0.02)', borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>IDENTITY</th>
+                          <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>ROLE</th>
+                          <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>STATUS</th>
+                          <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {users.map((u) => (
+                          <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '1.25rem 2rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <div style={{ fontWeight: 600 }}>{u.nickname || u.email.split('@')[0]}</div>
+                                {u.role === 'super_admin' && (
+                                  <span style={{ background: 'linear-gradient(135deg, #0575e6, #00f2fe)', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Owner</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email}</div>
+                            </td>
+                            <td style={{ padding: '1.25rem 2rem' }}>
+                              <select 
+                                value={u.role} 
+                                onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                disabled={
+                                  // If target user is a Super Admin: only they themselves can change their role (e.g. to demote)
+                                  u.role === 'super_admin'
+                                    ? u.email !== user.email
+                                    : (u.email === user.email) // Regular users/admins cannot change their own role
+                                }
+                                style={{ 
+                                  padding: '0.25rem 0.5rem', 
+                                  borderRadius: '4px', 
+                                  border: '1px solid var(--border)', 
+                                  fontSize: '0.85rem',
+                                  background: (u.role === 'super_admin' && u.email !== user.email) ? '#f8fafc' : 'white',
+                                  cursor: (u.role === 'super_admin' && u.email !== user.email) ? 'not-allowed' : 'default'
+                                }}
+                              >
+                                {/* Only show Super Admin option if current logged-in user is a Super Admin or target user is already a Super Admin */}
+                                {(user.role === 'super_admin' || u.role === 'super_admin') && (
+                                  <option value="super_admin">Super Admin</option>
+                                )}
+                                <option value="admin">Admin</option>
+                                <option value="authorized">Authorized</option>
+                                <option value="user">User</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '1.25rem 2rem' }}>
+                               <span style={{ 
+                                 padding: '0.25rem 0.75rem', 
+                                 background: u.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                                 color: u.status === 'active' ? 'var(--success)' : '#ef4444',
+                                 borderRadius: '100px',
+                                 fontSize: '0.7rem',
+                                 fontWeight: 700,
+                                 textTransform: 'uppercase'
+                               }}>
+                                 {u.status}
+                               </span>
+                            </td>
+                            <td style={{ padding: '1.25rem 2rem', textAlign: 'right' }}>
+                              {u.email !== user.email && u.role !== 'super_admin' && (
+                                <button 
+                                  onClick={() => {
+                                    setVisualConfirm({
+                                      isOpen: true,
+                                      title: 'Remove Identity',
+                                      message: `Are you sure you want to permanently remove ${u.nickname || u.email}? This cannot be undone.`,
+                                      onConfirm: async () => {
+                                        try {
+                                          await axios.delete(`http://localhost:5000/api/admin/users/${u.id}`, {
+                                            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                                          });
+                                          fetchUsers();
+                                          showToast('Identity redacted');
+                                          setVisualConfirm(prev => ({ ...prev, isOpen: false }));
+                                        } catch (err) { showToast('Deletion rejected'); }
+                                      }
+                                    });
+                                  }}
+                                  style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                                >
+                                  Terminate
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -1862,24 +1951,24 @@ const PrivateDashboard = ({ user }) => {
                     <ImageIcon size={20} color="var(--accent)" /> Add New Memory
                   </h3>
                   <form onSubmit={handleAddGallery} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div className="memory-row-inputs">
                       <input name="title" placeholder="Catchy Title" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
                       <input name="caption" placeholder="Short description..." className="input-field" style={{ flex: 1, marginBottom: 0 }} />
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', background: 'rgba(15, 23, 42, 0.02)', padding: '1rem', borderRadius: '12px', border: '1px dashed var(--border)' }}>
+                    <div className="memory-upload-container" style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '1rem', borderRadius: '12px', border: '1px dashed var(--border)' }}>
                       <div style={{ flex: 1 }}>
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 1: Paste URL</label>
                         <input name="url" placeholder="https://..." className="input-field" style={{ marginBottom: 0 }} />
                       </div>
-                      <div style={{ width: '1px', height: '40px', background: 'var(--border)' }} />
+                      <div className="memory-upload-divider" style={{ width: '1px', height: '40px', background: 'var(--border)' }} />
                       <div style={{ flex: 1 }}>
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 2: Upload File</label>
                         <input type="file" name="file" accept="image/*" style={{ fontSize: '0.8rem' }} />
                       </div>
                     </div>
 
-                    <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>Publish to Carousel</button>
+                    <button type="submit" className="btn-primary memory-publish-btn" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>Publish to Carousel</button>
                   </form>
                 </div>
 
@@ -2074,7 +2163,7 @@ const PrivateDashboard = ({ user }) => {
             {activeTab === 'vault' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                  <div className="vault-header-row">
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <Lock size={20} color="var(--accent)" /> Private Photos & Videos
                     </h3>
@@ -2106,7 +2195,7 @@ const PrivateDashboard = ({ user }) => {
                     </div>
                   </div>
 
-                  <form onSubmit={handleAddPersonalAsset} style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '16px', display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '2rem' }}>
+                  <form onSubmit={handleAddPersonalAsset} className="add-asset-form">
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: '#64748b' }}>ASSET TITLE</label>
                       <input name="title" placeholder="Untitled Moment" className="input-field" style={{ marginBottom: 0 }} />

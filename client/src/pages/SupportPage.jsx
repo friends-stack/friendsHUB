@@ -79,7 +79,7 @@ const SupportPage = ({ user }) => {
             </p>
           </motion.div>
 
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '3rem' }}>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: '3rem' }}>
             {/* Visual Prop */}
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}

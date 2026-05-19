@@ -18,7 +18,24 @@ const RestrictedDashboard = ({ user }) => {
 
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--background)' }}>
+    <div className="restricted-layout" style={{ display: 'flex', height: '100vh', background: 'var(--background)' }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .restricted-layout { flex-direction: column !important; }
+          .restricted-sidebar { 
+            width: 100% !important; 
+            height: auto !important; 
+            padding: 1rem !important;
+            border-right: none !important;
+            border-bottom: 1px solid var(--border);
+          }
+          .restricted-main { padding: 1.5rem !important; }
+          .restricted-banner { flex-direction: column !important; gap: 1rem !important; text-align: left !important; }
+          .restricted-banner > div:first-child { align-self: flex-start !important; }
+          .restricted-banner-actions { flex-direction: column !important; }
+          .restricted-banner-actions button { width: 100% !important; }
+        }
+      `}</style>
       {/* Logo Modal */}
       {showLogoModal && (
         <div 
@@ -33,7 +50,7 @@ const RestrictedDashboard = ({ user }) => {
         </div>
       )}
       {/* Sidebar */}
-      <aside style={{ 
+      <aside className="restricted-sidebar" style={{ 
         width: '280px', 
         background: 'var(--surface)', 
         borderRight: '1px solid var(--border)',
@@ -81,7 +98,7 @@ const RestrictedDashboard = ({ user }) => {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '3rem' }}>
+      <main className="restricted-main" style={{ flex: 1, overflowY: 'auto', padding: '3rem' }}>
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -98,7 +115,7 @@ const RestrictedDashboard = ({ user }) => {
             marginBottom: '3rem',
             background: 'linear-gradient(to right, #ffffff, #f0fdfa)'
           }}>
-            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
+            <div className="restricted-banner" style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
               <div style={{ background: 'rgba(13, 148, 136, 0.1)', padding: '1.5rem', borderRadius: '20px' }}>
                 <ShieldAlert size={40} color="var(--secondary)" />
               </div>
@@ -108,7 +125,7 @@ const RestrictedDashboard = ({ user }) => {
                   Your account has successfully integrated with our system hub. However, <b>Elevation Privileges</b> have not yet been granted to this identity. 
                   Until an administrator verifies your profile, internal communications and the secure hub will remain locked.
                 </p>
-                <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
+                <div className="restricted-banner-actions" style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
                   <button className="btn-primary" style={{ padding: '0.8rem 2rem' }}>Request Access Elevation</button>
                   <button className="btn-secondary" style={{ padding: '0.8rem 2rem' }} onClick={() => window.location.href = '/'}>Return to Home</button>
                 </div>

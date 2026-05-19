@@ -179,6 +179,67 @@ const ProfilePage = ({ currentUser, userId }) => {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>
+      <style>{`
+        .profile-header-card {
+          background: white; 
+          border-radius: 16px; 
+          padding: 2rem; 
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+          margin-bottom: 2.5rem;
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center;
+          border: 1px solid #e2e8f0;
+        }
+        .profile-grid {
+          display: grid;
+          grid-template-columns: 1fr 2fr;
+          gap: 2rem;
+        }
+        .edit-profile-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.5rem;
+        }
+        .address-row {
+          display: flex;
+          gap: 0.5rem;
+        }
+        @media (max-width: 768px) {
+          .profile-header-card {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 1.5rem !important;
+            padding: 1.5rem !important;
+          }
+          .profile-header-card > div {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 1rem !important;
+          }
+          .profile-header-card button {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .profile-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1.5rem !important;
+          }
+          .edit-profile-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+          }
+          .address-row {
+            flex-direction: column !important;
+          }
+          .address-row button {
+            width: 100% !important;
+            padding: 0.75rem !important;
+            justify-content: center !important;
+          }
+        }
+      `}</style>
+
       {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
@@ -229,18 +290,8 @@ const ProfilePage = ({ currentUser, userId }) => {
 
       <main style={{ maxWidth: '800px', margin: '2rem auto', padding: '0 1rem' }}>
         {/* Clean Header (no cover photo banner) */}
-        <div style={{ 
-          background: 'white', 
-          borderRadius: '16px', 
-          padding: '2rem', 
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)', 
-          marginBottom: '2.5rem',
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          border: '1px solid #e2e8f0'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        <div className="profile-header-card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative' }}>
               <img 
                 src={profile.profile_picture || `https://ui-avatars.com/api/?name=${profile.nickname || profile.email}&size=128`} 
@@ -275,7 +326,7 @@ const ProfilePage = ({ currentUser, userId }) => {
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+        <div className="profile-grid">
           {/* Left Column: Stats & Socials */}
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -327,7 +378,7 @@ const ProfilePage = ({ currentUser, userId }) => {
                 <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   {isRestrictedUser ? (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                      <div className="edit-profile-grid">
                         <div>
                           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Full Name / Nickname</label>
                           <input 
@@ -375,7 +426,7 @@ const ProfilePage = ({ currentUser, userId }) => {
 
                       <div>
                         <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Address / Location</label>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div className="address-row">
                           <input 
                             className="input-field" 
                             value={editData.address || ''} 
@@ -396,7 +447,7 @@ const ProfilePage = ({ currentUser, userId }) => {
                     </>
                   ) : (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                      <div className="edit-profile-grid">
                         <div>
                           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Full Name / Nickname</label>
                           <input 
@@ -450,7 +501,7 @@ const ProfilePage = ({ currentUser, userId }) => {
 
                       <div>
                         <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Address / Location</label>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div className="address-row">
                           <input 
                             className="input-field" 
                             value={editData.address || ''} 

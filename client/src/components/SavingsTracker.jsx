@@ -407,7 +407,26 @@ const SavingsTracker = ({ user }) => {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem', background:'#F9FAFB', borderRadius:'24px', minHeight:'80vh', color:'#111827', fontFamily:"'Inter', sans-serif", padding:'1.5rem' }}>
-      <nav style={{ position:'sticky', top:0, background:'rgba(255, 255, 255, 0.9)', backdropFilter:'blur(10px)', display:'flex', justifyContent:'space-around', padding:'0.75rem 0', borderBottom:'1px solid #E5E7EB', zIndex:100, margin: '-1.5rem -1.5rem 1.5rem -1.5rem', borderRadius: '24px 24px 0 0' }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .savings-nav {
+            justify-content: flex-start !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 1rem !important;
+            padding: 0.75rem 1rem !important;
+            scrollbar-width: none !important;
+          }
+          .savings-nav::-webkit-scrollbar {
+            display: none !important;
+          }
+          .savings-nav > button {
+            flex: 0 0 auto !important;
+          }
+        }
+      `}</style>
+      
+      <nav className="savings-nav" style={{ position:'sticky', top:0, background:'rgba(255, 255, 255, 0.9)', backdropFilter:'blur(10px)', display:'flex', justifyContent:'space-around', padding:'0.75rem 0', borderBottom:'1px solid #E5E7EB', zIndex:100, margin: '-1.5rem -1.5rem 1.5rem -1.5rem', borderRadius: '24px 24px 0 0' }}>
         <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" active={activeView} onClick={setActiveView} />
         <NavItem id="investments" icon={Briefcase} label="Working" active={activeView} onClick={setActiveView} />
         <NavItem id="members" icon={Users} label="Members" active={activeView} onClick={setActiveView} />
@@ -419,7 +438,7 @@ const SavingsTracker = ({ user }) => {
           {activeView === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
               <header><h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit', margin:'0 0 0.25rem' }}>Dashboard</h1><p style={{ color:'#6B7280', margin:0 }}>{members.length} members • {new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</p></header>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'1.25rem' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap:'1.25rem' }}>
                 <StatCard label="TOTAL PROFIT" value={formatCurrency(totalProfitsEarned)} color="#16A34A" subValue="Realized Gains" onClick={() => setShowProfitModal(true)} />
                 <StatCard label="TOTAL WEALTH" value={formatCurrency(totalPool)} color="#16A34A" subValue="Savings + Profits" onClick={() => setShowWealthModal(true)} />
                 <StatCard label="MONEY AT WORK" value={formatCurrency(totalActiveCapital)} color="#8B5CF6" subValue="In active missions" onClick={() => setShowActiveInvestmentsModal(true)} />
@@ -435,7 +454,7 @@ const SavingsTracker = ({ user }) => {
                 </div>
               </div>
               
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(400px, 1fr))', gap:'1.5rem' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap:'1.5rem' }}>
                 <Section title="Member Balances" onAction={() => setActiveView('members')} actionLabel="View all →">
                   {processedMembers.map((m, i) => <MemberListItem key={m.id} member={m} index={i} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
                 </Section>
@@ -557,7 +576,7 @@ const SavingsTracker = ({ user }) => {
               <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit' }}>Working Capital</h1>
               <p style={{ color:'#6B7280', marginTop:'-1rem' }}>Track the businesses and projects our savings are invested in.</p>
               
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'1rem' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap:'1rem' }}>
                 <StatCard 
                   label="REMAINING MONEY" 
                   value={formatCurrency(finalTotalAvailable)} 
@@ -1206,7 +1225,7 @@ const SavingsTracker = ({ user }) => {
         {showInvestmentDetailModal && selectedInvestment && (
           <Modal title={selectedInvestment.project_name} onClose={() => setShowInvestmentDetailModal(false)}>
             <div style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: '0.75rem' }}>
                 <div style={{ background: '#F9FAFB', padding: '1rem', borderRadius: '16px', border: '1px solid #E5E7EB', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Expense</div>
                   <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>{formatCurrency(selectedInvestment.allocated_amount)}</div>

@@ -477,7 +477,7 @@ const LandingPage = ({ user }) => {
               <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--primary-dark)' }}>Interactive Portal & Maps</h2>
               <p style={{ color: 'var(--text-muted)' }}>Direct access to the official carrier resources for our community.</p>
             </div>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
               <div onClick={() => navigate('/support/self-portal')} style={{ cursor: 'pointer' }}>
                 <div className="glass-card" style={{ padding: '2.5rem', background: '#fff', textAlign: 'center', borderBottom: '5px solid var(--primary)' }}>
                   <Globe size={40} color="var(--primary-dark)" style={{ marginBottom: '1.5rem' }} />
