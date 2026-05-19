@@ -33,6 +33,7 @@ const ProfilePage = ({ currentUser, userId }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [lightBox, setLightBox] = useState({ isOpen: false, url: '' });
   const [toastMessage, setToastMessage] = useState('');
+  const [imageError, setImageError] = useState(false);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -41,6 +42,7 @@ const ProfilePage = ({ currentUser, userId }) => {
 
 
   useEffect(() => {
+    setImageError(false);
     fetchProfile();
   }, [id]);
 
@@ -180,62 +182,80 @@ const ProfilePage = ({ currentUser, userId }) => {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>
       <style>{`
+        /* Mobile-First Default Styles (Stack vertically by default) */
         .profile-header-card {
+          position: relative;
           background: white; 
           border-radius: 16px; 
-          padding: 2rem; 
+          padding: 1.5rem; 
           box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
-          margin-bottom: 2.5rem;
+          margin-bottom: 1.5rem;
           display: flex; 
-          justify-content: space-between; 
-          align-items: center;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1.5rem;
           border: 1px solid #e2e8f0;
         }
+        .profile-header-card > div {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1rem;
+          width: 100%;
+        }
         .profile-grid {
-          display: grid;
-          grid-template-columns: 1fr 2fr;
-          gap: 2rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
         }
         .edit-profile-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1.5rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
         }
         .address-row {
           display: flex;
-          gap: 0.5rem;
+          flex-direction: column;
+          gap: 0.75rem;
         }
-        @media (max-width: 768px) {
+        .address-row button {
+          width: 100% !important;
+          padding: 0.75rem !important;
+          justify-content: center !important;
+        }
+
+        /* Desktop Adjustments (min-width: 769px) */
+        @media (min-width: 769px) {
           .profile-header-card {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 1.5rem !important;
-            padding: 1.5rem !important;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
           }
           .profile-header-card > div {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 1rem !important;
-          }
-          .profile-header-card button {
-            width: 100% !important;
-            justify-content: center !important;
+            flex-direction: row;
+            align-items: center;
+            gap: 1.5rem;
+            width: auto;
           }
           .profile-grid {
-            grid-template-columns: 1fr !important;
-            gap: 1.5rem !important;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
           }
           .edit-profile-grid {
-            grid-template-columns: 1fr !important;
-            gap: 1rem !important;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
           }
           .address-row {
-            flex-direction: column !important;
+            flex-direction: row;
+            gap: 0.5rem;
           }
           .address-row button {
-            width: 100% !important;
-            padding: 0.75rem !important;
-            justify-content: center !important;
+            width: auto !important;
+            padding: 0 1rem !important;
           }
         }
       `}</style>
@@ -292,13 +312,37 @@ const ProfilePage = ({ currentUser, userId }) => {
         {/* Clean Header (no cover photo banner) */}
         <div className="profile-header-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative' }}>
-              <img 
-                src={profile.profile_picture || `https://ui-avatars.com/api/?name=${profile.nickname || profile.email}&size=128`} 
-                alt="Profile" 
-                onClick={() => setLightBox({ isOpen: true, url: profile.profile_picture || `https://ui-avatars.com/api/?name=${profile.nickname || profile.email}&size=128` })}
-                style={{ width: '96px', height: '96px', borderRadius: '20px', border: '1px solid #e2e8f0', objectFit: 'cover', cursor: 'zoom-in' }}
-              />
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              {(!profile.profile_picture || imageError) ? (
+                <div 
+                  style={{ 
+                    width: '96px', 
+                    height: '96px', 
+                    borderRadius: '20px', 
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '2.5rem',
+                    fontWeight: 800,
+                    border: '1px solid #e2e8f0',
+                    textTransform: 'uppercase',
+                    boxShadow: '0 4px 12px rgba(141, 198, 63, 0.15)',
+                    cursor: 'default'
+                  }}
+                >
+                  {(profile.nickname || profile.email || 'U')[0]}
+                </div>
+              ) : (
+                <img 
+                  src={profile.profile_picture} 
+                  alt="Profile" 
+                  onError={() => setImageError(true)}
+                  onClick={() => setLightBox({ isOpen: true, url: profile.profile_picture })}
+                  style={{ width: '96px', height: '96px', borderRadius: '20px', border: '1px solid #e2e8f0', objectFit: 'cover', cursor: 'zoom-in' }}
+                />
+              )}
               {isOwnProfile && isEditing && !isRestrictedUser && (
                 <label style={{ 
                   position: 'absolute', bottom: '-5px', right: '-5px', 
@@ -311,17 +355,34 @@ const ProfilePage = ({ currentUser, userId }) => {
                 </label>
               )}
             </div>
-            <div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 0.25rem' }}>{profile.nickname || 'Unknown Identity'}</h2>
-              <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>{profile.email}</p>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.nickname || 'Unknown Identity'}</h2>
+              <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.email}</p>
             </div>
           </div>
           {isOwnProfile && !isEditing && (
             <button 
               onClick={() => setIsEditing(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.6rem 1.2rem', fontWeight: 600, cursor: 'pointer' }}
+              style={{ 
+                position: 'absolute',
+                top: '1.25rem',
+                right: '1.25rem',
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                background: 'white', 
+                border: '1px solid #e2e8f0', 
+                borderRadius: '8px', 
+                padding: '0.5rem 1rem', 
+                fontSize: '0.85rem',
+                fontWeight: 600, 
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                transition: 'all 0.2s',
+                zIndex: 5
+              }}
             >
-              <Edit2 size={16} /> Edit Profile
+              <Edit2 size={14} /> Edit Profile
             </button>
           )}
         </div>
