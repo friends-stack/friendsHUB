@@ -4,9 +4,72 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const morgan = require('morgan');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const speakeasy = require('speakeasy');
+const { Telegraf, Markup } = require('telegraf');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const cron = require('node-cron');
 
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// Ensure upload directory exists
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// MIME-type extension mappings for fallback
+const MIME_EXTENSIONS = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'text/plain': '.txt',
+  'application/zip': '.zip',
+  'application/x-rar-compressed': '.rar',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/ogg': '.ogg',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'video/mp4': '.mp4',
+  'video/mpeg': '.mpeg',
+  'video/quicktime': '.mov'
+};
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    let ext = path.extname(file.originalname);
+    if (!ext) {
+      ext = MIME_EXTENSIONS[file.mimetype] || '';
+    }
+    const cleanOriginal = file.originalname.endsWith(ext)
+      ? file.originalname.slice(0, -ext.length)
+      : file.originalname;
+    const baseName = cleanOriginal === 'blob' ? 'document' : cleanOriginal;
+    cb(null, Date.now() + '-' + baseName + ext);
+  }
+});
+const upload = multer({ storage });
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 class Statement {
   constructor(sql) {
@@ -1464,7 +1527,7 @@ app.post('/api/admin/users/cover-photo', checkAuth, async (req, res) => {
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // Wildcard route to serve React Router SPA frontend
-app.get('*', async (req, res) => {
+app.get(/.*/, async (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
