@@ -21,6 +21,11 @@ const pool = new Pool({
     : { rejectUnauthorized: false }
 });
 
+// Handle idle client errors securely to prevent process crashes
+pool.on('error', (err) => {
+  console.error('⚠️ Unexpected error on idle database client:', err.message);
+});
+
 // Ensure upload directory exists
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -1439,6 +1444,10 @@ if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_T
 
     ctx.reply(`⚡ CHAT HISTORY SYNC\n\n${historyText || 'No recent messages found.'}\n\nEncryption: ACTIVE | Status: SECURE`);
     logAction(null, 'ADMIN_HISTORY_SYNC', `Admin ${ctx.from.id} synchronized chat history`);
+  });
+
+  bot.catch((err, ctx) => {
+    console.error(`⚠️ Telegram bot error for update type "${ctx.updateType}":`, err);
   });
 
   bot.launch().catch(err => {
