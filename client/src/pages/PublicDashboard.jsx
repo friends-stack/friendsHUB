@@ -1269,8 +1269,8 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             {/* Why Trust Us Section */}
             <div style={{ background: 'white', borderRadius: '32px', padding: '4rem', marginBottom: '4rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
               <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Why Trust Us</span>
-                <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', margin: '1rem 0' }}>Trust isn't given — it's earned. We've earned it.</h2>
+                <div style={{ color: '#10b981', fontSize: '1rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '1rem' }}>Why Trust Us</div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 600, color: '#0f172a', margin: '0' }}>Trust isn't given — it's earned. We've earned it.</div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '3rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
