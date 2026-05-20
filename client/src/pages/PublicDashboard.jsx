@@ -1552,9 +1552,6 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </div>
           </div>
         )}
-
-      </main>
-
       {/* Property Detail Modal overlay */}
       {selectedProperty && (
         <div style={{
@@ -2000,6 +1997,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           </div>
         </div>
       </div>
+      </main>
 
       {/* Floating Action Bar */}
       <div style={{
