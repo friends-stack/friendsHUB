@@ -1192,7 +1192,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
 
             {/* Property Grid Header & Advanced Filters (Sticky) */}
             <div ref={portfolioRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem', position: 'sticky', top: 0, zIndex: 40, background: '#f8fafc', padding: '1rem 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="property-grid-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                 <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>Featured Estates</h2>
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                   {['All', 'Villas', 'Penthouses', 'Commercial'].map(filter => (
@@ -2078,6 +2078,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           .floating-action-bar a, .floating-action-bar button { padding: 0.75rem 0.5rem !important; flex: 1; justify-content: center; font-size: 0.75rem !important; }
           .ermias-trust-banner { padding: 2rem 1.5rem !important; gap: 2rem !important; }
           .ermias-trust-stats { gap: 1.5rem !important; flex-wrap: wrap !important; }
+          .property-grid-header { flex-direction: column !important; align-items: flex-start !important; }
         }
       `}</style>
     </div>
