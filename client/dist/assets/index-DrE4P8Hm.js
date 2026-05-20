@@ -369,7 +369,7 @@ Please change the parent <Route path="${e}"> to <Route path="${e===`/`?`*`:`${e}
         .ermias-trust-stats { gap: 3rem; }
         @media (max-width: 768px) {
           aside { display: none !important; }
-          main { padding: 1rem !important; }
+          main { padding: 1rem !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; box-sizing: border-box !important; }
           .property-grid { grid-template-columns: 1fr !important; gap: 1.5rem !important; }
           div[style*="gridTemplateColumns: repeat(auto-fit"] { grid-template-columns: 1fr !important; }
           h1 { font-size: 2.5rem !important; }
