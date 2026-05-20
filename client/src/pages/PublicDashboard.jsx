@@ -1165,7 +1165,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </motion.div>
 
             {/* "Why Trust Us" Trust Banner */}
-            <div style={{ background: '#0f172a', borderRadius: '32px', padding: '3rem 4rem', color: 'white', marginBottom: '4rem', display: 'flex', flexWrap: 'wrap', gap: '3rem', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="ermias-trust-banner" style={{ background: '#0f172a', borderRadius: '32px', color: 'white', marginBottom: '4rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ maxWidth: '400px' }}>
                 <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Ermias & Partners</span>
                 <h2 style={{ fontSize: '2rem', fontWeight: 900, margin: '0.5rem 0 1rem', lineHeight: '1.2' }}>The Standard for Luxury in Ethiopia</h2>
@@ -1174,7 +1174,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                   <MessageCircle size={18} /> Chat on WhatsApp
                 </a>
               </div>
-              <div style={{ display: 'flex', gap: '3rem' }}>
+              <div className="ermias-trust-stats" style={{ display: 'flex' }}>
                 <div>
                   <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981' }}>15+</div>
                   <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Years in Business</div>
@@ -2063,6 +2063,8 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           main { padding: 2rem !important; }
           h1 { font-size: 3rem !important; }
         }
+        .ermias-trust-banner { padding: 3rem 4rem; gap: 3rem; }
+        .ermias-trust-stats { gap: 3rem; }
         @media (max-width: 768px) {
           aside { display: none !important; }
           main { padding: 1rem !important; }
@@ -2074,6 +2076,8 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           .contact-grid-wrapper { padding: 3rem 1rem !important; border-radius: 0 !important; }
           .floating-action-bar { width: 90%; justify-content: space-between; padding: 0.5rem; }
           .floating-action-bar a, .floating-action-bar button { padding: 0.75rem 0.5rem !important; flex: 1; justify-content: center; font-size: 0.75rem !important; }
+          .ermias-trust-banner { padding: 2rem 1.5rem !important; gap: 2rem !important; }
+          .ermias-trust-stats { gap: 1.5rem !important; flex-wrap: wrap !important; }
         }
       `}</style>
     </div>
