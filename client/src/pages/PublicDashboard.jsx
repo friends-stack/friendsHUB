@@ -1000,7 +1000,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   });
 
   return (
-    <div className="public-dashboard-container" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b' }}>
+    <div className="public-dashboard-container" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b', overflowX: 'hidden', width: '100%', maxWidth: '100vw' }}>
       <style>{`
         @media (max-width: 768px) {
           .public-dashboard-container { flex-direction: column !important; }
