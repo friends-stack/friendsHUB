@@ -1170,7 +1170,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Ermias & Partners</span>
                 <h2 style={{ fontSize: '2rem', fontWeight: 900, margin: '0.5rem 0 1rem', lineHeight: '1.2' }}>The Standard for Luxury in Ethiopia</h2>
                 <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.6', margin: 0 }}>We are the leading licensed luxury brokerage in Addis Ababa. Handling the most prestigious assets for discerning global clients.</p>
-                <a href="https://wa.me/251911234567" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.9rem', textDecoration: 'none', marginTop: '1.5rem', transition: 'all 0.2s' }}>
+                <a href="https://wa.me/qr/E4DFLRL5BK54I1" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.9rem', textDecoration: 'none', marginTop: '1.5rem', transition: 'all 0.2s' }}>
                   <MessageCircle size={18} /> Chat on WhatsApp
                 </a>
               </div>
@@ -1962,7 +1962,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Call Us Directly</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>+251 911 234 567</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>0996985228</div>
                 </div>
               </div>
               
@@ -1972,7 +1972,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Email Address</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>vip@ethioluxury.com</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>ermiasgesgis@gmail.com</div>
                 </div>
               </div>
               
@@ -1990,13 +1990,13 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           
           <div style={{ background: 'white', borderRadius: '24px', padding: '3rem' }}>
             <h3 style={{ color: '#0f172a', fontSize: '1.5rem', fontWeight: 800, margin: '0 0 2rem' }}>Send a Message</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <input type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
-              <input type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
-              <input type="text" placeholder="Phone Number" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
-              <textarea placeholder="How can we help you?" rows="4" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', resize: 'none' }}></textarea>
-              <button onClick={() => setShowSuccessModal(true)} style={{ padding: '1.1rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', marginTop: '0.5rem' }}>Submit Inquiry</button>
-            </div>
+            <form onSubmit={(e) => { e.preventDefault(); setShowSuccessModal(true); }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input required type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input required type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input required type="text" placeholder="Phone Number" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <textarea required placeholder="How can we help you?" rows="4" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', resize: 'none' }}></textarea>
+              <button type="submit" style={{ padding: '1.1rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', marginTop: '0.5rem' }}>Submit Inquiry</button>
+            </form>
           </div>
         </div>
       </div>
@@ -2016,10 +2016,10 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
         zIndex: 50,
         boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
       }} className="floating-action-bar">
-        <a href="tel:+251911234567" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#38bdf8', color: '#0f172a', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
+        <a href="tel:+251996985228" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#38bdf8', color: '#0f172a', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
           <Phone size={16} /> Call Now
         </a>
-        <a href="https://wa.me/251911234567" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
+        <a href="https://wa.me/qr/E4DFLRL5BK54I1" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
           <MessageCircle size={16} /> WhatsApp
         </a>
         <button onClick={() => setShowBrochureModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s' }}>
@@ -2036,18 +2036,18 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             <button onClick={() => setShowBrochureModal(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', width: '36px', height: '36px', borderRadius: '50%', background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 900 }}>✕</button>
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Request Brochure</h3>
             <p style={{ color: '#64748b', marginBottom: '2rem', fontSize: '0.95rem' }}>Receive our exclusive portfolio prospectus instantly.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <input type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
-              <input type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
-              <select style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', color: '#475569' }}>
+            <form onSubmit={(e) => { e.preventDefault(); setShowBrochureModal(false); setShowSuccessModal(true); }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input required type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input required type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <select required style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', color: '#475569' }}>
                 <option value="">Select Property Interest</option>
                 <option value="villas">Luxury Villas</option>
                 <option value="commercial">Commercial Towers</option>
                 <option value="penthouses">Sky Penthouses</option>
                 <option value="all">Full Portfolio</option>
               </select>
-              <button onClick={() => { setShowBrochureModal(false); setShowSuccessModal(true); }} style={{ width: '100%', padding: '1.1rem', borderRadius: '12px', background: '#0f172a', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer', fontSize: '1rem', marginTop: '0.5rem' }}>Send Prospectus</button>
-            </div>
+              <button type="submit" style={{ width: '100%', padding: '1.1rem', borderRadius: '12px', background: '#0f172a', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer', fontSize: '1rem', marginTop: '0.5rem' }}>Send Prospectus</button>
+            </form>
           </motion.div>
         </div>
       )}
