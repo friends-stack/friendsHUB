@@ -1266,44 +1266,43 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               ))}
             </div>
 
-            {/* Our Advantage Section */}
+            {/* Why Trust Us Section */}
             <div style={{ background: 'white', borderRadius: '32px', padding: '4rem', marginBottom: '4rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-              <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Competitive Edge</span>
-                <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>Why Ermias Luxury?</h2>
+              <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Why Trust Us</span>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', margin: '1rem 0' }}>Trust isn't given — it's earned. We've earned it.</h2>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '1.5rem', fontWeight: 800, color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', borderRadius: '16px 0 0 16px' }}>Feature</th>
-                      <th style={{ padding: '1.5rem', fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>Ermias Luxury</th>
-                      <th style={{ padding: '1.5rem', fontWeight: 700, color: '#94a3b8', fontSize: '1rem', borderRadius: '0 16px 16px 0' }}>Standard Agencies</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>Free concierge after sale</td>
-                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
-                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>International partner network (Dubai, London)</td>
-                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
-                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>24/7 property management</td>
-                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
-                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>Exclusive Off-Market Access</td>
-                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
-                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ Limited</td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '3rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>🏛️</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>A Decade of Excellence</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>10 years. Countless legacies. Zero shortcuts.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>✅</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Proven Track Record</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>180+ deals closed. Results speak louder.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>🌍</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Global Reach, Local Roots</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>World-class reach. Ethiopian heart.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>🔒</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>100% Legally Compliant</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>Every deal. By the book. No exceptions.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>🤝</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Full-Cycle Concierge</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>We stay long after the sale.</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ fontSize: '2.5rem' }}>⭐</div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Built on Referrals</h3>
+                  <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>Our best ads? Our happy clients.</p>
+                </div>
               </div>
             </div>
           </>
