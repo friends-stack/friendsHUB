@@ -1165,7 +1165,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             </motion.div>
 
             {/* "Why Trust Us" Trust Banner */}
-            <div className="ermias-trust-banner" style={{ background: '#0f172a', borderRadius: '32px', color: 'white', marginBottom: '4rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="ermias-trust-banner" style={{ background: '#0f172a', borderRadius: '32px', color: 'white', marginBottom: '4rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
               <div style={{ maxWidth: '400px' }}>
                 <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Ermias & Partners</span>
                 <h2 style={{ fontSize: '2rem', fontWeight: 900, margin: '0.5rem 0 1rem', lineHeight: '1.2' }}>The Standard for Luxury in Ethiopia</h2>
@@ -2074,8 +2074,9 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           .contact-grid-wrapper { padding: 3rem 1rem !important; border-radius: 0 !important; }
           .floating-action-bar { width: 90%; justify-content: space-between; padding: 0.5rem; }
           .floating-action-bar a, .floating-action-bar button { padding: 0.75rem 0.5rem !important; flex: 1; justify-content: center; font-size: 0.75rem !important; }
-          .ermias-trust-banner { padding: 2rem 1.5rem !important; gap: 2rem !important; }
-          .ermias-trust-stats { gap: 1.5rem !important; flex-wrap: wrap !important; }
+          .ermias-trust-banner { padding: 2rem 1.5rem !important; gap: 1.5rem !important; }
+          .ermias-trust-stats { gap: 1rem !important; flex-wrap: wrap !important; width: 100%; justify-content: space-between; }
+          .ermias-trust-stats > div { min-width: 45%; }
           .property-grid-header { flex-direction: column !important; align-items: flex-start !important; }
         }
       `}</style>
