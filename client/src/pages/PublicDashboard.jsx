@@ -1273,34 +1273,28 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', margin: '1rem 0' }}>Trust isn't given — it's earned. We've earned it.</h2>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '3rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>🏛️</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>A Decade of Excellence</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>🏛️</span> A Decade of Excellence</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>10 years. Countless legacies. Zero shortcuts.</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>✅</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Proven Track Record</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>✅</span> Proven Track Record</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>180+ deals closed. Results speak louder.</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>🌍</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Global Reach, Local Roots</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>🌍</span> Global Reach, Local Roots</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>World-class reach. Ethiopian heart.</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>🔒</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>100% Legally Compliant</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>🔒</span> 100% Legally Compliant</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>Every deal. By the book. No exceptions.</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>🤝</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Full-Cycle Concierge</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>🤝</span> Full-Cycle Concierge</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>We stay long after the sale.</p>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ fontSize: '2.5rem' }}>⭐</div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>Built on Referrals</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '1.75rem' }}>⭐</span> Built on Referrals</h3>
                   <p style={{ color: '#64748b', fontSize: '1rem', lineHeight: '1.6', margin: 0 }}>Our best ads? Our happy clients.</p>
                 </div>
               </div>
