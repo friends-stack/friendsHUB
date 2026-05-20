@@ -806,11 +806,18 @@ const MessagingPage = ({ user }) => {
                         <div style={{ fontSize: '1rem', lineHeight: '1.4', fontWeight: 300 }}>{msg.content}</div>
                         <div style={{ 
                           fontSize: '0.75rem', 
-                          color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.9)' : '#64748b', 
-                          textAlign: 'left',
-                          marginTop: '0.25rem'
+                          color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.95)' : '#64748b', 
+                          textAlign: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'right' : 'left',
+                          marginTop: '0.35rem'
                         }}>
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {msg.created_at ? (() => {
+                            try {
+                              const d = new Date(msg.created_at);
+                              return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            } catch (e) {
+                              return '';
+                            }
+                          })() : ''}
                         </div>
                       </div>
 
@@ -829,6 +836,7 @@ const MessagingPage = ({ user }) => {
                   ))}
                 </>
               )}
+              <div style={{ height: '40px', flexShrink: 0 }} />
               <div ref={messagesEndRef} />
             </div>
 

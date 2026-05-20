@@ -1748,17 +1748,25 @@ const PrivateDashboard = ({ user }) => {
                           )}
                         <div style={{ 
                           fontSize: '0.7rem', 
-                          color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.9)' : '#94a3b8', 
-                          textAlign: 'left',
-                          marginTop: '0.2rem',
+                          color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255,255,255,0.95)' : '#94a3b8', 
+                          textAlign: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'right' : 'left',
+                          marginTop: '0.35rem',
                           textTransform: 'uppercase',
                           fontWeight: 500
                         }}>
-                          {new Date(msg.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true })}
+                          {msg.created_at ? (() => {
+                            try {
+                              const d = new Date(msg.created_at);
+                              return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+                            } catch (e) {
+                              return '';
+                            }
+                          })() : ''}
                         </div>
                       </div>
                     </div>
                   ))}
+                  <div style={{ height: '40px', flexShrink: 0 }} />
                   <div ref={messagesEndRef} />
                 </div>
                 
@@ -2065,14 +2073,14 @@ const PrivateDashboard = ({ user }) => {
                     <motion.div 
                       key={item.id} 
                       layout 
-                      className="glass-card" 
+                      className="glass-card card-no-pad" 
                       style={{ 
                         padding: '0', 
                         position: 'relative', 
                         borderRadius: '24px', 
                         display: 'flex', 
                         flexDirection: 'column',
-                        overflow: 'hidden',
+                        overflow: 'visible',
                         border: 'none',
                         boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
                         background: 'white'
@@ -2130,11 +2138,13 @@ const PrivateDashboard = ({ user }) => {
                         </div>
                       </div>
 
-                      {/* Interaction Bar (Hidden by default, shown on hover? No, let's keep it clean but accessible) */}
-                      <div style={{ 
+                      {/* Interaction Bar — always visible including on mobile */}
+                      <div className="card-interaction-bar" style={{ 
                         display: 'flex', alignItems: 'center', justifyContent: 'center', 
                         gap: '1.5rem', padding: '1rem', borderTop: '1px solid #f1f5f9',
-                        background: '#f8fafc'
+                        background: '#f8fafc',
+                        borderBottomLeftRadius: '24px',
+                        borderBottomRightRadius: '24px'
                       }}>
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleGalleryReaction(item.id); }}

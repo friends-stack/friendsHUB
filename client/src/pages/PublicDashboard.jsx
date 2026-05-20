@@ -2,7 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import {
   Home, Building, Layout, User, Search, Heart, MapPin,
-  TrendingUp, Star, ArrowRight, Menu, Bell, LogIn, CheckCircle, LogOut
+  TrendingUp, Star, ArrowRight, Menu, Bell, LogIn, CheckCircle, LogOut,
+  Phone, Mail, MessageCircle, FileText, ShieldCheck
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -29,7 +30,9 @@ const luxuryProperties = [
       side: '/sheger_side.jpg',
       top: '/sheger_top.jpg'
     },
-    description: 'This breathtaking family villa features beautiful stone work, a warm infinity pool for hot days, and simple smart home controls. Located in a secure, quiet corner of Bole, it is perfect for families who appreciate fine modern living in the capital.'
+    description: 'This breathtaking family villa features beautiful stone work, a warm infinity pool for hot days, and simple smart home controls. Located in a secure, quiet corner of Bole, it is perfect for families who appreciate fine modern living in the capital.',
+    status: '🔴 Just Listed',
+    story: "Host diplomats in your private cinema. This is not a home — it is a statement of power.",
   },
   {
     id: 'v2',
@@ -50,7 +53,8 @@ const luxuryProperties = [
       side: '/adey_villa_side.jpg',
       top: '/adey_villa_top.jpg'
     },
-    description: 'A cozy and welcoming contemporary home designed for families who love hosting guests. Features underfloor heating for cool Addis mornings, a beautifully built private cellar, and a spacious green lawn where children can play safely.'
+    description: 'A cozy and welcoming contemporary home designed for families who love hosting guests. Features underfloor heating for cool Addis mornings, a beautifully built private cellar, and a spacious green lawn where children can play safely.',
+    story: "Wake up to Addis mornings with heated floors and espresso from your sun-drenched terrace.",
   },
   {
     id: 'v3',
@@ -71,7 +75,9 @@ const luxuryProperties = [
       side: '/taitu_side.jpg',
       top: '/taitu_top.jpg'
     },
-    description: 'A stunning traditional manor situated in the elegant neighborhood of Old Airport. This spacious estate includes a private pool house, professional water borehole filters, and beautifully landscaped gardens filled with local highland flowers.'
+    description: 'A stunning traditional manor situated in the elegant neighborhood of Old Airport. This spacious estate includes a private pool house, professional water borehole filters, and beautifully landscaped gardens filled with local highland flowers.',
+    status: '⏳ Under Offer',
+    story: "Your own helipad. Your own pool house. Your own dynasty begins at Taitu Palace.",
   },
   {
     id: 'v4',
@@ -92,7 +98,8 @@ const luxuryProperties = [
       side: '/hora_crater_side.jpg',
       top: '/hora_crater_top.jpg'
     },
-    description: 'Wake up to the spectacular views of Babogaya Crater Lake in Bishoftu. This environment-friendly stone villa matches the local cliffs, offering a peaceful infinity pool, huge wrap-around wooden decks, and quiet garden paths for resting.'
+    description: 'Wake up to the spectacular views of Babogaya Crater Lake in Bishoftu. This environment-friendly stone villa matches the local cliffs, offering a peaceful infinity pool, huge wrap-around wooden decks, and quiet garden paths for resting.',
+    story: "Sip Ethiopian coffee watching flamingos land on a volcanic crater lake — from your living room.",
   },
   {
     id: 'v5',
@@ -113,28 +120,8 @@ const luxuryProperties = [
       side: '/selam_glass_side.jpg',
       top: '/selam_glass_top.jpg'
     },
-    description: 'A modern glasshouse sanctuary that blends beautiful indoor spaces with lush green gardens in CMC. It features a private lift, open-plan dining area, and a central blue pool perfect for refreshing afternoon swims.'
-  },
-  {
-    id: 'v6',
-    type: 'Villas',
-    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80',
-    title: 'Entoto Mountain Villa',
-    price: '210,000,000 ETB',
-    location: 'Summit, Addis Ababa',
-    tags: ['Privacy', 'Tennis Court', 'Hamam'],
-    features: {
-      beds: 6,
-      baths: 7,
-      sqm: 1350,
-      amenities: ['Full-size Tennis Court', 'Private Steam Hamam', 'CCTV Cyber Network', 'Real Wood Fireplaces', 'Outdoor Dining Pavilion', 'Double Height Library']
-    },
-    views: {
-      front: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
-      side: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=800&q=80',
-      top: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80'
-    },
-    description: 'Hidden behind tall trees in the peaceful Summit area, this estate offers unmatched privacy. Enjoy your own private clay tennis court, a traditional steam room, and a grand warm living room complete with a genuine wood-burning fireplace.'
+    description: 'A modern glasshouse sanctuary that blends beautiful indoor spaces with lush green gardens in CMC. It features a private lift, open-plan dining area, and a central blue pool perfect for refreshing afternoon swims.',
+    story: "Where ancient Lalibela stone meets modern genius. A villa that tells a thousand-year story.",
   },
   {
     id: 'v7',
@@ -155,7 +142,8 @@ const luxuryProperties = [
       side: '/goha_hawassa_side.png',
       top: '/goha_hawassa_top.jpg'
     },
-    description: 'Escape the capital to the beautiful shores of Hawassa. This lakeside home features a private boat jetty, a large green lawn running directly to the water, and a peaceful spa pavilion for the ultimate relaxing weekend.'
+    description: 'Escape the capital to the beautiful shores of Hawassa. This lakeside home features a private boat jetty, a large green lawn running directly to the water, and a peaceful spa pavilion for the ultimate relaxing weekend.',
+    story: "Fall asleep to the sound of Lake Hawassa waves, wake up to a paradise only you can see.",
   },
   {
     id: 'v8',
@@ -176,7 +164,8 @@ const luxuryProperties = [
       side: '/abay_tana_side.png',
       top: '/abay_tana_top.jpg'
     },
-    description: 'An outstanding palace situated in Bahir Dar on the historic shores of Lake Tana. Includes beautiful expansive mature gardens, a private boat house, a professional service wing, and highly secure private parking.'
+    description: 'An outstanding palace situated in Bahir Dar on the historic shores of Lake Tana. Includes beautiful expansive mature gardens, a private boat house, a professional service wing, and highly secure private parking.',
+    story: "Sail on Lake Tana at sunrise, return to your private jetty by sunset. This is living.",
   },
   {
     id: 'v9',
@@ -197,7 +186,8 @@ const luxuryProperties = [
       side: '/entoto_mountain_side.jpg',
       top: '/entoto_mountain_top.jpg'
     },
-    description: 'Perched high on the Entoto Mountain Ridge overlooking Addis Ababa. This eco-luxury stone retreat features beautiful traditional thatched roofing, separate round guest cottages (Tukul), cozy stone fireplaces, and lush walking paths winding through the native eucalyptus and pine forest.'
+    description: 'Perched high on the Entoto Mountain Ridge overlooking Addis Ababa. This eco-luxury stone retreat features beautiful traditional thatched roofing, separate round guest cottages (Tukul), cozy stone fireplaces, and lush walking paths winding through the native eucalyptus and pine forest.',
+    story: "Wake up to breathtaking views in your v9. This is not just a home—it\'s a statement.",
   },
 
   // ================= PENTHOUSES (8) =================
@@ -220,7 +210,9 @@ const luxuryProperties = [
       side: '/lalibela_side.jpg',
       top: '/lalibela_top.jpg'
     },
-    description: 'Live high above the capital in Bole’s premier luxury tower. This duplex penthouse features its own heated sky-pool on the balcony, a private express lift, and absolute peace and quiet high above the city.'
+    description: 'Live high above the capital in Bole’s premier luxury tower. This duplex penthouse features its own heated sky-pool on the balcony, a private express lift, and absolute peace and quiet high above the city.',
+    status: '🔴 Just Listed',
+    story: "The entire city at your feet. Bole Platinum is not an address — it is a destination.",
   },
   {
     id: 'p2',
@@ -241,7 +233,8 @@ const luxuryProperties = [
       side: '/unity_side.jpg',
       top: '/unity_top.jpg'
     },
-    description: 'A masterfully crafted double-story loft in Kazanchis. Features large sky-facing windows, warm wood floors, and a gorgeous private rooftop patio with a hot jacuzzi overlooking the central towers.'
+    description: 'A masterfully crafted double-story loft in Kazanchis. Features large sky-facing windows, warm wood floors, and a gorgeous private rooftop patio with a hot jacuzzi overlooking the central towers.',
+    story: "Own the sky above Kazanchis. Every sunset is your private masterpiece.",
   },
   {
     id: 'p3',
@@ -262,7 +255,8 @@ const luxuryProperties = [
       side: '/hora_side.jpg',
       top: '/hora_top.jpg'
     },
-    description: 'A highly luxurious sky home located in Kirkos. Features an exquisite glass-sided infinity pool on the upper deck, a warm private wood-paneled lounge, and high-speed elevators straight into your living room.'
+    description: 'A highly luxurious sky home located in Kirkos. Features an exquisite glass-sided infinity pool on the upper deck, a warm private wood-paneled lounge, and high-speed elevators straight into your living room.',
+    story: "From your rooftop, watch the sun paint the Rift Valley gold. Live above it all.",
   },
   {
     id: 'p4',
@@ -283,7 +277,8 @@ const luxuryProperties = [
       side: '/adwa_side.jpg',
       top: '/adwa_top.jpg'
     },
-    description: 'Located in the historic Piassa district. This loft combines beautiful vintage exposed brick walls with modern luxury finishes, a private rooftop fitness studio, and incredible views of Piassa’s warm old streets.'
+    description: 'Located in the historic Piassa district. This loft combines beautiful vintage exposed brick walls with modern luxury finishes, a private rooftop fitness studio, and incredible views of Piassa’s warm old streets.',
+    story: "History lives in these walls. Piassa heritage meets tomorrow in this extraordinary loft.",
   },
   {
     id: 'p5',
@@ -304,7 +299,9 @@ const luxuryProperties = [
       side: '/semien_side.jpg',
       top: '/semien_top.jpg'
     },
-    description: 'A spectacular glass sanctuary right at Meskel Square. Enjoy complete privacy with soundproof glass walls, electrochromic smart window tinting, a secure master wing, and instant tower helipad access.'
+    description: 'A spectacular glass sanctuary right at Meskel Square. Enjoy complete privacy with soundproof glass walls, electrochromic smart window tinting, a secure master wing, and instant tower helipad access.',
+    status: '⏳ Under Offer',
+    story: "Helicopters land on your roof. Smart glass dims at your command. Welcome to the future.",
   },
   {
     id: 'p6',
@@ -325,7 +322,8 @@ const luxuryProperties = [
       side: '/axum_side.jpg',
       top: '/axum_top.jpg'
     },
-    description: 'An absolute masterpiece spread across three floors in Bole Atlas. Features its own glass lift inside the penthouse, a private rooftop putting green, and a gorgeous private sauna.'
+    description: 'An absolute masterpiece spread across three floors in Bole Atlas. Features its own glass lift inside the penthouse, a private rooftop putting green, and a gorgeous private sauna.',
+    story: "Three floors of pure indulgence. A putting green in the sky. Addis has never seen this.",
   },
   {
     id: 'p7',
@@ -346,7 +344,8 @@ const luxuryProperties = [
       side: '/nechsar_side.jpg',
       top: '/nechsar_top.jpg'
     },
-    description: 'Perched on the famous Arba Minch cliffs. Offers a stunning view of Nech Sar National Park and the beautiful lakes Abaya and Chamo. Designed with warm local timber and complete with modern solar tech.'
+    description: 'Perched on the famous Arba Minch cliffs. Offers a stunning view of Nech Sar National Park and the beautiful lakes Abaya and Chamo. Designed with warm local timber and complete with modern solar tech.',
+    story: "Nech Sar at dawn. Lake Abaya at dusk. Nature designed this view just for you.",
   },
   {
     id: 'p8',
@@ -367,7 +366,8 @@ const luxuryProperties = [
       side: '/tana_side.jpg',
       top: '/tana_top.jpg'
     },
-    description: 'Sleep directly under the stars with Lideta’s most unique sky-dome retractable glass roof. Features a spacious private home theater, a fully equipped bar and lounge, and fingerprint-access safety lockers.'
+    description: 'Sleep directly under the stars with Lideta’s most unique sky-dome retractable glass roof. Features a spacious private home theater, a fully equipped bar and lounge, and fingerprint-access safety lockers.',
+    story: "Sleep under the stars through a retractable glass sky-dome. Lideta will never be the same.",
   },
 
   // ================= COMMERCIAL (8) =================
@@ -390,14 +390,23 @@ const luxuryProperties = [
       side: '/abay_side.jpg',
       top: '/abay_top.jpg'
     },
-    description: 'An ultra-modern commercial building in Kazanchis, ideal for corporate headquarters or banking institutions. Includes triple-source power generators, massive parking, and high-speed fiber lines.'
+    description: 'An ultra-modern commercial building in Kazanchis, ideal for corporate headquarters or banking institutions. Includes triple-source power generators, massive parking, and high-speed fiber lines.',
+    status: '🔴 Just Listed',
+    story: "Command Bole from your corner office. Where Ethiopian commerce meets global ambition.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c2',
     type: 'Commercial',
     image: '/sheger_front.png',
     title: 'Sheger Business Center',
-    price: '950,000,000 ETB',
+    price: 'Price on Request', hidePrice: true,
     location: 'Bole Medhanialem, Addis Ababa',
     tags: ['HQ', 'Bole', 'Helipad'],
     features: {
@@ -411,14 +420,23 @@ const luxuryProperties = [
       side: '/sheger_side.png',
       top: '/sheger_top.png'
     },
-    description: 'A spectacular 20-story skyscraper in the heart of Bole. Specially optimized for high-tech firms, featuring a professional server room, rooftop helipad, and biometric access controls.'
+    description: 'A spectacular 20-story skyscraper in the heart of Bole. Specially optimized for high-tech firms, featuring a professional server room, rooftop helipad, and biometric access controls.',
+    status: '🟡 Price on Request',
+    story: "Price on request for a reason. This is where billion-birr deals are closed.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c3',
     type: 'Commercial',
     image: '/adey_front.jpg',
     title: 'Adey Commercial Mall',
-    price: '1,450,000,000 ETB',
+    price: 'Price on Request', hidePrice: true,
     location: 'Bole Atlas, Addis Ababa',
     tags: ['Retail Mall', 'Escalators', 'Atrium'],
     features: {
@@ -432,7 +450,16 @@ const luxuryProperties = [
       side: '/adey_side.jpg',
       top: '/adey_top.jpg'
     },
-    description: 'Addis Ababa’s premier commercial shopping mall in Bole Atlas. Featuring high-end double height retail fronts, heavy-duty escalators, central multi-zone cooling, and parking for 150 vehicles.'
+    description: 'Addis Ababa’s premier commercial shopping mall in Bole Atlas. Featuring high-end double height retail fronts, heavy-duty escalators, central multi-zone cooling, and parking for 150 vehicles.',
+    status: '🟡 Price on Request',
+    story: "The anchor tenants are already here. Your corporate headquarters is waiting.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c4',
@@ -453,7 +480,15 @@ const luxuryProperties = [
       side: '/fasil_side.jpg',
       top: '/fasil_top.jpg'
     },
-    description: 'A contemporary business tower in Sarbet. Equipped with a huge rooftop cafeteria overlooking the capital, a hybrid solar generator system, and a warm lobby lounge perfect for client meetings.'
+    description: 'A contemporary business tower in Sarbet. Equipped with a huge rooftop cafeteria overlooking the capital, a hybrid solar generator system, and a warm lobby lounge perfect for client meetings.',
+    story: "Dire Dawa is rising. Secure your commercial footprint in Ethiopia\'s next boom city.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c5',
@@ -474,7 +509,16 @@ const luxuryProperties = [
       side: '/gadaa_side.jpg',
       top: '/gadaa_top.jpg'
     },
-    description: 'A beautiful regional headquarters located in the high-growth trade city of Adama. Includes double height ground showrooms, secure cash vaults, and high-speed lifts, ideal for corporate banking.'
+    description: 'A beautiful regional headquarters located in the high-growth trade city of Adama. Includes double height ground showrooms, secure cash vaults, and high-speed lifts, ideal for corporate banking.',
+    status: '⏳ Under Offer',
+    story: "Eight premium retail floors on CMC Road. The address every brand is fighting for.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c6',
@@ -495,7 +539,15 @@ const luxuryProperties = [
       side: '/awash_side.jpg',
       top: '/awash_top.jpg'
     },
-    description: 'A premier retail plaza connected directly to the CMC Light Rail Metro. Features an amazing interactive outer LED screen, easy loading bays, and 24/7 security control suites.'
+    description: 'A premier retail plaza connected directly to the CMC Light Rail Metro. Features an amazing interactive outer LED screen, easy loading bays, and 24/7 security control suites.',
+    story: "The tallest mixed-use tower in the Horn of Africa. Own a floor. Own the future.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c7',
@@ -516,14 +568,22 @@ const luxuryProperties = [
       side: '/kezira_side.jpg',
       top: '/kezira_top.jpg'
     },
-    description: 'A highly functional commercial tower located in Dire Dawa’s active Kezira trade district. Includes dual backup water wells, powerful generators, and robust fiber connections.'
+    description: 'A highly functional commercial tower located in Dire Dawa’s active Kezira trade district. Includes dual backup water wells, powerful generators, and robust fiber connections.',
+    story: "Trade flows through Adama. Position your enterprise at the gateway to East Africa.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   },
   {
     id: 'c8',
     type: 'Commercial',
     image: '/unity_corp_front.jpg',
     title: 'Unity Corporate Skyscraper',
-    price: '1,200,000,000 ETB',
+    price: 'Price on Request', hidePrice: true,
     location: 'Mexico Square, Addis Ababa',
     tags: ['Mexico', 'Skyscraper', 'Vertical Garden'],
     features: {
@@ -537,7 +597,16 @@ const luxuryProperties = [
       side: '/unity_corp_side.jpg',
       top: '/unity_corp_top.jpg'
     },
-    description: 'A landmark 18-story corporate skyscraper. Features spectacular vertical sky gardens, a 150-seat executive conference theater, a dedicated backup water reservoir, and 24/7 private security detail.'
+    description: 'A landmark 18-story corporate skyscraper. Features spectacular vertical sky gardens, a 150-seat executive conference theater, a dedicated backup water reservoir, and 24/7 private security detail.',
+    status: '🟡 Price on Request',
+    story: "Sky gardens and corporate power. Unity Tower is where empires are built.",
+    commercialDetails: {
+      leasePriceSqm: '2,500 ETB / m²',
+      efficiency: '85%',
+      parkingRatio: '1 bay per 50 m²',
+      powerBackup: 'Triple-redundant Tier III generators',
+      anchorTenants: ['Global Tech Inc.', 'Ethio Investment Bank']
+    },
   }
 ];
 
@@ -566,7 +635,7 @@ const luxuryCollections = [
     count: 2,
     image: '/entoto_mountain_front.jpg',
     tagline: 'Eco-luxe retreats amidst native pine forests and craters',
-    propertyIds: ['v6', 'v4'],
+    propertyIds: ['v9', 'v4'],
     color: '#059669'
   },
   {
@@ -631,6 +700,12 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
 
   // Dynamic Property State Management
   const [selectedFilter, setSelectedFilter] = React.useState('All');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [priceRange, setPriceRange] = React.useState('All');
+  const [bedsFilter, setBedsFilter] = React.useState('All');
+  const [locationFilter, setLocationFilter] = React.useState('All');
+  const [showInquiryModal, setShowInquiryModal] = React.useState(false);
+  const [showBrochureModal, setShowBrochureModal] = React.useState(false);
   const [selectedProperty, setSelectedProperty] = React.useState(null);
 
   // Elevational views inside the Modal
@@ -712,8 +787,15 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   );
 
   // Re-designed Rich Property Card Component with Stacked Title & Price
+  const formatUSD = (priceStr) => {
+    if (!priceStr || priceStr.includes('Request')) return null;
+    const etbNum = parseInt(priceStr.replace(/,/g, '').replace(' ETB', ''), 10);
+    if (isNaN(etbNum)) return null;
+    return `~$${Math.round(etbNum / 120).toLocaleString()} USD`;
+  };
+
   const PropertyCard = ({ property, onClick }) => {
-    const { image, title, price, location, tags, type, features } = property;
+    const { image, title, price, location, tags, type, features, story, status, hidePrice } = property;
     return (
       <motion.div
         whileHover={{ y: -8, scale: 1.01 }}
@@ -729,20 +811,44 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           flexDirection: 'column',
           justifyContent: 'space-between',
           height: '100%',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          position: 'relative'
         }}
       >
+        {status && (
+          <div style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '1rem',
+            zIndex: 10,
+            background: 'white',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '50px',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            color: '#0f172a',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+          }}>
+            {status}
+          </div>
+        )}
         <div>
           <div style={{ position: 'relative', height: '240px', overflow: 'hidden' }}>
-            <img src={image} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={image} alt={title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
 
           <div style={{ padding: '1.75rem' }}>
-            {/* Redesigned to stack Title and Price one after the other on separate lines */}
             <div style={{ marginBottom: '1rem' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.4rem 0', color: '#0f172a', lineHeight: '1.3' }}>{title}</h3>
-              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>{price}</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: hidePrice ? '#10b981' : '#0f172a' }}>{price}</div>
+              {!hidePrice && formatUSD(price) && (
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b', marginTop: '0.2rem' }}>{formatUSD(price)} (approx.)</div>
+              )}
             </div>
+
+            {story && (
+              <p style={{ fontSize: '0.9rem', color: '#475569', fontStyle: 'italic', marginBottom: '1rem', lineHeight: '1.4' }}>"{story}"</p>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
               <MapPin size={16} color="#0f172a" />
@@ -804,24 +910,51 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           </div>
         </div>
 
-        <div style={{ padding: '0 1.75rem 1.75rem 1.75rem' }}>
-          <button style={{
-            width: '100%',
-            padding: '0.85rem',
-            background: '#0f172a',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            fontWeight: 700,
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            transition: 'background 0.2s'
+        <div style={{ padding: '0 1.75rem 1.75rem 1.75rem', display: 'flex', gap: '0.75rem' }}>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            style={{
+              flex: 1,
+              padding: '0.85rem',
+              background: 'transparent',
+              color: '#0f172a',
+              border: '1px solid #0f172a',
+              borderRadius: '12px',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
+            }}>
+            Details
+          </button>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedProperty(property);
+              setShowInquiryModal(true);
+            }}
+            style={{
+              flex: 1,
+              padding: '0.85rem',
+              background: '#0f172a',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 0.2s'
           }}>
-            View Details <ArrowRight size={16} />
+            Inquire Now
           </button>
         </div>
 
@@ -830,9 +963,41 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   };
 
   // Filter properties dynamically
-  const filteredProperties = selectedFilter === 'All'
-    ? luxuryProperties
-    : luxuryProperties.filter(p => p.type === selectedFilter);
+  const parsePrice = (priceStr) => {
+    if (!priceStr || priceStr.includes('Request')) return 0;
+    return parseInt(priceStr.replace(/,/g, '').replace(' ETB', ''), 10);
+  };
+
+  const filteredProperties = luxuryProperties.filter(p => {
+    if (selectedFilter !== 'All' && p.type !== selectedFilter) return false;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      if (!p.title.toLowerCase().includes(query) && 
+          !p.location.toLowerCase().includes(query) && 
+          !p.tags.some(t => t.toLowerCase().includes(query))) return false;
+    }
+    
+    if (priceRange !== 'All') {
+      const priceNum = parsePrice(p.price);
+      if (priceRange === 'under-150M' && priceNum >= 150000000) return false;
+      if (priceRange === '150M-300M' && (priceNum < 150000000 || priceNum > 300000000)) return false;
+      if (priceRange === '300M-600M' && (priceNum < 300000000 || priceNum > 600000000)) return false;
+      if (priceRange === 'above-600M' && priceNum <= 600000000) return false;
+    }
+    
+    if (bedsFilter !== 'All' && p.type !== 'Commercial') {
+      const beds = p.features.beds;
+      if (bedsFilter === '3' && beds !== 3) return false;
+      if (bedsFilter === '4' && beds !== 4) return false;
+      if (bedsFilter === '5' && beds !== 5) return false;
+      if (bedsFilter === '6+' && beds < 6) return false;
+    }
+    
+    if (locationFilter !== 'All' && !p.location.includes(locationFilter)) return false;
+    
+    return true;
+  });
 
   return (
     <div className="public-dashboard-container" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b' }}>
@@ -893,7 +1058,8 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             <input
               type="text"
               placeholder="Search estates, locations..."
-              onClick={handleSupportClick}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem' }}
             />
           </div>
@@ -998,34 +1164,99 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               </div>
             </motion.div>
 
-            {/* Property Grid Header */}
-            <div ref={portfolioRef} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
-              <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>Featured Estates</h2>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                {['All', 'Villas', 'Penthouses', 'Commercial'].map(filter => (
-                  <button
-                    key={filter}
-                    onClick={() => setSelectedFilter(filter)}
-                    style={{
-                      padding: '0.6rem 1.25rem',
-                      borderRadius: '50px',
-                      border: '1px solid #e2e8f0',
-                      background: selectedFilter === filter ? '#0f172a' : 'white',
-                      color: selectedFilter === filter ? 'white' : '#64748b',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {filter}
-                  </button>
-                ))}
+            {/* "Why Trust Us" Trust Banner */}
+            <div style={{ background: '#0f172a', borderRadius: '32px', padding: '3rem 4rem', color: 'white', marginBottom: '4rem', display: 'flex', flexWrap: 'wrap', gap: '3rem', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ maxWidth: '400px' }}>
+                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Ermias & Partners</span>
+                <h2 style={{ fontSize: '2rem', fontWeight: 900, margin: '0.5rem 0 1rem', lineHeight: '1.2' }}>The Standard for Luxury in Ethiopia</h2>
+                <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: '1.6', margin: 0 }}>We are the leading licensed luxury brokerage in Addis Ababa. Handling the most prestigious assets for discerning global clients.</p>
+                <a href="https://wa.me/251911234567" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.9rem', textDecoration: 'none', marginTop: '1.5rem', transition: 'all 0.2s' }}>
+                  <MessageCircle size={18} /> Chat on WhatsApp
+                </a>
+              </div>
+              <div style={{ display: 'flex', gap: '3rem' }}>
+                <div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981' }}>15+</div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Years in Business</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981' }}>250+</div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>VIP Transactions</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#10b981' }}>100%</div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Confidentiality</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Property Grid Header & Advanced Filters (Sticky) */}
+            <div ref={portfolioRef} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem', position: 'sticky', top: 0, zIndex: 40, background: '#f8fafc', padding: '1rem 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>Featured Estates</h2>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  {['All', 'Villas', 'Penthouses', 'Commercial'].map(filter => (
+                    <button
+                      key={filter}
+                      onClick={() => setSelectedFilter(filter)}
+                      style={{
+                        padding: '0.6rem 1.25rem',
+                        borderRadius: '50px',
+                        border: '1px solid #e2e8f0',
+                        background: selectedFilter === filter ? '#0f172a' : 'white',
+                        color: selectedFilter === filter ? 'white' : '#64748b',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Advanced Filter Bar */}
+              <div style={{ display: 'flex', gap: '1rem', padding: '1rem', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                <select value={priceRange} onChange={(e) => setPriceRange(e.target.value)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', color: '#475569', fontWeight: 600 }}>
+                  <option value="All">All Prices</option>
+                  <option value="under-150M">Under 150M ETB</option>
+                  <option value="150M-300M">150M - 300M ETB</option>
+                  <option value="300M-600M">300M - 600M ETB</option>
+                  <option value="above-600M">Above 600M ETB</option>
+                </select>
+                
+                {selectedFilter !== 'Commercial' && (
+                  <select value={bedsFilter} onChange={(e) => setBedsFilter(e.target.value)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', color: '#475569', fontWeight: 600 }}>
+                    <option value="All">All Bedrooms</option>
+                    <option value="3">3 Beds</option>
+                    <option value="4">4 Beds</option>
+                    <option value="5">5 Beds</option>
+                    <option value="6+">6+ Beds</option>
+                  </select>
+                )}
+                
+                <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', color: '#475569', fontWeight: 600 }}>
+                  <option value="All">All Locations</option>
+                  <option value="Bole">Bole</option>
+                  <option value="Sarbet">Sarbet</option>
+                  <option value="CMC">CMC</option>
+                  <option value="Entoto">Entoto</option>
+                  <option value="Bishoftu">Bishoftu</option>
+                  <option value="Hawassa">Hawassa</option>
+                  <option value="Bahir Dar">Bahir Dar</option>
+                  <option value="Kazanchis">Kazanchis</option>
+                  <option value="Piassa">Piassa</option>
+                  <option value="Arba Minch">Arba Minch</option>
+                  <option value="Dire Dawa">Dire Dawa</option>
+                  <option value="Adama">Adama</option>
+                </select>
               </div>
             </div>
 
             {/* Property Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '3rem', marginBottom: '4rem' }}>
+            <div className="property-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '3rem', marginBottom: '4rem' }}>
               {filteredProperties.map(property => (
                 <PropertyCard
                   key={property.id}
@@ -1035,19 +1266,44 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               ))}
             </div>
 
-            {/* Footer info for decoy */}
-            <div className="footer-grid" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '3rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4rem', paddingBottom: '5rem' }}>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', color: '#0f172a' }}>Investment Insights</h4>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.6 }}>Real-time market data for the Ethiopian luxury real estate sector. Updated weekly with verified valuation metrics.</p>
+            {/* Our Advantage Section */}
+            <div style={{ background: 'white', borderRadius: '32px', padding: '4rem', marginBottom: '4rem', border: '1px solid #e2e8f0', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
+              <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+                <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Competitive Edge</span>
+                <h2 style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0f172a', margin: '0.5rem 0' }}>Why Ermias Luxury?</h2>
               </div>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', color: '#0f172a' }}>Management Services</h4>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.6 }}>Full-cycle property management from tenant acquisition to high-end maintenance and concierge services.</p>
-              </div>
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.25rem', color: '#0f172a' }}>Global Network</h4>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.6 }}>Our portfolio is accessible through a network of international partners in Dubai, London, and New York.</p>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ padding: '1.5rem', fontWeight: 800, color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', borderRadius: '16px 0 0 16px' }}>Feature</th>
+                      <th style={{ padding: '1.5rem', fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>Ermias Luxury</th>
+                      <th style={{ padding: '1.5rem', fontWeight: 700, color: '#94a3b8', fontSize: '1rem', borderRadius: '0 16px 16px 0' }}>Standard Agencies</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>Free concierge after sale</td>
+                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
+                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>International partner network (Dubai, London)</td>
+                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
+                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>24/7 property management</td>
+                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
+                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ No</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '1.5rem', fontWeight: 600, color: '#334155' }}>Exclusive Off-Market Access</td>
+                      <td style={{ padding: '1.5rem', color: '#10b981', fontWeight: 900 }}>✓ Included</td>
+                      <td style={{ padding: '1.5rem', color: '#cbd5e1', fontWeight: 600 }}>✕ Limited</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </>
@@ -1445,12 +1701,12 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 {selectedProperty.type === 'Commercial' ? (
                   <>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Total Floors</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.features.floors} Floors</div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Lease Rate</div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.commercialDetails?.leasePriceSqm || 'Price on Request'}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Business Suites</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.features.units} Units</div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Efficiency</div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.commercialDetails?.efficiency || 'N/A'}</div>
                     </div>
                   </>
                 ) : (
@@ -1474,6 +1730,11 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               {/* Description */}
               <div style={{ marginBottom: '2.5rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>Estate Overview</h3>
+                {selectedProperty.story && (
+                  <p style={{ color: '#0f172a', fontSize: '1.05rem', fontStyle: 'italic', fontWeight: 600, marginBottom: '1rem', borderLeft: '4px solid #10b981', paddingLeft: '1rem' }}>
+                    "{selectedProperty.story}"
+                  </p>
+                )}
                 <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: '1.7', margin: 0 }}>
                   {selectedProperty.description}
                 </p>
@@ -1494,7 +1755,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
 
               {/* CTA Button */}
               <button
-                onClick={handleBookTour}
+                onClick={() => setShowInquiryModal(true)}
                 style={{
                   width: '100%',
                   padding: '1.1rem',
@@ -1571,7 +1832,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               fontWeight: 800,
               color: '#0f172a'
             }}>
-              Tour Booking Confirmed!
+              Inquiry Confirmed!
             </h3>
 
             <p style={{
@@ -1608,8 +1869,201 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
         </div>
       )}
 
+      {/* Inquiry Modal */}
+      {showInquiryModal && selectedProperty && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '2rem'
+        }} onClick={() => setShowInquiryModal(false)}>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            style={{
+              background: 'white',
+              width: '100%',
+              maxWidth: '500px',
+              borderRadius: '28px',
+              padding: '2.5rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)',
+              position: 'relative'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+                onClick={() => setShowInquiryModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1.5rem',
+                  right: '1.5rem',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#f1f5f9',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontWeight: 900,
+                  fontSize: '1rem'
+                }}
+              >
+                ✕
+              </button>
+              
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Inquire Now</h3>
+            <p style={{ color: '#64748b', marginBottom: '2rem', fontSize: '0.95rem' }}>Send a direct inquiry for <strong style={{ color: '#0f172a' }}>{selectedProperty.title}</strong>.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input type="text" placeholder="Phone Number" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <textarea defaultValue={`I would like to schedule a viewing and inquire about ${selectedProperty.title}.`} rows="4" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', resize: 'none' }}></textarea>
+              
+              <button
+                onClick={() => {
+                  setShowInquiryModal(false);
+                  setShowSuccessModal(true);
+                  setSelectedProperty(null);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '1.1rem',
+                  borderRadius: '12px',
+                  background: '#0f172a',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)',
+                  marginTop: '0.5rem'
+                }}
+              >
+                Send Inquiry
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Global Contact Section */}
+      <div style={{ background: '#0f172a', padding: '4rem 2rem', color: 'white', marginTop: '4rem' }} className="contact-grid-wrapper">
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem' }} className="contact-grid">
+          <div>
+            <span style={{ color: '#38bdf8', fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '2px' }}>Get In Touch</span>
+            <h2 style={{ fontSize: '2.5rem', fontWeight: 900, margin: '1rem 0 1.5rem', lineHeight: '1.2' }}>Let's find your<br/>dream estate.</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.1rem', marginBottom: '3rem', lineHeight: '1.6' }}>Our luxury real estate experts are available 24/7 to assist you with private tours, investment inquiries, and exclusive off-market listings.</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Phone size={20} color="#38bdf8" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Call Us Directly</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>+251 911 234 567</div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Mail size={20} color="#38bdf8" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Email Address</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>vip@ethioluxury.com</div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MapPin size={20} color="#38bdf8" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Corporate Office</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>Bole Medhanialem, Addis Ababa</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ background: 'white', borderRadius: '24px', padding: '3rem' }}>
+            <h3 style={{ color: '#0f172a', fontSize: '1.5rem', fontWeight: 800, margin: '0 0 2rem' }}>Send a Message</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input type="text" placeholder="Phone Number" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <textarea placeholder="How can we help you?" rows="4" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', resize: 'none' }}></textarea>
+              <button onClick={() => setShowSuccessModal(true)} style={{ padding: '1.1rem', background: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', marginTop: '0.5rem' }}>Submit Inquiry</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Action Bar */}
+      <div style={{
+        position: 'fixed',
+        bottom: '2rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(15, 23, 42, 0.95)',
+        backdropFilter: 'blur(10px)',
+        padding: '0.5rem 1rem',
+        borderRadius: '50px',
+        display: 'flex',
+        gap: '0.5rem',
+        zIndex: 50,
+        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+      }} className="floating-action-bar">
+        <a href="tel:+251911234567" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#38bdf8', color: '#0f172a', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
+          <Phone size={16} /> Call Now
+        </a>
+        <a href="https://wa.me/251911234567" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#25D366', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.85rem', textDecoration: 'none', transition: 'all 0.2s' }}>
+          <MessageCircle size={16} /> WhatsApp
+        </a>
+        <button onClick={() => setShowBrochureModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '0.75rem 1.25rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s' }}>
+          <FileText size={16} /> Request Brochure
+        </button>
+      </div>
+
+      {/* Brochure Request Modal */}
+      {showBrochureModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(16px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '2rem'
+        }} onClick={() => setShowBrochureModal(false)}>
+          <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} style={{ background: 'white', width: '100%', maxWidth: '440px', borderRadius: '28px', padding: '2.5rem', position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.3)' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowBrochureModal(false)} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', width: '36px', height: '36px', borderRadius: '50%', background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 900 }}>✕</button>
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Request Brochure</h3>
+            <p style={{ color: '#64748b', marginBottom: '2rem', fontSize: '0.95rem' }}>Receive our exclusive portfolio prospectus instantly.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <input type="text" placeholder="Full Name" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <input type="email" placeholder="Email Address" style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem' }} />
+              <select style={{ padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', background: '#f8fafc', fontSize: '0.95rem', color: '#475569' }}>
+                <option value="">Select Property Interest</option>
+                <option value="villas">Luxury Villas</option>
+                <option value="commercial">Commercial Towers</option>
+                <option value="penthouses">Sky Penthouses</option>
+                <option value="all">Full Portfolio</option>
+              </select>
+              <button onClick={() => { setShowBrochureModal(false); setShowSuccessModal(true); }} style={{ width: '100%', padding: '1.1rem', borderRadius: '12px', background: '#0f172a', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer', fontSize: '1rem', marginTop: '0.5rem' }}>Send Prospectus</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Styles for the page */}
       <style>{`
+        *:focus-visible { outline: 3px solid #38bdf8; outline-offset: 2px; }
+        button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #38bdf8; outline-offset: 2px; }
+        
         @media (max-width: 1100px) {
           aside { width: 80px !important; padding: 2rem 1rem !important; }
           aside span, aside nav span { display: none; }
@@ -1619,9 +2073,14 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
         @media (max-width: 768px) {
           aside { display: none !important; }
           main { padding: 1rem !important; }
+          .property-grid { grid-template-columns: 1fr !important; gap: 1.5rem !important; }
           div[style*="gridTemplateColumns: repeat(auto-fit"] { grid-template-columns: 1fr !important; }
           h1 { font-size: 2.5rem !important; }
           .hero-section { height: 350px !important; }
+          .contact-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
+          .contact-grid-wrapper { padding: 3rem 1rem !important; border-radius: 0 !important; }
+          .floating-action-bar { width: 90%; justify-content: space-between; padding: 0.5rem; }
+          .floating-action-bar a, .floating-action-bar button { padding: 0.75rem 0.5rem !important; flex: 1; justify-content: center; font-size: 0.75rem !important; }
         }
       `}</style>
     </div>
