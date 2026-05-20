@@ -1052,8 +1052,8 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
       <main className="public-main" style={{ flex: 1, padding: '2rem 4rem', maxWidth: '1400px', margin: '0 auto' }}>
 
         {/* Header Area */}
-        <div className="public-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-          <div className="public-search-wrapper" style={{ position: 'relative', width: '400px' }}>
+        <div className="public-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="public-search-wrapper" style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
             <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
