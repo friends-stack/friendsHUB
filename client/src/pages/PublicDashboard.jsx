@@ -1034,7 +1034,10 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
         top: 0,
         height: '100vh'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '3rem' }}>
+        <div 
+          onClick={handleSupportClick}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '3rem', cursor: 'pointer', userSelect: 'none' }}
+        >
           <div style={{ width: '32px', height: '32px', background: '#0f172a', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800 }}>E</div>
           <span style={{ fontWeight: 900, fontSize: '1rem', letterSpacing: '1px', color: '#0f172a' }}>ETHIOLUXURY</span>
         </div>
