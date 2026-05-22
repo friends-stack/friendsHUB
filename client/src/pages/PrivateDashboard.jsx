@@ -219,7 +219,7 @@ const PrivateDashboard = ({ user }) => {
 
   const fetchMessages = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/messages', {
+      const { data } = await axios.get('/api/messages', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setMessages(data);
@@ -228,7 +228,7 @@ const PrivateDashboard = ({ user }) => {
 
   const fetchUsers = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/admin/users', {
+      const { data } = await axios.get('/api/admin/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setUsers(data);
@@ -237,7 +237,7 @@ const PrivateDashboard = ({ user }) => {
 
   const fetchLogs = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/admin/logs', {
+      const { data } = await axios.get('/api/admin/logs', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setLogs(data);
@@ -246,7 +246,7 @@ const PrivateDashboard = ({ user }) => {
 
   const fetchSettings = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/admin/settings', {
+      const { data } = await axios.get('/api/admin/settings', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setSystemSettings(data);
@@ -255,14 +255,14 @@ const PrivateDashboard = ({ user }) => {
 
   const fetchGallery = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/gallery');
+      const { data } = await axios.get('/api/gallery');
       setGallery(data);
     } catch (err) { console.error(err); }
   };
  
   const fetchPersonalAssets = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/personal-assets', {
+      const { data } = await axios.get('/api/personal-assets', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setPersonalAssets(data);
@@ -284,7 +284,7 @@ const PrivateDashboard = ({ user }) => {
       if (file && file.name) {
         const uploadData = new FormData();
         uploadData.append('image', file);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/admin/gallery/upload', uploadData, {
+        const { data: uploadRes } = await axios.post('/api/admin/gallery/upload', uploadData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
@@ -294,7 +294,7 @@ const PrivateDashboard = ({ user }) => {
 
       if (!url) return showToast('Please provide a URL or select a file');
 
-      await axios.post('http://localhost:5000/api/admin/gallery', { url, title, caption }, {
+      await axios.post('/api/admin/gallery', { url, title, caption }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       e.target.reset();
@@ -315,7 +315,7 @@ const PrivateDashboard = ({ user }) => {
       if (file && file.name) {
         const uploadData = new FormData();
         uploadData.append('image', file);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/admin/gallery/upload', uploadData, {
+        const { data: uploadRes } = await axios.post('/api/admin/gallery/upload', uploadData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
@@ -323,7 +323,7 @@ const PrivateDashboard = ({ user }) => {
         url = uploadRes.url;
       }
 
-      await axios.put(`http://localhost:5000/api/admin/gallery/${editingItem.id}`, { title, caption, url }, {
+      await axios.put(`/api/admin/gallery/${editingItem.id}`, { title, caption, url }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setEditingItem(null);
@@ -335,7 +335,7 @@ const PrivateDashboard = ({ user }) => {
   const handleEditGalleryItem = async (id, updatedItem) => {
     try {
       if (updatedItem.type === 'personal') {
-        await axios.put(`http://localhost:5000/api/personal-assets/${id}`, { title: updatedItem.title }, {
+        await axios.put(`/api/personal-assets/${id}`, { title: updatedItem.title }, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
         fetchPersonalAssets();
@@ -344,7 +344,7 @@ const PrivateDashboard = ({ user }) => {
           setLightBox(prev => ({ ...prev, item: { ...prev.item, title: updatedItem.title } }));
         }
       } else {
-        await axios.put(`http://localhost:5000/api/admin/gallery/${id}`, updatedItem, {
+        await axios.put(`/api/admin/gallery/${id}`, updatedItem, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
         fetchGallery();
@@ -365,7 +365,7 @@ const PrivateDashboard = ({ user }) => {
       message: 'Are you sure you want to remove this memory from the public gallery?',
       onConfirm: async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/admin/gallery/${id}`, {
+          await axios.delete(`/api/admin/gallery/${id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
           fetchGallery();
@@ -392,7 +392,7 @@ const PrivateDashboard = ({ user }) => {
       uploadData.append('title', title);
       uploadData.append('type', type);
 
-      await axios.post('http://localhost:5000/api/personal-assets', uploadData, {
+      await axios.post('/api/personal-assets', uploadData, {
         headers: { 
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -413,7 +413,7 @@ const PrivateDashboard = ({ user }) => {
       message: 'This will permanently delete this asset from your private vault. This action cannot be undone.',
       onConfirm: async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/personal-assets/${id}`, {
+          await axios.delete(`/api/personal-assets/${id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
           fetchPersonalAssets();
@@ -436,7 +436,7 @@ const PrivateDashboard = ({ user }) => {
     }));
 
     try {
-      const { data } = await axios.post('http://localhost:5000/api/reactions', {
+      const { data } = await axios.post('/api/reactions', {
         target_id: assetId,
         target_type: 'personal_asset',
         reaction_type: type
@@ -468,7 +468,7 @@ const PrivateDashboard = ({ user }) => {
         : a
     ));
     try {
-      const { data } = await axios.post('http://localhost:5000/api/comments', {
+      const { data } = await axios.post('/api/comments', {
         personal_asset_id: assetId,
         content
       }, {
@@ -503,7 +503,7 @@ const PrivateDashboard = ({ user }) => {
     }));
 
     try {
-      const { data } = await axios.post('http://localhost:5000/api/reactions', {
+      const { data } = await axios.post('/api/reactions', {
         target_id: galleryId,
         target_type: 'gallery',
         reaction_type: type
@@ -537,7 +537,7 @@ const PrivateDashboard = ({ user }) => {
         : g
     ));
     try {
-      const { data } = await axios.post('http://localhost:5000/api/comments', {
+      const { data } = await axios.post('/api/comments', {
         gallery_id: galleryId,
         content
       }, {
@@ -638,7 +638,7 @@ const PrivateDashboard = ({ user }) => {
   const handleSaveEdit = async (messageId) => {
     if (!editingText.trim()) return;
     try {
-      await axios.put(`http://localhost:5000/api/messages/${messageId}`, {
+      await axios.put(`/api/messages/${messageId}`, {
         content: editingText
       }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -661,7 +661,7 @@ const PrivateDashboard = ({ user }) => {
       type: 'danger',
       onConfirm: async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/messages/${messageId}`, {
+          await axios.delete(`/api/messages/${messageId}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
           setMessages(prev => prev.filter(m => Number(m.id) !== Number(messageId)));
@@ -731,7 +731,7 @@ const PrivateDashboard = ({ user }) => {
       const formData = new FormData();
       formData.append('image', file, file.name);
       
-      const { data } = await axios.post('http://localhost:5000/api/upload', formData, {
+      const { data } = await axios.post('/api/upload', formData, {
         headers: { 
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'multipart/form-data'
@@ -762,7 +762,7 @@ const PrivateDashboard = ({ user }) => {
 
   const handleRoleChange = async (userId, newRole) => {
     try {
-      await axios.post('http://localhost:5000/api/admin/users/role', { userId, role: newRole }, {
+      await axios.post('/api/admin/users/role', { userId, role: newRole }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       fetchUsers();
@@ -774,7 +774,7 @@ const PrivateDashboard = ({ user }) => {
 
   const handleUpdateSetting = async (key, newValue) => {
     try {
-      await axios.post('http://localhost:5000/api/admin/settings/toggle', { key, value: newValue }, {
+      await axios.post('/api/admin/settings/toggle', { key, value: newValue }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       fetchSettings();
@@ -789,7 +789,7 @@ const PrivateDashboard = ({ user }) => {
 
   const handleMakeCoverPhoto = async (url) => {
     try {
-      await axios.post('http://localhost:5000/api/admin/users/cover-photo', { url }, {
+      await axios.post('/api/admin/users/cover-photo', { url }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       showToast('Cover photo updated!');
@@ -1915,7 +1915,7 @@ const PrivateDashboard = ({ user }) => {
                     const formData = new FormData(e.target);
                     const newUser = Object.fromEntries(formData);
                     try {
-                      await axios.post('http://localhost:5000/api/admin/users', newUser, {
+                      await axios.post('/api/admin/users', newUser, {
                         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
                       });
                       e.target.reset();
@@ -2014,7 +2014,7 @@ const PrivateDashboard = ({ user }) => {
                                       message: `Are you sure you want to permanently remove ${u.nickname || u.email}? This cannot be undone.`,
                                       onConfirm: async () => {
                                         try {
-                                          await axios.delete(`http://localhost:5000/api/admin/users/${u.id}`, {
+                                          await axios.delete(`/api/admin/users/${u.id}`, {
                                             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
                                           });
                                           fetchUsers();

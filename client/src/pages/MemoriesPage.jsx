@@ -59,7 +59,7 @@ const MemoriesPage = ({ user }) => {
 
   const fetchMemories = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/memories', {
+      const { data } = await axios.get('/api/memories', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setMemories(data);
@@ -75,7 +75,7 @@ const MemoriesPage = ({ user }) => {
       if (mediaFile) {
         const formData = new FormData();
         formData.append('image', mediaFile);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/upload', formData, {
+        const { data: uploadRes } = await axios.post('/api/upload', formData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -84,7 +84,7 @@ const MemoriesPage = ({ user }) => {
         finalMediaUrl = uploadRes.url;
       }
 
-      await axios.post('http://localhost:5000/api/memories', {
+      await axios.post('/api/memories', {
         ...newMemory,
         media_url: finalMediaUrl
       }, {
@@ -111,7 +111,7 @@ const MemoriesPage = ({ user }) => {
       message: 'Are you sure you want to permanently delete this memory? This action cannot be undone.',
       onConfirm: async () => {
         try {
-          await axios.delete(`http://localhost:5000/api/memories/${id}`, {
+          await axios.delete(`/api/memories/${id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
           fetchMemories();
@@ -124,7 +124,7 @@ const MemoriesPage = ({ user }) => {
 
   const handleReaction = async (memoryId, type = 'like') => {
     try {
-      await axios.post('http://localhost:5000/api/reactions', {
+      await axios.post('/api/reactions', {
         target_id: memoryId,
         target_type: 'memory',
         reaction_type: type
@@ -136,7 +136,7 @@ const MemoriesPage = ({ user }) => {
 
   const handleComment = async (memoryId, content) => {
     try {
-      await axios.post('http://localhost:5000/api/comments', {
+      await axios.post('/api/comments', {
         memory_id: memoryId,
         content
       }, {

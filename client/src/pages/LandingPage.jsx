@@ -266,7 +266,7 @@ const LandingPage = ({ user }) => {
 
   const fetchGallery = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/gallery');
+      const { data } = await axios.get('/api/gallery');
       setGallery(data.length > 0 ? data : [
         {
           id: 1,

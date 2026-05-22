@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import axios from 'axios';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import PrivateDashboard from './pages/PrivateDashboard';
@@ -11,6 +12,8 @@ import PublicDashboard from './pages/PublicDashboard';
 import ProfilePage from './pages/ProfilePage';
 import MemoriesPage from './pages/MemoriesPage';
 import './index.css';
+
+axios.defaults.baseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : window.location.origin;
 
 
 const App = () => {

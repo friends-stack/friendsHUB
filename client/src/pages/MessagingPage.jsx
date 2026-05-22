@@ -286,7 +286,7 @@ const MessagingPage = ({ user }) => {
 
   const fetchOnlineStatus = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/users/status', {
+      const { data } = await axios.get('/api/users/status', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setOnlineUsers(data.onlineIds);
@@ -300,7 +300,7 @@ const MessagingPage = ({ user }) => {
 
   const fetchUsers = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/users', {
+      const { data } = await axios.get('/api/users', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       // Add a virtual "Global Pulse" contact for broadcast messages
@@ -327,7 +327,7 @@ const MessagingPage = ({ user }) => {
 
   const fetchMessages = async () => {
     try {
-      const { data } = await axios.get('http://localhost:5000/api/messages', {
+      const { data } = await axios.get('/api/messages', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setMessages(data);
@@ -381,7 +381,7 @@ const MessagingPage = ({ user }) => {
       if (mediaFile) {
         const formData = new FormData();
         formData.append('image', mediaFile);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/upload', formData, {
+        const { data: uploadRes } = await axios.post('/api/upload', formData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'

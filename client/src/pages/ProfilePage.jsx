@@ -48,7 +48,7 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
 
   const fetchProfile = async () => {
     try {
-      const { data } = await axios.get(`http://localhost:5000/api/profile/${id}`, {
+      const { data } = await axios.get(`/api/profile/${id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setProfile(data);
@@ -134,7 +134,7 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
       if (profileFile) {
         const formData = new FormData();
         formData.append('image', profileFile);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/upload', formData, {
+        const { data: uploadRes } = await axios.post('/api/upload', formData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -146,7 +146,7 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
       if (coverFile) {
         const formData = new FormData();
         formData.append('image', coverFile);
-        const { data: uploadRes } = await axios.post('http://localhost:5000/api/upload', formData, {
+        const { data: uploadRes } = await axios.post('/api/upload', formData, {
           headers: { 
             Authorization: `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'multipart/form-data'
@@ -155,7 +155,7 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
         finalCoverPhoto = uploadRes.url;
       }
 
-      await axios.put('http://localhost:5000/api/profile', { 
+      await axios.put('/api/profile', { 
         ...editData, 
         profile_picture: finalProfilePicture,
         cover_photo: finalCoverPhoto

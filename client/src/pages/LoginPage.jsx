@@ -35,7 +35,7 @@ const LoginPage = ({ setUser }) => {
         ? { email, password, nickname, mobile, gender, address, telegram_username: telegramUsername }
         : { email, password };
       
-      const { data } = await axios.post(`http://localhost:5000${endpoint}`, payload);
+      const { data } = await axios.post(`${endpoint}`, payload);
       
       if (isSignup) {
         setIsSignup(false);

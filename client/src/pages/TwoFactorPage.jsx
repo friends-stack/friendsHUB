@@ -13,7 +13,7 @@ const TwoFactorPage = ({ setUser }) => {
   const handleVerify = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await axios.post('http://localhost:5000/api/auth/verify-2fa', { userId, token: code });
+      const { data } = await axios.post('/api/auth/verify-2fa', { userId, token: code });
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
