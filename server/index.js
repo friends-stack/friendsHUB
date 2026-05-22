@@ -939,6 +939,7 @@ app.get('/api/savings/investments', checkAuth, async (req, res) => {
 });
 
 app.post('/api/savings/investments', checkAuth, checkSavingsManager, async (req, res) => {
+  const { project_name, allocated_amount, projected_profit, challenges, expected_days } = req.body;
   const result = await db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
     .run(project_name, allocated_amount, projected_profit || 0, challenges || '', expected_days || null);
   res.json({ success: true, id: result.lastInsertRowid });
