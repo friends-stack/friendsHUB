@@ -64,22 +64,34 @@ const MIME_EXTENSIONS = {
   'video/quicktime': '.mov'
 };
 
-// Multer config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    let ext = path.extname(file.originalname);
-    if (!ext) {
-      ext = MIME_EXTENSIONS[file.mimetype] || '';
-    }
-    const cleanOriginal = file.originalname.endsWith(ext)
-      ? file.originalname.slice(0, -ext.length)
-      : file.originalname;
-    const baseName = cleanOriginal === 'blob' ? 'document' : cleanOriginal;
-    cb(null, Date.now() + '-' + baseName + ext);
-  }
-});
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+// Multer config (Memory Storage for Supabase upload)
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
+
+const uploadToSupabase = async (file) => {
+  let ext = path.extname(file.originalname);
+  if (!ext) {
+    if (file.mimetype.startsWith('image/')) ext = file.mimetype.replace('image/', '.');
+    else if (file.mimetype.startsWith('video/')) ext = file.mimetype.replace('video/', '.');
+  }
+  if (ext === '.jpeg') ext = '.jpg';
+  if (ext === '.quicktime') ext = '.mov';
+  const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '');
+  const fileName = Date.now() + '-' + baseName + ext;
+  
+  const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
+    contentType: file.mimetype,
+    upsert: true
+  });
+  
+  if (error) throw error;
+  
+  const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
+  return urlData.publicUrl;
+};
 
 const app = express();
 const server = http.createServer(app);
@@ -429,9 +441,13 @@ const checkSavingsManager = async (req, res, next) => {
 // Generic Image Upload for all authenticated users
 app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const fileUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+  try {
+    const fileUrl = await uploadToSupabase(req.file);
+    res.json({ url: fileUrl });
+  } catch (error) {
+    console.error('Supabase upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image to cloud storage' });
+  }
 });
 
 
@@ -1531,9 +1547,13 @@ app.post('/api/admin/gallery', checkAuth, async (req, res) => {
 // Single image upload endpoint
 app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const fileUrl = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+  try {
+    const fileUrl = await uploadToSupabase(req.file);
+    res.json({ url: fileUrl });
+  } catch (error) {
+    console.error('Supabase upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image to cloud storage' });
+  }
 });
 
 app.put('/api/admin/gallery/:id', checkAuth, async (req, res) => {
@@ -1547,11 +1567,19 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
   const item = await db.prepare('SELECT url FROM gallery WHERE id = ?').get(req.params.id);
 
-  // Also delete local file if it exists
+  // Also delete local file or cloud file if it exists
   if (item && item.url.includes('/uploads/')) {
     const filename = item.url.split('/uploads/')[1];
     const filePath = path.join(__dirname, 'uploads', filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } else if (item && item.url.includes('supabase.co')) {
+    try {
+      const urlParts = item.url.split('/');
+      const filename = urlParts[urlParts.length - 1];
+      await supabase.storage.from('friends-info-uploads').remove([filename]);
+    } catch (e) {
+      console.error('Failed to delete from Supabase', e);
+    }
   }
 
   await db.prepare('DELETE FROM gallery WHERE id = ?').run(req.params.id);
@@ -1582,14 +1610,18 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { title, type } = req.body; // type: 'photo' or 'video'
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const url = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  try {
+    const url = await uploadToSupabase(req.file);
 
-  const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES (?, ?, ?, ?)');
-  await insert.run(req.user.id, url, type, title || 'Untitled');
+    const insert = db.prepare('INSERT INTO personal_assets (user_id, url, type, title) VALUES (?, ?, ?, ?)');
+    await insert.run(req.user.id, url, type, title || 'Untitled');
 
-  logAction(req.user.id, 'PERSONAL_ASSET_UPLOAD', `Uploaded personal ${type}: ${title || 'Untitled'}`);
-  res.json({ success: true, url });
+    logAction(req.user.id, 'PERSONAL_ASSET_UPLOAD', `Uploaded personal ${type}: ${title || 'Untitled'}`);
+    res.json({ success: true, url });
+  } catch (error) {
+    console.error('Supabase upload error:', error);
+    res.status(500).json({ error: 'Failed to upload media to cloud storage' });
+  }
 });
 
 app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
@@ -1610,6 +1642,14 @@ app.delete('/api/personal-assets/:id', checkAuth, async (req, res) => {
     const filename = asset.url.split('/uploads/')[1];
     const filePath = path.join(__dirname, 'uploads', filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } else if (asset.url.includes('supabase.co')) {
+    try {
+      const urlParts = asset.url.split('/');
+      const filename = urlParts[urlParts.length - 1];
+      await supabase.storage.from('friends-info-uploads').remove([filename]);
+    } catch (e) {
+      console.error('Failed to delete from Supabase', e);
+    }
   }
 
   await db.prepare('DELETE FROM personal_assets WHERE id = ?').run(req.params.id);
