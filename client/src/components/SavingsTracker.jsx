@@ -380,16 +380,20 @@ const SavingsTracker = ({ user }) => {
   const isMemberManager = isSuperAdmin;
 
   const totalMemberSavings = members.reduce((sum, m) => sum + (m.total_paid || 0), 0);
-  const totalProfitsEarned = investments.filter(i => i.status === 'completed').reduce((sum, i) => sum + getActualProfit(i), 0);
+  const totalProfitsEarned = investments.filter(i => i.status === 'completed').reduce((sum, i) => sum + (i.projected_profit || 0), 0);
   
-  // Total Group Wealth = All money collected from members + All realized profits from completed missions
-  const totalPool = totalMemberSavings + totalProfitsEarned;
+  // The 'Internal Pool' is the money members paid + profits.
+  // We assume any investment made came from this pool.
+  const completedCapital = investments.filter(i => i.status === 'completed').reduce((sum, i) => sum + (i.allocated_amount || 0), 0);
+  const activeCapital = investments.filter(i => i.status === 'active').reduce((sum, i) => sum + (i.allocated_amount || 0), 0);
   
-  // Active Capital = Principal money currently out in projects
-  const totalActiveCapital = investments.filter(i => i.status === 'active').reduce((sum, i) => sum + i.allocated_amount, 0);
+  // Total Group Money = Member Savings + Profits + The principal of successful missions
+  // (We don't add active capital to wealth yet, because it's still at risk/out)
+  const totalPool = totalMemberSavings + totalProfitsEarned + completedCapital;
   
-  // Available Cash = Total Pool - Capital currently at work
-  const finalTotalAvailable = totalPool - totalActiveCapital;
+  // Available Cash = Total Pool - Active Capital
+  const finalTotalAvailable = totalPool - activeCapital;
+  const totalActiveCapital = activeCapital;
 
   // GENUINE LOGIC PROCESSING
   const weeklyRate = config.weekly_amount || 300;
@@ -438,11 +442,22 @@ const SavingsTracker = ({ user }) => {
           {activeView === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
               <header><h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit', margin:'0 0 0.25rem' }}>Dashboard</h1><p style={{ color:'#6B7280', margin:0 }}>{members.length} members • {new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</p></header>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap:'1.25rem' }}>
-                <StatCard label="TOTAL PROFIT" value={formatCurrency(totalProfitsEarned)} color="#16A34A" subValue="Realized Gains" onClick={() => setShowProfitModal(true)} />
-                <StatCard label="TOTAL WEALTH" value={formatCurrency(totalPool)} color="#16A34A" subValue="Savings + Profits" onClick={() => setShowWealthModal(true)} />
-                <StatCard label="MONEY AT WORK" value={formatCurrency(totalActiveCapital)} color="#8B5CF6" subValue="In active missions" onClick={() => setShowActiveInvestmentsModal(true)} />
-                <StatCard label="AVAILABLE CASH" value={formatCurrency(finalTotalAvailable)} color="#3B82F6" subValue="Ready to invest" />
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap:'1rem' }}>
+                <StatCard label="REMAINING MONEY" value={formatCurrency(finalTotalAvailable)} color="#3B82F6" subValue="Cash in hand" />
+                <StatCard 
+                  label="MONEY AT WORK" 
+                  value={formatCurrency(totalActiveCapital)} 
+                  color="#8B5CF6" 
+                  subValue="Active investments" 
+                  onClick={() => setShowActiveInvestmentsModal(true)}
+                />
+                <StatCard 
+                  label="TOTAL MONEY" 
+                  value={formatCurrency(totalPool)} 
+                  color="#16A34A" 
+                  subValue="Savings + Net Profits" 
+                  onClick={() => setShowWealthModal(true)}
+                />
               </div>
               <div onClick={() => setShowDebtModal(true)} style={{ background: debtMembers.length > 0 ? '#FFF1F2' : '#F0FDF4', border: `1px solid ${debtMembers.length > 0 ? '#FECDD3' : '#BBF7D0'}`, borderRadius:'16px', padding:'1.25rem 1.5rem', display:'flex', gap:'1rem', cursor: 'pointer' }}>
                 <AlertCircle color={debtMembers.length > 0 ? "#DC2626" : "#16A34A"} size={24} />
@@ -506,10 +521,10 @@ const SavingsTracker = ({ user }) => {
                     subValue={isOnTrack ? "Up to date ✓" : `Current Debt (ETB ${weeklyRate}/wk)`}
                   />
                   <StatCard 
-                    label="REMAINING BALANCE" 
-                    value={formatCurrency(Math.max(0, m.genuineBalance))} 
+                    label="Group Balance" 
+                    value={formatCurrency(totalPool)} 
                     color="#3B82F6" 
-                    subValue="Advanced Payment" 
+                    subValue="Total Friends Wealth" 
                   />
                 </div>
                 {isPaymentManager && <div style={{ display:'flex', gap:'1rem' }}><ActionButton label="+ Add payment" color="#16A34A" onClick={() => { setPaymentForm({ amount: 300, notes: '', date: getTodayDateString(), time: getNowTimeString(), type: 'payment' }); setShowPaymentModal(true); }} /><ActionButton label="Mark missed" color="#DC2626" onClick={() => { setPaymentForm({ amount: 300, notes: '', date: getTodayDateString(), time: getNowTimeString(), type: 'missed' }); setShowMissedModal(true); }} /></div>}
