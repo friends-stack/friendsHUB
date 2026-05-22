@@ -429,10 +429,12 @@ const checkPermission = (permission) => async (req, res, next) => {
 const checkPaymentClerk = async (req, res, next) => {
   const clerkSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
   const clerkId = clerkSetting && clerkSetting.value ? parseInt(clerkSetting.value) : null;
-  if (req.user.id === clerkId) {
+  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  
+  if (req.user.id === clerkId || user?.role === 'super_admin') {
     next();
   } else {
-    res.status(403).json({ error: 'Only the designated clerk can manage payments' });
+    res.status(403).json({ error: 'Only the designated clerk or Super Admin can manage payments' });
   }
 };
 

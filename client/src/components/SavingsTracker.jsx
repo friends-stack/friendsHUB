@@ -376,7 +376,7 @@ const SavingsTracker = ({ user }) => {
   const formatCurrency = (amt) => new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(amt || 0);
   const isSuperAdmin = user?.role === 'super_admin';
   const isClerk = user?.id === config.clerk_id;
-  const isPaymentManager = isClerk;
+  const isPaymentManager = isClerk || isSuperAdmin;
   const isMemberManager = isSuperAdmin;
 
   const totalMemberSavings = members.reduce((sum, m) => sum + (m.total_paid || 0), 0);
