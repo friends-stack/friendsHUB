@@ -347,13 +347,16 @@ const db = {
     )
   `);
   // Seed default roles
-  const superAdminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: true });
-  const adminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: false });
-  const userPerms = JSON.stringify({ canViewLogs: false, canManageAdmins: false, canManageSavings: false });
+  const superAdminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: true, canToggleFeatures: true });
+  const adminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: false, canToggleFeatures: false });
+  const userPerms = JSON.stringify({ canViewLogs: false, canManageAdmins: false, canManageSavings: false, canToggleFeatures: false });
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('super_admin', '${superAdminPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('admin', '${adminPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('authorized', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('user', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
+
+  // Migration: Ensure existing roles have canToggleFeatures
+  await db.exec(`UPDATE roles SET permissions = permissions || '{"canToggleFeatures": true}'::jsonb WHERE name = 'super_admin' AND NOT permissions ? 'canToggleFeatures'`);
 
   // Insert default config if empty
   const configCount = await db.prepare('SELECT COUNT(*) as count FROM savings_config').get();
