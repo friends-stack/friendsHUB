@@ -1670,18 +1670,17 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               ))}
             </div>
 
-            {/* Details Panel */}
-            <div style={{ padding: '2.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1.5rem' }}>
-                <div>
+            <div style={{ padding: '2.5rem' }} className="modal-details-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1.5rem' }}>
+                <div style={{ flex: '1 1 min-content' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
-                    <MapPin size={18} color="#0f172a" />
+                    <MapPin size={18} color="#0f172a" style={{ flexShrink: 0 }} />
                     <span style={{ color: '#0f172a', fontWeight: 600 }}>{selectedProperty.location}</span>
                   </div>
                   <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>PRESTIGIOUS DISTRICT</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: 900, color: '#0f172a' }}>{selectedProperty.price}</div>
+                <div style={{ textAlign: 'left', flex: '1 1 auto' }}>
+                  <div style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 900, color: '#0f172a', wordBreak: 'break-word' }}>{selectedProperty.price}</div>
                   <div style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 800 }}>ESTIMATED MARKET VALUE</div>
                 </div>
               </div>
