@@ -825,8 +825,8 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
       FROM savings_transactions 
       WHERE member_id = ?
     `).get(m.id);
-    m.total_paid = totals?.total_paid || 0;
-    m.total_expected = totals?.total_expected || 0;
+    m.total_paid = totals?.total_paid ? parseFloat(totals.total_paid) : 0;
+    m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
     m.balance = m.total_paid - m.total_expected;
   }
   res.json(members);
@@ -888,6 +888,7 @@ app.get('/api/savings/history', checkAuth, async (req, res) => {
   }
   query += ` ORDER BY t.created_at DESC`;
   const history = await db.prepare(query).all(...params);
+  history.forEach(h => { if (h.amount) h.amount = parseFloat(h.amount); });
   res.json(history);
 });
 
@@ -930,6 +931,10 @@ app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) 
 // Investments
 app.get('/api/savings/investments', checkAuth, async (req, res) => {
   const investments = await db.prepare('SELECT * FROM savings_investments ORDER BY created_at DESC').all();
+  investments.forEach(i => {
+    if (i.allocated_amount) i.allocated_amount = parseFloat(i.allocated_amount);
+    if (i.projected_profit) i.projected_profit = parseFloat(i.projected_profit);
+  });
   res.json(investments);
 });
 
