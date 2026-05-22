@@ -317,6 +317,10 @@ const db = {
     )
   `);
   await db.exec(`INSERT INTO system_settings (key, value) SELECT 'clerk_id', '' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'clerk_id')`);
+  await db.exec(`INSERT INTO system_settings (key, value) SELECT 'messaging_enabled', 'true' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'messaging_enabled')`);
+  await db.exec(`INSERT INTO system_settings (key, value) SELECT 'signup_enabled', 'true' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'signup_enabled')`);
+  await db.exec(`INSERT INTO system_settings (key, value) SELECT 'private_dashboard_enabled', 'true' WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'private_dashboard_enabled')`);
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS personal_assets (
       id BIGSERIAL PRIMARY KEY,
