@@ -1619,100 +1619,79 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               </div>
             </div>
 
-            {/* Interactive front/side/top view elevation selector */}
+            {/* Interactive front/side/top view elevation selector (Compact Chips) */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '1rem',
-              padding: '1.25rem 2.5rem',
-              background: '#f8fafc',
+              display: 'flex',
+              gap: '0.75rem',
+              padding: '1.25rem 2.5rem 0.5rem',
+              background: 'white',
+              flexWrap: 'wrap',
               borderBottom: '1px solid #f1f5f9'
             }}>
               {[
-                { key: 'front', label: 'Front View (Elevation)' },
-                { key: 'side', label: 'Side View (Elevation)' },
-                { key: 'top', label: 'Top View (Axonometric Model)' }
+                { key: 'front', label: 'Front View' },
+                { key: 'side', label: 'Side View' },
+                { key: 'top', label: 'Top View' }
               ].map(view => (
                 <button
                   key={view.key}
                   onClick={() => setActiveModalView(view.key)}
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    padding: '0.6rem 0.6rem 0.5rem 0.6rem',
-                    borderRadius: '16px',
-                    border: '2px solid',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '50px',
+                    border: '1px solid',
                     borderColor: activeModalView === view.key ? '#0f172a' : '#e2e8f0',
                     background: activeModalView === view.key ? '#0f172a' : 'white',
                     color: activeModalView === view.key ? 'white' : '#64748b',
                     cursor: 'pointer',
-                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: activeModalView === view.key ? '0 4px 12px rgba(15,23,42,0.15)' : 'none'
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    transition: 'all 0.2s',
                   }}
                 >
-                  <div style={{
-                    width: '100%',
-                    height: '56px',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    marginBottom: '0.2rem'
-                  }}>
-                    <img
-                      src={selectedProperty.views[view.key]}
-                      alt={view.label}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  </div>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{view.label}</span>
+                  {view.label}
                 </button>
               ))}
             </div>
 
-            <div style={{ padding: '2.5rem' }} className="modal-details-panel">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '1.5rem' }}>
-                <div style={{ flex: '1 1 min-content' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
-                    <MapPin size={18} color="#0f172a" style={{ flexShrink: 0 }} />
-                    <span style={{ color: '#0f172a', fontWeight: 600 }}>{selectedProperty.location}</span>
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>PRESTIGIOUS DISTRICT</div>
-                </div>
-                <div style={{ textAlign: 'left', flex: '1 1 auto' }}>
-                  <div style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 900, color: '#0f172a', wordBreak: 'break-word' }}>{selectedProperty.price}</div>
-                  <div style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 800 }}>ESTIMATED MARKET VALUE</div>
-                </div>
+            <div style={{ padding: '1.5rem 2.5rem 2.5rem' }} className="modal-details-panel">
+              {/* Location */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontSize: '0.9rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                <MapPin size={16} color="#0f172a" style={{ flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>{selectedProperty.location}</span>
+                <span style={{ color: '#cbd5e1', display: 'none', '@media (min-width: 400px)': { display: 'inline' } }}>—</span>
+                <span style={{ fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', fontSize: '0.8rem' }}>Prestigious District</span>
               </div>
 
-              {/* Specs Grid */}
-              <div className="details-specs-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', background: '#f8fafc', padding: '1.5rem', borderRadius: '20px', marginBottom: '2rem' }}>
+              {/* Price */}
+              <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: 'clamp(1.5rem, 5vw, 2.25rem)', fontWeight: 900, color: '#0f172a', wordBreak: 'break-word' }}>{selectedProperty.price}</div>
+                <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', padding: '0.2rem 0.5rem', background: '#f0fdf4', borderRadius: '4px' }}>Est. Market Value</div>
+              </div>
+
+              {/* Specs Grid - Tight Row */}
+              <div style={{ display: 'flex', gap: '1.5rem', background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '12px', marginBottom: '2rem', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
                 {selectedProperty.type === 'Commercial' ? (
                   <>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Lease Rate</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.commercialDetails?.leasePriceSqm || 'Price on Request'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                      <span style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Rate:</span> {selectedProperty.commercialDetails?.leasePriceSqm || 'On Request'}
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Efficiency</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.commercialDetails?.efficiency || 'N/A'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                      <span style={{ color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase' }}>Eff:</span> {selectedProperty.commercialDetails?.efficiency || 'N/A'}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Bedrooms</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.features.beds} Beds</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                      🛏️ {selectedProperty.features.beds} Beds
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Bathrooms</div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.features.baths} Baths</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                      🛁 {selectedProperty.features.baths} Baths
                     </div>
                   </>
                 )}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Total Area</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>{selectedProperty.features.sqm} m²</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginLeft: selectedProperty.type === 'Commercial' ? '0' : 'auto' }}>
+                  📐 {selectedProperty.features.sqm} m²
                 </div>
               </div>
 
