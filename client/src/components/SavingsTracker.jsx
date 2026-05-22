@@ -459,7 +459,7 @@ const SavingsTracker = ({ user }) => {
                   {processedMembers.map((m, i) => <MemberListItem key={m.id} member={m} index={i} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
                 </Section>
                 <Section title="Recent Payments" onAction={() => setActiveView('history')} actionLabel="Full history →">
-                  {history.slice(0, 6).map((h, i) => <TransactionItem key={h.id} transaction={h} showBorder={i !== 0} formatCurrency={formatCurrency} />)}
+                  {history.slice(0, 6).map((h, i) => <TransactionItem key={h.id} transaction={h} showBorder={i !== 0} formatCurrency={formatCurrency} systemUsers={systemUsers} members={members} />)}
                 </Section>
               </div>
             </motion.div>
