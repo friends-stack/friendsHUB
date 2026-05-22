@@ -748,6 +748,12 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   try {
     const resInsert = await db.prepare('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES (?, ?, ?, ?, 1)').run(email, hashedPassword, nickname, role);
     
+    try {
+      await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(nickname || email);
+    } catch (savingsErr) {
+      console.error('Failed to auto-enroll in savings:', savingsErr);
+    }
+    
     const adminName = actingAdmin ? (actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
     const targetName = nickname || email;
     
