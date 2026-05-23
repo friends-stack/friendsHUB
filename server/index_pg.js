@@ -592,38 +592,64 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
 
 // --- SAVINGS TRACKER API ---
 app.get('/api/savings/members', checkAuth, async (req, res) => {
+  // Auto-sync admins to savings_members
+  try {
+    const admins = await db.prepare("SELECT nickname, email FROM users WHERE role IN ('super_admin', 'admin')").all();
+    for (const admin of admins) {
+      const adminName = admin.nickname || admin.email;
+      if (!adminName) continue;
+      
+      const existing = await db.prepare("SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)").get(adminName);
+      if (!existing) {
+        await db.prepare("INSERT INTO savings_members (name) VALUES (?)").run(adminName);
+      }
+    }
+  } catch (syncErr) {
+    console.error("Failed to sync admins to savings_members", syncErr);
+  }
+
   const members = (await pool.query('SELECT * FROM savings_members ORDER BY name ASC')).rows;
   const users = (await pool.query('SELECT nickname, email, role FROM users')).rows;
+  const filteredMembers = [];
   
-  members.forEach(m => {
+  for (const m of members) {
     // Try to match savings member to a user to find their role
     const matchedUser = users.find(u => 
       (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
       (u.nickname && m.name.toLowerCase().includes(u.nickname.toLowerCase())) ||
       (u.email && u.email.toLowerCase().startsWith(m.name.split(' ')[0].toLowerCase()))
     );
+
     if (matchedUser && ['admin', 'super_admin'].includes(matchedUser.role)) {
       m.role = matchedUser.role;
+    } else {
+      continue;
     }
 
-    const totals = db.prepare(`
+    const totals = (await pool.query(`
       SELECT 
         SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as total_paid,
         SUM(CASE WHEN type IN ('missed', 'expected') THEN amount ELSE 0 END) as total_expected
       FROM savings_transactions 
-      WHERE member_id = ?
-    `).get(m.id);
-    m.total_paid = totals.total_paid || 0;
-    m.total_expected = totals.total_expected || 0;
+      WHERE member_id = $1
+    `, [m.id])).rows[0];
+    m.total_paid = totals?.total_paid ? parseFloat(totals.total_paid) : 0;
+    m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
     m.balance = m.total_paid - m.total_expected;
-  });
-  res.json(members);
+    
+    filteredMembers.push(m);
+  }
+  res.json(filteredMembers);
 });
 
 app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res) => {
   const { name } = req.body;
-  const result = await pool.query('INSERT INTO savings_members (name) VALUES ($1)', [name]);
-  res.json({ success: true, id: result.lastInsertRowid });
+  const matchedUser = (await pool.query(`SELECT role FROM users WHERE LOWER(nickname) = LOWER($1) OR LOWER(email) = LOWER($2)`, [name, name])).rows[0];
+  if (!matchedUser || !['admin', 'super_admin'].includes(matchedUser.role)) {
+    return res.status(400).json({ error: 'Only admins and superadmins can be added to savings' });
+  }
+  const result = await pool.query('INSERT INTO savings_members (name) VALUES ($1) RETURNING id', [name]);
+  res.json({ success: true, id: result.rows[0].id });
 });
 
 app.delete('/api/savings/members/:id', checkAuth, checkSavingsManager, async (req, res) => {

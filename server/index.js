@@ -804,8 +804,25 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
 
 // --- SAVINGS TRACKER API ---
 app.get('/api/savings/members', checkAuth, async (req, res) => {
+  // Auto-sync admins to savings_members
+  try {
+    const admins = await db.prepare("SELECT nickname, email FROM users WHERE role IN ('super_admin', 'admin')").all();
+    for (const admin of admins) {
+      const adminName = admin.nickname || admin.email;
+      if (!adminName) continue;
+      
+      const existing = await db.prepare("SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)").get(adminName);
+      if (!existing) {
+        await db.prepare("INSERT INTO savings_members (name) VALUES (?)").run(adminName);
+      }
+    }
+  } catch (syncErr) {
+    console.error("Failed to sync admins to savings_members", syncErr);
+  }
+
   const members = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
   const users = await db.prepare('SELECT nickname, email, role FROM users').all();
+  const filteredMembers = [];
   
   for (const m of members) {
     // Try to match savings member to a user to find their role
@@ -816,6 +833,9 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
     );
     if (matchedUser && ['admin', 'super_admin'].includes(matchedUser.role)) {
       m.role = matchedUser.role;
+    } else {
+      // Skip calculating totals and omit from response if not admin/superadmin
+      continue;
     }
 
     const totals = await db.prepare(`
@@ -828,12 +848,19 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
     m.total_paid = totals?.total_paid ? parseFloat(totals.total_paid) : 0;
     m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
     m.balance = m.total_paid - m.total_expected;
+    
+    // Add to filtered response
+    filteredMembers.push(m);
   }
-  res.json(members);
+  res.json(filteredMembers);
 });
 
 app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res) => {
   const { name } = req.body;
+  const matchedUser = await db.prepare(`SELECT role FROM users WHERE LOWER(nickname) = LOWER(?) OR LOWER(email) = LOWER(?)`).get(name, name);
+  if (!matchedUser || !['admin', 'super_admin'].includes(matchedUser.role)) {
+    return res.status(400).json({ error: 'Only admins and superadmins can be added to savings' });
+  }
   const result = await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(name);
   res.json({ success: true, id: result.lastInsertRowid });
 });
