@@ -201,9 +201,9 @@ const SavingsTracker = ({ user }) => {
     confirmAction("Confirm Payment", `Are you sure you want to record a ${formatCurrency(amount)} payment?`, async () => {
       try {
         await axios.post(`${API_BASE}/api/savings/transactions`, { member_id: memberId, amount, type: 'payment' }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-        await fetchAllData();
         setConfirmation({ ...confirmation, isOpen: false });
         showSuccess("Payment recorded successfully!");
+        fetchAllData(); // refresh in background
       } catch (err) { showToast("Error recording payment"); }
     });
   };
@@ -228,9 +228,9 @@ const SavingsTracker = ({ user }) => {
             created_at: createdAtParam,
             notes: notes || undefined
           }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-          await fetchAllData();
           setConfirmation({ ...confirmation, isOpen: false });
           showSuccess(`${type === 'payment' ? 'Payment' : 'Missed contribution'} recorded successfully!`);
+          fetchAllData(); // refresh in background
 
           if (shouldExit) {
             setShowPaymentModal(false);
@@ -255,9 +255,9 @@ const SavingsTracker = ({ user }) => {
     confirmAction("Confirm Missed", `Are you sure you want to mark a ${formatCurrency(amount)} missed contribution?`, async () => {
       try {
         await axios.post(`${API_BASE}/api/savings/transactions`, { member_id: memberId, amount, type: 'missed' }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-        await fetchAllData();
         setConfirmation({ ...confirmation, isOpen: false });
         showSuccess("Missed contribution recorded.");
+        fetchAllData(); // refresh in background
       } catch (err) { showToast("Error marking missed"); }
     });
   };
