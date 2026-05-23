@@ -656,6 +656,15 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   const clickCountRef = React.useRef(0);
   const resetTimeoutRef = React.useRef(null);
 
+  // Hidden login modal state (triggered by 3 taps on search bar)
+  const [showHiddenLogin, setShowHiddenLogin] = React.useState(false);
+  const [hiddenEmail, setHiddenEmail] = React.useState('');
+  const [hiddenPassword, setHiddenPassword] = React.useState('');
+  const [hiddenError, setHiddenError] = React.useState('');
+  const [hiddenLoading, setHiddenLoading] = React.useState(false);
+  const searchTapRef = React.useRef(0);
+  const searchResetRef = React.useRef(null);
+
   const [localUser, setLocalUser] = React.useState(null);
   const user = propUser || localUser;
   const setUser = propSetUser || setLocalUser;
@@ -738,6 +747,62 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
       }
     };
   }, []);
+
+  const handleSearchTripleTap = () => {
+    if (searchResetRef.current) clearTimeout(searchResetRef.current);
+    searchTapRef.current += 1;
+    if (searchTapRef.current >= 3) {
+      searchTapRef.current = 0;
+      setHiddenEmail('');
+      setHiddenPassword('');
+      setHiddenError('');
+      setShowHiddenLogin(true);
+    } else {
+      searchResetRef.current = setTimeout(() => {
+        searchTapRef.current = 0;
+      }, 1500);
+    }
+  };
+
+  const handleHiddenLogin = async () => {
+    if (!hiddenEmail || !hiddenPassword) {
+      setHiddenError('Please enter your email and password.');
+      return;
+    }
+    setHiddenLoading(true);
+    setHiddenError('');
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: hiddenEmail, password: hiddenPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setHiddenError(data.error || 'Invalid credentials');
+        setHiddenLoading(false);
+        return;
+      }
+      if (data.mfaRequired) {
+        localStorage.setItem('pending2FAUserId', data.userId);
+        setShowHiddenLogin(false);
+        navigate('/verify-2fa');
+        return;
+      }
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
+      setShowHiddenLogin(false);
+      if (['admin', 'super_admin'].includes(data.user.role)) {
+        navigate('/private');
+      }
+      // Regular users just stay on public dashboard
+    } catch (err) {
+      setHiddenError('Connection error. Please try again.');
+    }
+    setHiddenLoading(false);
+  };
 
   const handleSupportClick = () => {
     if (resetTimeoutRef.current) {
@@ -1056,14 +1121,19 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
 
         {/* Header Area */}
         <div className="public-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div className="public-search-wrapper" style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
-            <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)' }} />
+          <div
+            className="public-search-wrapper"
+            style={{ position: 'relative', width: '100%', maxWidth: '400px' }}
+            onClick={handleSearchTripleTap}
+          >
+            <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="text"
               placeholder="Search estates, locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem' }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem', cursor: 'text' }}
             />
           </div>
           <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
@@ -2028,6 +2098,68 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               <button type="submit" style={{ width: '100%', padding: '1.1rem', borderRadius: '12px', background: '#0f172a', color: 'white', border: 'none', fontWeight: 800, cursor: 'pointer', fontSize: '1rem', marginTop: '0.5rem' }}>Send Prospectus</button>
             </form>
           </motion.div>
+        </div>
+      )}
+
+      {/* Hidden Login Modal — triggered by triple-tap on search bar */}
+      {showHiddenLogin && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(16px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '2rem' }}
+          onClick={() => setShowHiddenLogin(false)}
+        >
+          <div
+            style={{ background: 'white', width: '100%', maxWidth: '400px', borderRadius: '28px', padding: '2.5rem', position: 'relative', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowHiddenLogin(false)}
+              style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', width: '36px', height: '36px', borderRadius: '50%', background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 900, fontSize: '1rem' }}
+            >✕</button>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ width: '48px', height: '48px', background: '#0f172a', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: '1.25rem', marginBottom: '1rem' }}>E</div>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Welcome back</h3>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Sign in to access your dashboard</p>
+            </div>
+
+            {hiddenError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '0.75rem 1rem', borderRadius: '10px', fontSize: '0.875rem', marginBottom: '1.25rem', fontWeight: 600 }}>
+                {hiddenError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              <input
+                type="email"
+                placeholder="Email address"
+                value={hiddenEmail}
+                onChange={e => setHiddenEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleHiddenLogin()}
+                autoFocus
+                style={{ padding: '1rem 1.25rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', outline: 'none', fontSize: '0.95rem', background: '#f8fafc', transition: 'border-color 0.2s' }}
+                onFocus={e => e.target.style.borderColor = '#0f172a'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={hiddenPassword}
+                onChange={e => setHiddenPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleHiddenLogin()}
+                style={{ padding: '1rem 1.25rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', outline: 'none', fontSize: '0.95rem', background: '#f8fafc', transition: 'border-color 0.2s' }}
+                onFocus={e => e.target.style.borderColor = '#0f172a'}
+                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
+
+            <button
+              onClick={handleHiddenLogin}
+              disabled={hiddenLoading}
+              style={{ width: '100%', padding: '1rem', borderRadius: '12px', background: hiddenLoading ? '#94a3b8' : '#0f172a', color: 'white', border: 'none', fontWeight: 800, fontSize: '1rem', cursor: hiddenLoading ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}
+            >
+              {hiddenLoading ? 'Signing in…' : 'Sign In'}
+            </button>
+          </div>
         </div>
       )}
 
