@@ -14,13 +14,32 @@ const multer = require('multer');
 const cron = require('node-cron');
 
 const Database = require('better-sqlite3');
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
-const sqliteDb = new Database(dbPath);
+
+let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
+let sqliteDb;
+
+try {
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+  sqliteDb = new Database(dbPath);
+} catch (err) {
+  console.warn(`⚠️ Could not use ${dbPath}, falling back to local database directory:`, err.message);
+  dbPath = path.join(__dirname, 'db', 'database.sqlite');
+  const fallbackDir = path.dirname(dbPath);
+  if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
+  sqliteDb = new Database(dbPath);
+}
 console.log('✅ SQLite Database connected successfully at:', dbPath);
 
 // Ensure upload directory exists
-const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+let UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch (err) {
+  console.warn(`⚠️ Could not use ${UPLOADS_DIR}, falling back to local uploads directory:`, err.message);
+  UPLOADS_DIR = path.join(__dirname, 'uploads');
+  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 // MIME-type extension mappings for fallback
 const MIME_EXTENSIONS = {
@@ -1795,7 +1814,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
 
