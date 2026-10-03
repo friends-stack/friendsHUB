@@ -31,7 +31,7 @@ const getOriginalFileName = (url) => {
   return filenameWithTimestamp;
 };
 
-const PrivateDashboard = ({ user }) => {
+const PrivateDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
   const handleLogout = () => {
     localStorage.clear();
@@ -63,6 +63,11 @@ const PrivateDashboard = ({ user }) => {
   const lastMessageIdRef = useRef(null);
   const sidebarRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [galleryFilePreview, setGalleryFilePreview] = useState(null);
+  const [vaultFilePreview, setVaultFilePreview] = useState(null);
+  const galleryFileInputRef = useRef(null);
+  const galleryUrlInputRef = useRef(null);
+  const vaultFileInputRef = useRef(null);
   const [lightBox, setLightBox] = useState({ isOpen: false, url: '', type: 'image', item: null });
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [visualPrompt, setVisualPrompt] = useState({ isOpen: false, title: '', placeholder: '', onConfirm: null, defaultValue: '' });
@@ -298,6 +303,7 @@ const PrivateDashboard = ({ user }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       e.target.reset();
+      setGalleryFilePreview(null);
       fetchGallery();
       showToast('New memory added to gallery!');
     } catch (err) { showToast('Upload failed: ' + (err.response?.data?.error || err.message)); }
@@ -398,6 +404,7 @@ const PrivateDashboard = ({ user }) => {
         }
       });
       e.target.reset();
+      setVaultFilePreview(null);
       fetchPersonalAssets();
       showToast('Asset added to vault');
     } catch (err) { 
@@ -1029,7 +1036,17 @@ const PrivateDashboard = ({ user }) => {
               {lightBox.type === 'video' ? (
                 <video src={lightBox.url} controls autoPlay style={{ maxWidth: '95%', maxHeight: '95%', borderRadius: '8px' }} onClick={e => e.stopPropagation()} />
               ) : (
-                <img src={lightBox.url} alt="Full View" style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px' }} />
+                <img 
+                  src={lightBox.url} 
+                  alt="Full View" 
+                  onError={(e) => {
+                    if (lightBox.url && lightBox.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
+                      e.currentTarget.dataset.retried = 'true';
+                      e.currentTarget.src = `http://localhost:5000${lightBox.url}`;
+                    }
+                  }}
+                  style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px' }} 
+                />
               )}
             </div>
 
@@ -1213,7 +1230,7 @@ const PrivateDashboard = ({ user }) => {
 
               {/* Nav buttons */}
               <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto' }}>
-                <TabButton id="messages" icon={MessageSquare} label="Internal Pulse" onClick={() => setMobileMenuOpen(false)} />
+                <TabButton id="messages" icon={MessageSquare} label="Friends Chat" onClick={() => setMobileMenuOpen(false)} />
                 <TabButton id="profile" icon={User} label="My Profile" onClick={() => setMobileMenuOpen(false)} />
 
                 {(user.role === 'super_admin' || user.role === 'admin') && (
@@ -1291,7 +1308,7 @@ const PrivateDashboard = ({ user }) => {
             marginBottom: '1rem'
           }}
         >
-          <TabButton id="messages" icon={MessageSquare} label="Internal Pulse" />
+          <TabButton id="messages" icon={MessageSquare} label="Friends Chat" />
           <TabButton id="profile" icon={User} label="My Profile" />
 
           
@@ -1335,10 +1352,10 @@ const PrivateDashboard = ({ user }) => {
       {activeTab === 'profile' ? (
         <div ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', height: '100vh' }}>
           <ProfilePage currentUser={user} userId={user.id} onProfileUpdate={(updatedUser) => {
-            if (setUser) {
+            if (typeof setUser !== 'undefined' && setUser) {
               setUser(updatedUser);
-              localStorage.setItem('user', JSON.stringify(updatedUser));
             }
+            localStorage.setItem('user', JSON.stringify(updatedUser));
           }} />
         </div>
       ) : (
@@ -1467,7 +1484,7 @@ const PrivateDashboard = ({ user }) => {
                   }} />
                   <div style={{ position: 'absolute', bottom: '1rem', left: '1.25rem', color: 'white' }}>
                     <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.4)', letterSpacing: '0.5px' }}>Friends Circle</h3>
-                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', opacity: 0.85, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>Real-time Internal Pulse Stream</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '0.75rem', opacity: 0.85, textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>Real-time Friends Chat Stream</p>
                   </div>
                 </div>
 
@@ -2055,14 +2072,103 @@ const PrivateDashboard = ({ user }) => {
                     <div className="memory-upload-container" style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '1rem', borderRadius: '12px', border: '1px dashed var(--border)' }}>
                       <div style={{ flex: 1 }}>
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 1: Paste URL</label>
-                        <input name="url" placeholder="https://..." className="input-field" style={{ marginBottom: 0 }} />
+                        <input 
+                          name="url" 
+                          ref={galleryUrlInputRef}
+                          placeholder="https://..." 
+                          className="input-field" 
+                          style={{ marginBottom: 0 }}
+                          onChange={(e) => {
+                            const val = e.target.value?.trim();
+                            if (val) {
+                              setGalleryFilePreview({ url: val, type: 'url' });
+                            } else if (galleryFilePreview?.type === 'url') {
+                              setGalleryFilePreview(null);
+                            }
+                          }}
+                        />
                       </div>
                       <div className="memory-upload-divider" style={{ width: '1px', height: '40px', background: 'var(--border)' }} />
                       <div style={{ flex: 1 }}>
                         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 2: Upload File</label>
-                        <input type="file" name="file" accept="image/*" style={{ fontSize: '0.8rem' }} />
+                        <input 
+                          type="file" 
+                          name="file" 
+                          ref={galleryFileInputRef}
+                          accept="image/*" 
+                          style={{ fontSize: '0.8rem' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              const objectUrl = URL.createObjectURL(f);
+                              setGalleryFilePreview({ url: objectUrl, type: 'file', name: f.name });
+                              if (galleryUrlInputRef.current) galleryUrlInputRef.current.value = '';
+                            }
+                          }}
+                        />
                       </div>
                     </div>
+
+                    {galleryFilePreview && (
+                      <div style={{ 
+                        position: 'relative', 
+                        width: '100%', 
+                        maxWidth: '380px', 
+                        borderRadius: '16px', 
+                        overflow: 'hidden', 
+                        border: '1.5px solid #22c55e', 
+                        background: '#f8fafc',
+                        padding: '0.75rem',
+                        boxShadow: '0 4px 14px rgba(34, 197, 94, 0.12)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', padding: '0 0.25rem' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            ✓ Selected Image Preview
+                          </span>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setGalleryFilePreview(null);
+                              if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
+                              if (galleryUrlInputRef.current) galleryUrlInputRef.current.value = '';
+                            }}
+                            style={{ 
+                              background: '#ef4444', 
+                              color: 'white', 
+                              border: 'none', 
+                              borderRadius: '50%', 
+                              width: '22px', 
+                              height: '22px', 
+                              cursor: 'pointer', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              fontSize: '0.75rem',
+                              fontWeight: 700
+                            }}
+                            title="Remove selected preview"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <img 
+                          src={galleryFilePreview.url} 
+                          alt="Preview" 
+                          style={{ 
+                            width: '100%', 
+                            maxHeight: '220px', 
+                            objectFit: 'contain', 
+                            borderRadius: '12px',
+                            background: '#ffffff'
+                          }} 
+                        />
+                        {galleryFilePreview.name && (
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            📁 {galleryFilePreview.name}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <button type="submit" className="btn-primary memory-publish-btn" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>post Gallery</button>
                   </form>
@@ -2096,6 +2202,12 @@ const PrivateDashboard = ({ user }) => {
                         <img 
                           src={item.url} 
                           alt={item.title} 
+                          onError={(e) => {
+                            if (item.url && item.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
+                              e.currentTarget.dataset.retried = 'true';
+                              e.currentTarget.src = `http://localhost:5000${item.url}`;
+                            }
+                          }}
                           style={{ 
                             width: '100%', 
                             height: '350px',
@@ -2300,12 +2412,78 @@ const PrivateDashboard = ({ user }) => {
                     </div>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: '#64748b' }}>SELECT {vaultSubTab.toUpperCase()}</label>
-                      <input type="file" name="file" accept={vaultSubTab === 'photo' ? 'image/*' : 'video/*'} style={{ fontSize: '0.8rem' }} />
+                      <input 
+                        type="file" 
+                        name="file" 
+                        ref={vaultFileInputRef}
+                        accept={vaultSubTab === 'photo' ? 'image/*' : 'video/*'} 
+                        style={{ fontSize: '0.8rem' }} 
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            const objectUrl = URL.createObjectURL(f);
+                            setVaultFilePreview({ url: objectUrl, type: vaultSubTab, name: f.name });
+                          }
+                        }}
+                      />
                     </div>
                     <button type="submit" className="btn-primary" disabled={uploadingVault} style={{ padding: '0.75rem 2rem' }}>
                       {uploadingVault ? 'Saving...' : 'Add to Private'}
                     </button>
                   </form>
+
+                  {vaultFilePreview && (
+                    <div style={{ 
+                      position: 'relative', 
+                      width: '100%', 
+                      maxWidth: '320px', 
+                      borderRadius: '16px', 
+                      overflow: 'hidden', 
+                      border: '1.5px solid #22c55e', 
+                      background: '#f8fafc',
+                      padding: '0.75rem',
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.12)',
+                      marginTop: '-0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', padding: '0 0.25rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          ✓ Selected {vaultSubTab.toUpperCase()} Preview
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setVaultFilePreview(null);
+                            if (vaultFileInputRef.current) vaultFileInputRef.current.value = '';
+                          }}
+                          style={{ 
+                            background: '#ef4444', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '50%', 
+                            width: '22px', 
+                            height: '22px', 
+                            cursor: 'pointer', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontSize: '0.75rem', 
+                            fontWeight: 700 
+                          }}
+                          title="Remove selected preview"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {vaultSubTab === 'photo' ? (
+                        <img src={vaultFilePreview.url} alt="Preview" style={{ width: '100%', height: '180px', objectFit: 'contain', borderRadius: '12px', background: '#ffffff' }} />
+                      ) : (
+                        <video src={vaultFilePreview.url} controls style={{ width: '100%', height: '180px', objectFit: 'contain', borderRadius: '12px', background: '#000000' }} />
+                      )}
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        📁 {vaultFilePreview.name}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid">
                     {personalAssets.filter(a => a.type === vaultSubTab).map(asset => (
@@ -2325,6 +2503,12 @@ const PrivateDashboard = ({ user }) => {
                           {asset.type === 'photo' ? (
                             <img 
                               src={asset.url} 
+                              onError={(e) => {
+                                if (asset.url && asset.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
+                                  e.currentTarget.dataset.retried = 'true';
+                                  e.currentTarget.src = `http://localhost:5000${asset.url}`;
+                                }
+                              }}
                               onClick={() => setLightBox({ isOpen: true, url: asset.url, type: 'image', item: { ...asset, type: 'personal' } })}
                               style={{ width: '100%', aspectRatio: '1/1', objectFit: 'contain', background: '#f1f5f9', cursor: 'zoom-in' }} 
                               alt={asset.title} 
@@ -2510,8 +2694,8 @@ const PrivateDashboard = ({ user }) => {
                       );
                     })}
 
-                    {/* Render Clerk Dropdown (Instead of a Switch - Visible only to superadmin!) */}
-                    {user.role === 'super_admin' && systemSettings.find(s => s.key === 'clerk_id') && (() => {
+                    {/* Render Clerk Dropdown (Instead of a Switch - Visible only to superadmin ermiasgesgis@gmail.com!) */}
+                    {(user.role === 'super_admin' && user.email?.toLowerCase() === 'ermiasgesgis@gmail.com') && systemSettings.find(s => s.key === 'clerk_id') && (() => {
                       const setting = systemSettings.find(s => s.key === 'clerk_id');
                       const selectedUserId = setting.value;
                       
@@ -2583,7 +2767,7 @@ const PrivateDashboard = ({ user }) => {
       <div className="mobile-bottom-nav">
         <button onClick={() => setActiveTab('messages')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'messages' ? 'var(--primary)' : 'var(--text-muted)' }}>
           <MessageSquare size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Pulse</span>
+          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Friends Chat</span>
         </button>
         <button onClick={() => setActiveTab('gallery')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'gallery' ? 'var(--primary)' : 'var(--text-muted)' }}>
           <ImageIcon size={20} />

@@ -45,6 +45,18 @@ const rewriteUrls = (data) => {
         return rewritten.replace(targetPrefix, `${window.location.protocol}//${window.location.hostname}:5000`);
       }
     }
+    
+    // 3. Dynamically prefix relative /uploads/ paths to point to the backend in development
+    if (rewritten.startsWith('/uploads/')) {
+      const isProd = import.meta.env.PROD;
+      const isLocalIp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (!isProd) {
+        const backendOrigin = isLocalIp 
+          ? `${window.location.protocol}//${window.location.hostname}:5000` 
+          : 'http://localhost:5000';
+        return `${backendOrigin}${rewritten}`;
+      }
+    }
     return rewritten;
   }
   if (Array.isArray(data)) {

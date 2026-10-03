@@ -3,7 +3,8 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, History as HistoryIcon, LayoutDashboard, 
-  Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle
+  Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
+  Calendar, Clock, Calculator, ArrowLeft, FileText
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -14,6 +15,15 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-ET', { style: 'currenc
 
 const getActualProfit = (inv) => inv.projected_profit || 0;
 
+const getCachedSavings = () => {
+  try {
+    const raw = localStorage.getItem('cached_savings_data');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 const SavingsTracker = ({ user }) => {
   useEffect(() => {
     const link = document.createElement('link');
@@ -23,15 +33,30 @@ const SavingsTracker = ({ user }) => {
     document.body.style.fontFamily = "'Inter', sans-serif";
   }, []);
 
+  const cachedData = getCachedSavings();
   const [activeView, setActiveView] = useState('dashboard'); 
-  const [members, setMembers] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [config, setConfig] = useState({ weekly_amount: 0 });
-  const [configHistory, setConfigHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState(cachedData?.members || []);
+  const [history, setHistory] = useState(cachedData?.history || []);
+  const [config, setConfig] = useState(cachedData?.config || { weekly_amount: 0 });
+  const [configHistory, setConfigHistory] = useState(cachedData?.configHistory || []);
+  const [loading, setLoading] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [systemUsers, setSystemUsers] = useState([]);
-  const [investments, setInvestments] = useState([]);
+  const [systemUsers, setSystemUsers] = useState(cachedData?.systemUsers || []);
+  const [investments, setInvestments] = useState(cachedData?.investments || []);
+
+  // Superadmin authorization strictly bound to ermiasgesgis@gmail.com
+  const SUPER_ADMIN_EMAIL = 'ermiasgesgis@gmail.com';
+  const isSuperAdmin = user?.role === 'super_admin' && (user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
+  const isClerk = user?.id === config.clerk_id;
+  const isPaymentManager = isClerk || isSuperAdmin;
+  const isMemberManager = isSuperAdmin;
+
+  // Settings dashboard is only accessible to superadmin ermiasgesgis@gmail.com
+  useEffect(() => {
+    if (activeView === 'settings' && !isSuperAdmin) {
+      setActiveView('dashboard');
+    }
+  }, [activeView, isSuperAdmin]);
   
   // Modals & Confirmation
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -50,6 +75,201 @@ const SavingsTracker = ({ user }) => {
   const [paymentForm, setPaymentForm] = useState({ amount: 300, notes: '', date: '', time: '', type: 'payment' });
   const [investmentForm, setInvestmentForm] = useState({ projectName: '', amount: '', projectedProfit: '', challenges: '', expectedDays: '' });
   const [completionForm, setCompletionForm] = useState({ finalProfit: '', challenges: '' });
+
+  // Cash In / Cash Out Modal State (Inspired by cash entry design)
+  const [showCashEntryModal, setShowCashEntryModal] = useState(false);
+  const [cashMode, setCashMode] = useState('Cash Out');
+  const [cashMemberId, setCashMemberId] = useState('');
+  const [cashAmount, setCashAmount] = useState('');
+  const [cashDate, setCashDate] = useState('');
+  const [cashTime, setCashTime] = useState('');
+  const [cashNotes, setCashNotes] = useState('');
+
+  // Cycle History & Super Admin Reset State
+  const [cycles, setCycles] = useState([]);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetCycleName, setResetCycleName] = useState('');
+  const [showCycleHistoryModal, setShowCycleHistoryModal] = useState(false);
+  const [selectedCycleSnapshot, setSelectedCycleSnapshot] = useState(null);
+
+  const handleOpenCashEntry = (initialMode = 'Cash In', memberId = null) => {
+    setCashMode(initialMode);
+    setCashAmount('');
+    setCashNotes('');
+    setCashDate(getTodayDateString());
+    setCashTime(getNowTimeString());
+    if (memberId) {
+      setCashMemberId(memberId);
+    } else if (members && members.length > 0) {
+      setCashMemberId(members[0].id);
+    }
+    setShowCashEntryModal(true);
+  };
+
+  const getConsecutiveSaturdayDates = (startDateStr, numWeeks) => {
+    const dates = [];
+    if (!startDateStr || numWeeks <= 0) return dates;
+    const parts = startDateStr.split('-');
+    if (parts.length < 3) return dates;
+    let curr = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    const currentDay = curr.getDay();
+    let daysUntilSat = (6 - currentDay + 7) % 7;
+    curr.setDate(curr.getDate() + daysUntilSat);
+
+    for (let i = 0; i < numWeeks; i++) {
+      const formatted = curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      if (i === 0) {
+        dates.push(`${formatted} (Today)`);
+      } else {
+        dates.push(`${formatted} (Next Sat #${i})`);
+      }
+      curr.setDate(curr.getDate() + 7);
+    }
+    return dates;
+  };
+
+  const handleSaveCashEntry = async (shouldExit) => {
+    if (!cashMemberId) {
+      showToast("Please select a friend / member");
+      return;
+    }
+    if (!cashAmount || parseFloat(cashAmount) <= 0) {
+      showToast("Please enter a valid amount");
+      return;
+    }
+
+    const selectedM = members.find(m => String(m.id) === String(cashMemberId));
+    const memberName = selectedM ? selectedM.name : 'Member';
+    const typeParam = cashMode === 'Cash In' ? 'payment' : 'missed';
+    const createdAtParam = `${cashDate} ${cashTime}:00`;
+
+    const weeklyRate = config.weekly_amount || 300;
+    const numSats = cashMode === 'Cash In' ? Math.floor(parseFloat(cashAmount) / weeklyRate) : 0;
+    let finalNotes = cashNotes ? cashNotes.trim() : '';
+    if (numSats >= 1) {
+      const satDates = getConsecutiveSaturdayDates(cashDate, numSats);
+      const satText = `🗓️ Consecutive Saturdays (${numSats} wks): ${satDates.join(', ')}`;
+      finalNotes = finalNotes ? `${finalNotes} • ${satText}` : satText;
+    }
+
+    confirmAction(
+      `Confirm ${cashMode}`,
+      `Are you sure you want to record a ${formatCurrency(cashAmount)} ${cashMode} for ${memberName}?`,
+      async () => {
+        try {
+          await axios.post(`${API_BASE}/api/savings/transactions`, {
+            member_id: cashMemberId,
+            amount: parseFloat(cashAmount),
+            type: typeParam,
+            created_at: createdAtParam,
+            notes: finalNotes || undefined
+          }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          const addedAmt = cashMode === 'Cash In' ? parseFloat(cashAmount) : 0;
+          const updatedTotalWealth = (finalTotalAvailable + totalActiveCapital) + addedAmt;
+          const formattedTotalWealth = formatCurrency(updatedTotalWealth);
+          const signerName = user?.nickname || 'Admin';
+
+          const currentDebt = selectedM ? Math.max(0, (selectedM.total_expected || 0) - (selectedM.total_paid || 0)) : 0;
+          const addedMissed = cashMode === 'Cash Out' ? parseFloat(cashAmount) : 0;
+          const addedPaid = cashMode === 'Cash In' ? parseFloat(cashAmount) : 0;
+          const updatedMemberMissed = Math.max(0, currentDebt + addedMissed - addedPaid);
+          const formattedMemberMissed = formatCurrency(updatedMemberMissed);
+
+          const labelText = cashMode === 'Cash In' ? 'New payment' : 'Missed record';
+          showSuccess(`🔔 ${labelText} of ${formatCurrency(cashAmount)} signed by ${signerName} for ${memberName} (total missed: ${formattedMemberMissed}), now you all have ${formattedTotalWealth}`);
+          fetchAllData();
+
+          if (shouldExit) {
+            setShowCashEntryModal(false);
+          } else {
+            setCashAmount('');
+            setCashNotes('');
+          }
+        } catch (err) {
+          showToast("Error recording transaction");
+        }
+      }
+    );
+  };
+
+  const handleResetCycle = async () => {
+    confirmAction(
+      "Archive & Reset Savings Pool?",
+      `Are you sure you want to archive current wealth (${formatCurrency(finalTotalAvailable + totalActiveCapital)}) and start from scratch for a new cycle? All current member records and history will be saved in Cycle History.`,
+      async () => {
+        try {
+          const token = localStorage.getItem('token');
+          await axios.post(
+            `${API_BASE}/api/savings/reset-cycle`,
+            {
+              cycle_name: resetCycleName || undefined,
+              cash_in_hand: finalTotalAvailable,
+              money_at_work: totalActiveCapital,
+              total_wealth: finalTotalAvailable + totalActiveCapital
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          setShowResetModal(false);
+          setResetCycleName('');
+          showSuccess("Savings pool successfully archived and reset! Active transactions reset to ETB 0.00.");
+          fetchAllData();
+        } catch (err) {
+          showToast(err.response?.data?.error || "Error archiving and resetting pool.");
+        }
+      }
+    );
+  };
+
+  const handleDeleteCycle = (cycleId, cycleName) => {
+    confirmAction(
+      "Delete Archived Cycle?",
+      `Are you sure you want to permanently delete the archived cycle "${cycleName || 'this cycle'}"? This action cannot be undone.`,
+      async () => {
+        try {
+          const token = localStorage.getItem('token');
+          await axios.delete(`${API_BASE}/api/savings/cycles/${cycleId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          if (selectedCycleSnapshot?.id === cycleId) {
+            setSelectedCycleSnapshot(null);
+          }
+          showSuccess(`Archived cycle "${cycleName || 'cycle'}" deleted successfully!`);
+          fetchAllData();
+        } catch (err) {
+          showToast(err.response?.data?.error || "Error deleting archived cycle.");
+        }
+      },
+      "Yes, Delete",
+      "Cancel"
+    );
+  };
+
+  const handleClearAllCycles = () => {
+    confirmAction(
+      "Clear All Cycle Archives?",
+      "Are you sure you want to permanently delete ALL archived savings cycles? This action cannot be undone.",
+      async () => {
+        try {
+          const token = localStorage.getItem('token');
+          await axios.delete(`${API_BASE}/api/savings/cycles`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          setSelectedCycleSnapshot(null);
+          showSuccess("All archived savings cycles have been permanently cleared!");
+          fetchAllData();
+        } catch (err) {
+          showToast(err.response?.data?.error || "Error clearing cycle archives.");
+        }
+      },
+      "Yes, Clear All",
+      "Cancel"
+    );
+  };
 
   // Filtering
   const [dateFilter, setDateFilter] = useState('all'); 
@@ -126,9 +346,11 @@ const SavingsTracker = ({ user }) => {
     return count;
   };
 
-  const fetchAllData = async () => {
+  const fetchAllData = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent && !localStorage.getItem('cached_savings_data')) {
+        setLoading(true);
+      }
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       const promises = [
@@ -136,15 +358,24 @@ const SavingsTracker = ({ user }) => {
         axios.get(`${API_BASE}/api/savings/history`, { headers }),
         axios.get(`${API_BASE}/api/savings/config`, { headers }),
         axios.get(`${API_BASE}/api/savings/config/all`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/api/savings/investments`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API_BASE}/api/savings/investments`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/api/savings/cycles`, { headers }).catch(() => ({ data: [] }))
       ];
-      if (user?.role === 'super_admin') {
+      if (user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'clerk') {
         promises.push(axios.get(`${API_BASE}/api/users`, { headers }).catch(() => ({ data: [] })));
       }
       const res = await Promise.all(promises);
-      setMembers(res[0].data);
-
+      const newMembers = res[0].data || [];
+      const newCycles = res[5].data || [];
       let historyData = res[1].data || [];
+      const newConfig = res[2].data || { weekly_amount: 0 };
+      const newConfigHistory = res[3].data || [];
+      const newInvestments = res[4].data || [];
+      const newSystemUsers = res[6]?.data || systemUsers;
+
+      setMembers(newMembers);
+      setCycles(newCycles);
+
       const memberPayments = {};
       historyData.forEach(h => {
         if (h.type === 'payment') memberPayments[h.member_id] = (memberPayments[h.member_id] || 0) + h.amount;
@@ -176,22 +407,37 @@ const SavingsTracker = ({ user }) => {
       });
 
       setHistory(historyData);
-      setConfig(res[2].data);
-      setConfigHistory(res[3].data || []);
-      setInvestments(res[4].data || []);
-      if (res[5]) setSystemUsers(res[5].data);
+      setConfig(newConfig);
+      setConfigHistory(newConfigHistory);
+      setInvestments(newInvestments);
+      if (res[6]?.data) setSystemUsers(res[6].data);
+
+      try {
+        localStorage.setItem('cached_savings_data', JSON.stringify({
+          members: newMembers,
+          history: historyData,
+          config: newConfig,
+          configHistory: newConfigHistory,
+          investments: newInvestments,
+          cycles: newCycles,
+          systemUsers: newSystemUsers
+        }));
+      } catch (cacheErr) {}
     } catch (err) {
       console.error(err);
     } finally {
-      if (user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'clerk') {
-        const usersRes = await axios.get(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-        setSystemUsers(usersRes.data);
-      }
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchAllData(); }, []);
+  useEffect(() => { 
+    fetchAllData(); 
+    // Auto-refresh in background every 2.5s quickly without blocking UI
+    const intervalId = setInterval(() => {
+      fetchAllData(true);
+    }, 2500);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const confirmAction = (title, message, onConfirm, confirmText = 'Yes', cancelText = 'No') => {
     setConfirmation({ isOpen: true, title, message, onConfirm, confirmText, cancelText });
@@ -263,6 +509,10 @@ const SavingsTracker = ({ user }) => {
   };
 
   const handleAddMember = async (name) => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can add members");
+      return;
+    }
     if (!name) return;
     confirmAction("Add Member", `Do you want to add "${name}" to the group?`, async () => {
       try {
@@ -270,11 +520,15 @@ const SavingsTracker = ({ user }) => {
         await fetchAllData();
         setConfirmation({ ...confirmation, isOpen: false });
         showSuccess(`${name} is added successfully to the system`);
-      } catch (e) { showToast("Error adding member"); }
+      } catch (e) { showToast("Error adding member: " + (e.response?.data?.error || e.message)); }
     });
   };
 
   const handleDeleteMember = async (memberId, memberName) => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can remove members");
+      return;
+    }
     confirmAction("Remove Member", `Are you sure you want to PERMANENTLY remove ${memberName} and all their transaction history?`, async () => {
       try {
         await axios.delete(`${API_BASE}/api/savings/members/${memberId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
@@ -285,23 +539,118 @@ const SavingsTracker = ({ user }) => {
     });
   };
 
+  const [selectedWeekIds, setSelectedWeekIds] = useState([]);
+
   const handleAddWeek = async (amount) => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can change weekly contribution amount");
+      return;
+    }
     confirmAction("New Week", `Are you sure you want to set the weekly contribution to ${formatCurrency(amount)}?`, async () => {
       try {
         await axios.post(`${API_BASE}/api/savings/config`, { amount }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
         await fetchAllData();
         setConfirmation({ ...confirmation, isOpen: false });
         showSuccess(`Weekly amount updated to ${formatCurrency(amount)}`);
-      } catch (e) { showToast("Error updating configuration"); }
+      } catch (e) { showToast("Error updating configuration: " + (e.response?.data?.error || e.message)); }
     });
   };
 
+  const handleDeleteWeekConfig = (id, weekNum, amount) => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can delete week configurations");
+      return;
+    }
+    const latestConfigId = configHistory[0]?.id;
+    if (String(id) === String(latestConfigId)) {
+      showToast("The current active week configuration cannot be deleted as the system requires at least 1 active weekly setting.");
+      return;
+    }
+    confirmAction(
+      "Confirm Week Deletion",
+      `Are you sure you want to delete Week ${weekNum} (${formatCurrency(amount)}) configuration?`,
+      async () => {
+        try {
+          await axios.delete(`${API_BASE}/api/savings/config/${id}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          setSelectedWeekIds(prev => prev.filter(wId => wId !== id));
+          await fetchAllData();
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          showSuccess(`Week ${weekNum} configuration deleted successfully!`);
+        } catch (e) {
+          showToast("Error deleting week configuration: " + (e.response?.data?.error || e.message));
+        }
+      }
+    );
+  };
+
+  const handleDeleteSelectedWeeks = () => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can delete week configurations");
+      return;
+    }
+    const latestConfigId = configHistory[0]?.id;
+    const idsToDelete = selectedWeekIds.filter(wId => String(wId) !== String(latestConfigId));
+    if (idsToDelete.length === 0) return;
+    confirmAction(
+      "Confirm Bulk Week Deletion",
+      `Are you sure you want to delete the ${idsToDelete.length} selected week configuration(s)?`,
+      async () => {
+        try {
+          await axios.post(`${API_BASE}/api/savings/config/bulk-delete`, { ids: idsToDelete }, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          const count = idsToDelete.length;
+          setSelectedWeekIds([]);
+          await fetchAllData();
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          showSuccess(`${count} week configuration(s) deleted successfully!`);
+        } catch (e) {
+          showToast("Error deleting selected week configurations: " + (e.response?.data?.error || e.message));
+        }
+      }
+    );
+  };
+
+  const handleClearAllWeeks = () => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin (ermiasgesgis@gmail.com) can delete week configurations");
+      return;
+    }
+    if (configHistory.length <= 1) {
+      showToast("No previous week configurations to clear (active week is protected).");
+      return;
+    }
+    confirmAction(
+      "Clear All Previous Week History?",
+      "⚠️ Are you sure you want to PERMANENTLY delete all previous week configurations? (The current active week will be preserved).",
+      async () => {
+        try {
+          await axios.post(`${API_BASE}/api/savings/config/bulk-delete`, { ids: 'all' }, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          setSelectedWeekIds([]);
+          await fetchAllData();
+          setConfirmation(prev => ({ ...prev, isOpen: false }));
+          showSuccess("All previous week configurations cleared successfully!");
+        } catch (e) {
+          showToast("Error clearing week history: " + (e.response?.data?.error || e.message));
+        }
+      }
+    );
+  };
+
   const handleSetClerk = async (clerkId) => {
+    if (!isSuperAdmin) {
+      showToast("Setting clerk is the role of the Super Admin (ermiasgesgis@gmail.com)");
+      return;
+    }
     try {
       await axios.post(`${API_BASE}/api/savings/clerk`, { clerk_id: clerkId }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       await fetchAllData();
       showSuccess("Clerk updated successfully");
-    } catch (e) { showToast("Error setting clerk"); }
+    } catch (e) { showToast("Error setting clerk: " + (e.response?.data?.error || e.message)); }
   };
 
   const handleAddInvestment = async () => {
@@ -353,61 +702,140 @@ const SavingsTracker = ({ user }) => {
   };
 
   const handleCompleteInvestment = async () => {
-    const income = parseFloat(completionForm.finalProfit);
+    const totalReturned = parseFloat(completionForm.finalProfit);
     const expense = selectedInvestment.allocated_amount;
-    const netProfit = income - expense;
+    const netProfit = totalReturned - expense;
+    const newRemaining = remainingMoney + totalReturned;
 
-    confirmAction("Confirm Completion", `Confirming Income of ${formatCurrency(income)}. Net Profit will be ${formatCurrency(netProfit)}.`, async () => {
-      try {
-        await axios.put(
-          `${API_BASE}/api/savings/investments/${selectedInvestment.id}/status`, 
-          { status: 'completed', profit: netProfit, challenges: completionForm.challenges }, 
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+    confirmAction(
+      "Confirm Return & Completion", 
+      `Confirming return of ${formatCurrency(totalReturned)} (${formatCurrency(expense)} capital + ${formatCurrency(netProfit)} profit). Remaining Money will become ${formatCurrency(newRemaining)}.`, 
+      async () => {
+        try {
+          await axios.put(
+            `${API_BASE}/api/savings/investments/${selectedInvestment.id}/status`, 
+            { status: 'completed', profit: netProfit, challenges: completionForm.challenges }, 
+            { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+          );
+          await fetchAllData();
+          setShowInvestmentCompleteModal(false);
+          setShowInvestmentDetailModal(false);
+          setConfirmation({ ...confirmation, isOpen: false });
+          showSuccess(`Business completed! ${formatCurrency(totalReturned)} returned to Remaining Money.`);
+        } catch (e) { showToast("Error completing investment: " + (e.response?.data?.error || e.message)); }
+      }
+    );
+  };
+
+
+  const handleEditAdvanceBalance = (memberToEdit) => {
+    if (!isSuperAdmin) {
+      showToast("Only Super Admin can edit stored advance savings");
+      return;
+    }
+    setVisualPrompt({
+      isOpen: true,
+      title: `✏️ Edit Stored Advance Savings (${memberToEdit.name})`,
+      placeholder: `Auto calculated: ETB ${memberToEdit.autoAdvanceBalance}. Leave empty to reset to auto`,
+      defaultValue: memberToEdit.isOverridden ? String(memberToEdit.advanceBalance) : '',
+      onConfirm: async (inputVal) => {
+        const payloadVal = (inputVal === null || inputVal.trim() === '') ? null : parseFloat(inputVal);
+        setVisualPrompt(prev => ({ ...prev, isOpen: false }));
+
+        const confirmMsg = payloadVal === null 
+          ? `Are you sure you want to RESET stored advance savings to automatic calculation for ${memberToEdit.name}?`
+          : `Are you sure you want to UPDATE stored advance savings for ${memberToEdit.name} to ${formatCurrency(payloadVal)}?`;
+
+        confirmAction(
+          "Confirm Advance Savings Change",
+          confirmMsg,
+          async () => {
+            try {
+              await axios.put(`${API_BASE}/api/savings/members/${memberToEdit.id}/advance`, {
+                custom_advance_balance: payloadVal
+              }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+              
+              setConfirmation(prev => ({ ...prev, isOpen: false }));
+              const successText = payloadVal === null 
+                ? `Stored advance savings for ${memberToEdit.name} has been reset to automatic calculation!` 
+                : `Stored advance savings for ${memberToEdit.name} updated successfully to ${formatCurrency(payloadVal)}!`;
+              showSuccess(successText);
+              fetchAllData();
+            } catch (e) {
+              showToast("Error updating advance savings: " + (e.response?.data?.error || e.message));
+            }
+          }
         );
-        await fetchAllData();
-        setShowInvestmentCompleteModal(false);
-        setShowInvestmentDetailModal(false);
-        setConfirmation({ ...confirmation, isOpen: false });
-        showSuccess("Business completed and capital returned!");
-      } catch (e) { showToast("Error completing investment: " + (e.response?.data?.error || e.message)); }
+      }
     });
   };
 
-  const formatCurrency = (amt) => new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(amt || 0);
-  const isSuperAdmin = user?.role === 'super_admin';
-  const isClerk = user?.id === config.clerk_id;
-  const isPaymentManager = isClerk || isSuperAdmin;
-  const isMemberManager = isSuperAdmin;
+  // 🟢 1. Total Saving: "How much have we contributed?"
+  // Cumulative contributions made by all members since the group started.
+  // Never decreases when money is invested, spent, or moved. It is the historical cumulative record.
+  const totalSaving = members.reduce((sum, m) => sum + (Number(m.total_paid) || 0), 0);
+  const totalMemberSavings = totalSaving;
 
-  const totalMemberSavings = members.reduce((sum, m) => sum + (m.total_paid || 0), 0);
-  const totalProfitsEarned = investments.filter(i => i.status === 'completed').reduce((sum, i) => sum + (i.projected_profit || 0), 0);
-  
-  // The 'Internal Pool' is the money members paid + profits.
-  // We assume any investment made came from this pool.
-  const completedCapital = investments.filter(i => i.status === 'completed').reduce((sum, i) => sum + (i.allocated_amount || 0), 0);
-  const activeCapital = investments.filter(i => i.status === 'active').reduce((sum, i) => sum + (i.allocated_amount || 0), 0);
-  
-  // Total Group Money = Member Savings + Profits + The principal of successful missions
-  // (We don't add active capital to wealth yet, because it's still at risk/out)
-  const totalPool = totalMemberSavings + totalProfitsEarned + completedCapital;
-  
-  // Available Cash = Total Pool - Active Capital
-  const finalTotalAvailable = totalPool - activeCapital;
-  const totalActiveCapital = activeCapital;
+  // 🔵 2. Money at Work: "How much of our money is currently being used?"
+  // Money taken from available group funds and put into active investments/projects/activities.
+  const moneyAtWork = investments
+    .filter(i => i.status === 'active')
+    .reduce((sum, i) => sum + (Number(i.allocated_amount) || 0), 0);
+  const activeCapital = moneyAtWork;
+  const totalActiveCapital = moneyAtWork;
+
+  // Completed profits returned from finished businesses in the active cycle:
+  const completedProfits = investments
+    .filter(i => i.status === 'completed')
+    .reduce((sum, i) => {
+      const net = (i.profit !== undefined && i.profit !== null && Number(i.profit) !== 0)
+        ? Number(i.profit)
+        : (Number(i.projected_profit) || 0);
+      return sum + net;
+    }, 0);
+  const totalProfitsEarned = completedProfits;
+
+  // 🟡 3. Remaining Money: "How much can we use right now?"
+  // Actual funds currently available to the group (physically in cash or sitting in bank account).
+  // When an investment is launched, funds are taken from remaining money into money at work.
+  // When an investment completes, capital returns and profits are added back into remaining money.
+  const rawRemaining = (totalSaving + completedProfits) - moneyAtWork;
+  const remainingMoney = Math.max(0, rawRemaining);
+  const finalTotalAvailable = remainingMoney;
+  const totalPool = totalSaving;
 
   // GENUINE LOGIC PROCESSING
   const weeklyRate = config.weekly_amount || 300;
   const processedMembers = members.map(m => {
-    // Reverting to DB-driven logic to respect manual 'Missed' marks
-    const genuineBalance = m.balance;
-    const currentDebt = Math.max(0, -m.balance);
-    const totalExpectedRequirement = m.total_expected;
-    return { ...m, genuineBalance, currentDebt, totalExpectedRequirement };
+    // Expected requirement for today's Saturday is at least 1 weeklyRate if payments or expected records exist
+    const expectedBase = (m.total_expected > 0) ? m.total_expected : (m.total_paid > 0 ? weeklyRate : 0);
+    const effectiveExpected = Math.max(expectedBase, m.total_expected || 0);
+
+    const currentDebt = Math.max(0, (m.total_expected || 0) - (m.total_paid || 0));
+    
+    // Auto advance calculation
+    const autoAdvanceBalance = Math.max(0, (m.total_paid || 0) - effectiveExpected);
+    
+    // Check if superadmin manual override exists
+    const isOverridden = m.custom_advance_balance !== null && m.custom_advance_balance !== undefined && !isNaN(m.custom_advance_balance);
+    const advanceBalance = isOverridden ? parseFloat(m.custom_advance_balance) : autoAdvanceBalance;
+    const advanceWeeks = Math.floor(advanceBalance / weeklyRate);
+    const genuineBalance = (m.total_paid || 0) - (m.total_expected > 0 ? m.total_expected : weeklyRate);
+
+    return { 
+      ...m, 
+      genuineBalance, 
+      currentDebt, 
+      autoAdvanceBalance,
+      advanceBalance, 
+      advanceWeeks, 
+      isOverridden,
+      effectiveExpected,
+      totalExpectedRequirement: m.total_expected 
+    };
   });
 
   const debtMembers = processedMembers.filter(m => m.currentDebt > 0);
-
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Tracker...</div>;
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem', background:'#F9FAFB', borderRadius:'24px', minHeight:'80vh', color:'#111827', fontFamily:"'Inter', sans-serif", padding:'1.5rem' }}>
@@ -441,21 +869,86 @@ const SavingsTracker = ({ user }) => {
         <AnimatePresence mode="wait">
           {activeView === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
-              <header><h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit', margin:'0 0 0.25rem' }}>Dashboard</h1><p style={{ color:'#6B7280', margin:0 }}>{members.length} members • {new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</p></header>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <header>
+                  <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit', margin:'0 0 0.25rem' }}>Dashboard</h1>
+                  <p style={{ color:'#6B7280', margin:0 }}>{members.length} members • {new Date().toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</p>
+                </header>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setShowCycleHistoryModal(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.6rem 1.1rem',
+                      borderRadius: '14px',
+                      border: '1.5px solid #CBD5E1',
+                      background: 'white',
+                      color: '#334155',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    📜 Cycle Archives ({cycles.length})
+                  </button>
+
+                  {user?.role === 'super_admin' && (
+                    <button
+                      onClick={() => setShowResetModal(true)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.6rem 1.1rem',
+                        borderRadius: '14px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #EF4444, #B91C1C)',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                      }}
+                    >
+                      🔄 Start From Scratch
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap:'1rem' }}>
-                <StatCard label="REMAINING MONEY" value={formatCurrency(finalTotalAvailable)} color="#3B82F6" subValue="Cash in hand" />
+                <StatCard 
+                  label="REMAINING MONEY" 
+                  value={formatCurrency(remainingMoney)} 
+                  color="#D97706" 
+                  badge="🟡 Cash & Bank"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #FFFDF5 100%)"
+                  borderColor="#FDE68A"
+                  subValue="Available in cash or bank" 
+                  onClick={() => setShowWealthModal(true)}
+                />
                 <StatCard 
                   label="MONEY AT WORK" 
-                  value={formatCurrency(totalActiveCapital)} 
-                  color="#8B5CF6" 
-                  subValue="Active investments" 
+                  value={formatCurrency(moneyAtWork)} 
+                  color="#2563EB" 
+                  badge="🔵 Working Capital"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #F8FAFF 100%)"
+                  borderColor="#BFDBFE"
+                  subValue="Active investments & projects" 
                   onClick={() => setShowActiveInvestmentsModal(true)}
                 />
                 <StatCard 
-                  label="TOTAL MONEY" 
-                  value={formatCurrency(totalPool)} 
+                  label="TOTAL SAVING" 
+                  value={formatCurrency(totalSaving)} 
                   color="#16A34A" 
-                  subValue="Savings + Net Profits" 
+                  badge="🟢 Cumulative"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #F5FDF7 100%)"
+                  borderColor="#BBF7D0"
+                  subValue="Cumulative member contributions" 
                   onClick={() => setShowWealthModal(true)}
                 />
               </div>
@@ -484,18 +977,7 @@ const SavingsTracker = ({ user }) => {
             <motion.div key="members" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
               <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit' }}>Members</h1>
               {processedMembers.map(m => <MemberCard key={m.id} member={m} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
-              {isMemberManager && <FloatingAddButton onClick={() => {
-                setVisualPrompt({
-                  isOpen: true,
-                  title: 'New Member',
-                  placeholder: 'Enter friend name...',
-                  defaultValue: '',
-                  onConfirm: (name) => {
-                    if (name) handleAddMember(name);
-                    setVisualPrompt(prev => ({ ...prev, isOpen: false }));
-                  }
-                });
-              }} />}
+              {isMemberManager && <FloatingAddButton onClick={() => handleOpenCashEntry('Cash In')} />}
             </motion.div>
           )}
 
@@ -521,13 +1003,18 @@ const SavingsTracker = ({ user }) => {
                     subValue={isOnTrack ? "Up to date ✓" : `Current Debt (ETB ${weeklyRate}/wk)`}
                   />
                   <StatCard 
-                    label="Group Balance" 
-                    value={formatCurrency(totalPool)} 
-                    color="#3B82F6" 
-                    subValue="Total Friends Wealth" 
+                    label={m.isOverridden ? "STORED ADVANCE SAVINGS ✏️ (Overridden)" : (isSuperAdmin ? "STORED ADVANCE SAVINGS ✏️" : "STORED ADVANCE SAVINGS")} 
+                    value={formatCurrency(m.advanceBalance || 0)} 
+                    color="#0284C7" 
+                    subValue={
+                      (m.advanceBalance || 0) > 0 
+                        ? `Covers ${m.advanceWeeks || Math.floor((m.advanceBalance || 0) / weeklyRate)} next Sat(s) 🗓️${isSuperAdmin ? ' (Click to edit)' : ''}` 
+                        : (isSuperAdmin ? "0 advance Saturdays (Click to edit)" : "0 advance Saturdays")
+                    } 
+                    onClick={isSuperAdmin ? () => handleEditAdvanceBalance(m) : undefined}
                   />
                 </div>
-                {isPaymentManager && <div style={{ display:'flex', gap:'1rem' }}><ActionButton label="+ Add payment" color="#16A34A" onClick={() => { setPaymentForm({ amount: 300, notes: '', date: getTodayDateString(), time: getNowTimeString(), type: 'payment' }); setShowPaymentModal(true); }} /><ActionButton label="Mark missed" color="#DC2626" onClick={() => { setPaymentForm({ amount: 300, notes: '', date: getTodayDateString(), time: getNowTimeString(), type: 'missed' }); setShowMissedModal(true); }} /></div>}
+                {isPaymentManager && <div style={{ display:'flex', gap:'1rem' }}><ActionButton label="+ Add payment (Cash In)" color="#16A34A" onClick={() => handleOpenCashEntry('Cash In', m.id)} /><ActionButton label="Mark missed (Cash Out)" color="#DC2626" onClick={() => handleOpenCashEntry('Cash Out', m.id)} /></div>}
                 <Section title="Contribution History">{history.filter(h => h.member_id === m.id).map((h, i) => <TransactionItem key={h.id} transaction={h} full showBorder={i !== 0} formatCurrency={formatCurrency} systemUsers={systemUsers} members={members} />)}</Section>
               </motion.div>
             );
@@ -594,24 +1081,33 @@ const SavingsTracker = ({ user }) => {
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap:'1rem' }}>
                 <StatCard 
                   label="REMAINING MONEY" 
-                  value={formatCurrency(finalTotalAvailable)} 
-                  color="#3B82F6" 
-                  subValue="Ready for new missions" 
+                  value={formatCurrency(remainingMoney)} 
+                  color="#D97706" 
+                  badge="🟡 Cash & Bank"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #FFFDF5 100%)"
+                  borderColor="#FDE68A"
+                  subValue="Available in cash/bank to invest" 
                   onClick={() => setShowWealthModal(true)}
                 />
                 <StatCard 
                   label="MONEY AT WORK" 
-                  value={formatCurrency(totalActiveCapital)} 
-                  color="#8B5CF6" 
-                  subValue="Out in businesses" 
+                  value={formatCurrency(moneyAtWork)} 
+                  color="#2563EB" 
+                  badge="🔵 Active Projects"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #F8FAFF 100%)"
+                  borderColor="#BFDBFE"
+                  subValue="Tied up in active investments" 
                   onClick={() => setShowActiveInvestmentsModal(true)}
                 />
                 <StatCard 
-                  label="TOTAL WEALTH" 
-                  value={formatCurrency(totalPool)} 
+                  label="TOTAL PROFIT" 
+                  value={formatCurrency(completedProfits)} 
                   color="#16A34A" 
-                  subValue="Our total wealth pool" 
-                  onClick={() => setShowWealthModal(true)}
+                  badge="🟢 Earned Profit"
+                  bgGradient="linear-gradient(180deg, #FFFFFF 0%, #F5FDF7 100%)"
+                  borderColor="#BBF7D0"
+                  subValue="Earned from completed investments" 
+                  onClick={() => setShowProfitModal(true)}
                 />
               </div>
 
@@ -686,18 +1182,11 @@ const SavingsTracker = ({ user }) => {
           )}
 
           {activeView === 'settings' && (
-            <motion.div key="settings" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
-              <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit' }}>Settings</h1>
-              
-              {!isSuperAdmin && (
-                <div style={{ background: '#FEF2F2', padding: '1.5rem', borderRadius: '24px', border: '1px solid #FECACA', color: '#991B1B', fontWeight: 600 }}>
-                  ⚠️ Some settings are restricted to Super Admin only.
-                </div>
-              )}
-
-              {isSuperAdmin && (
-                <>
-                  <div style={{ background:'white', padding:'2rem', borderRadius:'24px', border:'1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            isSuperAdmin ? (
+              <motion.div key="settings" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
+                <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit' }}>Settings</h1>
+                
+                <div style={{ background:'white', padding:'2rem', borderRadius:'24px', border:'1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                     <label style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', color:'#6B7280', display:'block', marginBottom:'1.5rem' }}>Add Member</label>
                     <div style={{ marginBottom: '1.5rem' }}>
                       <label style={{ fontSize: '0.9rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '0.5rem' }}>Full name</label>
@@ -744,40 +1233,174 @@ const SavingsTracker = ({ user }) => {
                     <button onClick={() => { const a = document.getElementById('new-weekly-amount').value; if(a) handleAddWeek(a); }} style={{ width:'100%', padding:'1.1rem', borderRadius:'12px', background:'#16A34A', color:'white', border:'none', fontWeight:700, fontSize: '1rem', cursor:'pointer', marginBottom: '2rem' }}>Add week</button>
 
                     <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '1.5rem' }}>
-                      <label style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', color:'#6B7280', display:'block', marginBottom:'1rem' }}>Week History</label>
-                      {configHistory.map((c, i) => (
-                        <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0', borderBottom: '1px solid #F3F4F6' }}>
-                          <span style={{ color: '#6B7280', fontWeight: 500 }}>Week {configHistory.length - i}</span>
-                          <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>{formatCurrency(c.weekly_amount)}</span>
-                        </div>
-                      ))}
+                      {(() => {
+                        const latestConfigId = configHistory[0]?.id;
+                        const selectableConfigs = configHistory.filter(c => c.id !== latestConfigId);
+                        const isAllSelectableChecked = selectableConfigs.length > 0 && selectedWeekIds.length === selectableConfigs.length;
+
+                        return (
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                {isSuperAdmin && selectableConfigs.length > 0 && (
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllSelectableChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedWeekIds(selectableConfigs.map(c => c.id));
+                                      } else {
+                                        setSelectedWeekIds([]);
+                                      }
+                                    }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#16A34A' }}
+                                  />
+                                )}
+                                <label style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', color:'#6B7280', margin: 0 }}>
+                                  Week History ({configHistory.length})
+                                </label>
+                              </div>
+
+                              {isSuperAdmin && selectableConfigs.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                  {selectedWeekIds.length > 0 && (
+                                    <button
+                                      onClick={handleDeleteSelectedWeeks}
+                                      style={{
+                                        padding: '0.4rem 0.8rem',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: '#EF4444',
+                                        color: 'white',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem'
+                                      }}
+                                    >
+                                      🗑️ Delete Selected ({selectedWeekIds.length})
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={handleClearAllWeeks}
+                                    style={{
+                                      padding: '0.4rem 0.8rem',
+                                      borderRadius: '8px',
+                                      border: '1px solid #FCA5A5',
+                                      background: '#FEF2F2',
+                                      color: '#DC2626',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    🗑️ Clear All Previous
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {configHistory.length === 0 ? (
+                              <div style={{ color: '#94A3B8', fontSize: '0.9rem', fontStyle: 'italic', padding: '1rem 0' }}>
+                                No week history configurations saved.
+                              </div>
+                            ) : (
+                              configHistory.map((c, i) => {
+                                const isLatest = (c.id === latestConfigId);
+                                const weekNum = c.week_number || (configHistory.length - i);
+                                const isSelected = selectedWeekIds.includes(c.id);
+
+                                return (
+                                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem 0', borderBottom: '1px solid #F3F4F6' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                      {isSuperAdmin && !isLatest && (
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedWeekIds(prev => [...prev, c.id]);
+                                            } else {
+                                              setSelectedWeekIds(prev => prev.filter(wId => wId !== c.id));
+                                            }
+                                          }}
+                                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#16A34A' }}
+                                        />
+                                      )}
+                                      <span style={{ color: '#374151', fontWeight: 600 }}>Week {weekNum}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                      <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>{formatCurrency(c.weekly_amount)}</span>
+                                      {isSuperAdmin && (
+                                        isLatest ? (
+                                          <span style={{ background: '#DCFCE7', color: '#166534', padding: '0.25rem 0.65rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                            Active Week (Protected)
+                                          </span>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleDeleteWeekConfig(c.id, weekNum, c.weekly_amount)}
+                                            title={`Delete Week ${weekNum}`}
+                                            style={{
+                                              background: '#FEF2F2',
+                                              border: '1px solid #FCA5A5',
+                                              color: '#DC2626',
+                                              borderRadius: '8px',
+                                              padding: '0.35rem 0.6rem',
+                                              fontSize: '0.75rem',
+                                              fontWeight: 700,
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            🗑️ Delete
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                </>
-              )}
-
-
-              {user?.role === 'super_admin' && (
-                <div style={{ background:'white', padding:'2rem', borderRadius:'24px', border:'1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                  <label style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', color:'#6B7280', display:'block', marginBottom:'1rem' }}>Assign Clerk</label>
-                  <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Only the assigned Clerk and Super Admin can manage members and payments.</p>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <select 
-                      id="clerk-select" 
-                      defaultValue={config.clerk_id || ''} 
-                      style={{ width:'100%', padding:'1rem', borderRadius:'12px', border:'1px solid #E5E7EB', background: '#F9FAFB' }}
-                    >
-                      <option value="">-- No Clerk Assigned --</option>
-                      {systemUsers.map(u => (
-                        <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.role})</option>
-                      ))}
-                    </select>
+                  <div style={{ background:'white', padding:'2rem', borderRadius:'24px', border:'1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                    <label style={{ fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', color:'#6B7280', display:'block', marginBottom:'1rem' }}>Assign Clerk</label>
+                    <p style={{ color: '#6B7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Only the assigned Clerk and Super Admin can manage members and payments.</p>
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <select 
+                        id="clerk-select" 
+                        defaultValue={config.clerk_id || ''} 
+                        style={{ width:'100%', padding:'1rem', borderRadius:'12px', border:'1px solid #E5E7EB', background: '#F9FAFB' }}
+                      >
+                        <option value="">-- No Clerk Assigned --</option>
+                        {systemUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.role})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button onClick={() => handleSetClerk(document.getElementById('clerk-select').value)} style={{ width:'100%', padding:'1.1rem', borderRadius:'12px', background:'#3B82F6', color:'white', border:'none', fontWeight:700, fontSize: '1rem', cursor:'pointer' }}>Set Clerk</button>
                   </div>
-                  <button onClick={() => handleSetClerk(document.getElementById('clerk-select').value)} style={{ width:'100%', padding:'1.1rem', borderRadius:'12px', background:'#3B82F6', color:'white', border:'none', fontWeight:700, fontSize: '1rem', cursor:'pointer' }}>Set Clerk</button>
-                </div>
-              )}
-            </motion.div>
+              </motion.div>
+            ) : (
+              <div style={{ padding: '4rem 2rem', textAlign: 'center', background: 'white', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#111827', marginBottom: '0.75rem' }}>Super Admin Settings Restricted</h2>
+                <p style={{ color: '#6B7280', fontSize: '0.95rem', maxWidth: '520px', margin: '0 auto 1.5rem', lineHeight: 1.6 }}>
+                  This dashboard is only visible to the Super Admin (<strong>{SUPER_ADMIN_EMAIL}</strong>) by default. Adding or removing members, changing weekly contribution amounts, and assigning the clerk are exclusively managed by the Super Admin.
+                </p>
+                <button 
+                  onClick={() => setActiveView('dashboard')} 
+                  style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', background: '#16A34A', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            )
           )}
         </AnimatePresence>
       </main>
@@ -1218,11 +1841,12 @@ const SavingsTracker = ({ user }) => {
                 <input type="text" placeholder="e.g., Electronics Store" value={investmentForm.projectName} onChange={e => setInvestmentForm({...investmentForm, projectName:e.target.value})} style={{ width:'100%', padding:'0.8rem', borderRadius:'12px', border:'1px solid #E5E7EB' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Expense (Birr)</label>
+                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Capital to Deploy from Remaining Money (ETB)</label>
                 <input type="number" min="0" placeholder="15000" value={investmentForm.allocatedAmount} onChange={e => setInvestmentForm({...investmentForm, allocatedAmount:e.target.value})} style={{ width:'100%', padding:'0.8rem', borderRadius:'12px', border:'1px solid #E5E7EB' }} />
+                <div style={{ fontSize: '0.8rem', color: '#D97706', marginTop: '0.35rem', fontWeight: 600 }}>Available in Remaining Money: {formatCurrency(remainingMoney)}</div>
               </div>
               <div>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Expected Profit (Birr)</label>
+                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Expected Profit (ETB)</label>
                 <input type="number" placeholder="1000" value={investmentForm.projectedProfit} onChange={e => setInvestmentForm({...investmentForm, projectedProfit:e.target.value})} style={{ width:'100%', padding:'0.8rem', borderRadius:'12px', border:'1px solid #E5E7EB' }} />
               </div>
               <div>
@@ -1233,7 +1857,7 @@ const SavingsTracker = ({ user }) => {
                 <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Business Challenges / Details (Optional)</label>
                 <textarea placeholder="Mention risks, elements or properties of this business..." value={investmentForm.challenges} onChange={e => setInvestmentForm({...investmentForm, challenges:e.target.value})} style={{ width:'100%', padding:'0.8rem', borderRadius:'12px', border:'1px solid #E5E7EB', minHeight: '100px', fontFamily: 'inherit' }} />
               </div>
-              <button onClick={handleAddInvestment} style={{ width:'100%', padding:'1rem', borderRadius:'12px', background:'#8B5CF6', color:'white', border:'none', fontWeight:700, cursor: 'pointer' }}>Add Investment</button>
+              <button onClick={handleAddInvestment} style={{ width:'100%', padding:'1rem', borderRadius:'12px', background:'#2563EB', color:'white', border:'none', fontWeight:700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}>Deploy into Money at Work</button>
             </div>
           </Modal>
         )}
@@ -1345,51 +1969,87 @@ const SavingsTracker = ({ user }) => {
           </Modal>
         )}
         {showInvestmentCompleteModal && selectedInvestment && (
-          <Modal title="Confirm Income" onClose={() => setShowInvestmentCompleteModal(false)}>
-            <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
-              <p style={{ color: '#6B7280', fontSize: '0.9rem', margin: 0 }}>Enter the total amount of money that came back to the pool (Original Capital + Net Profit).</p>
+          <Modal title="Confirm Return & Income" onClose={() => setShowInvestmentCompleteModal(false)}>
+            <div style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
+              <p style={{ color: '#6B7280', fontSize: '0.9rem', margin: 0 }}>
+                Enter the total cash that came back from this investment (Original Capital + Net Profit).
+              </p>
               
               <div>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Total Cash Returned (ETB)</label>
+                <label style={{ fontSize: '0.9rem', fontWeight: 700, display: 'block', marginBottom: '0.5rem', color: '#1E293B' }}>
+                  Total Cash Returned (ETB)
+                </label>
                 <div style={{ position: 'relative' }}>
                   <input 
                     type="number" 
-                    placeholder="e.g. 21000"
+                    placeholder="e.g. 2000"
                     value={completionForm.finalProfit} 
                     onChange={e => setCompletionForm({...completionForm, finalProfit: e.target.value})} 
-                    style={{ width:'100%', padding:'1rem', borderRadius:'12px', border:'2px solid #3B82F6', fontSize: '1.1rem', fontWeight: 700 }} 
+                    style={{ width:'100%', padding:'1rem', borderRadius:'14px', border:'2px solid #2563EB', fontSize: '1.2rem', fontWeight: 800, outline: 'none' }} 
                   />
-                  <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', color: '#3B82F6', fontWeight: 700, fontSize: '0.8rem' }}>ETB</div>
+                  <div style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', color: '#2563EB', fontWeight: 800, fontSize: '0.85rem' }}>ETB</div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#6B7280', marginTop: '0.5rem' }}>
-                  Expense was {formatCurrency(selectedInvestment.allocated_amount)}.
+                <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '0.45rem', fontWeight: 500 }}>
+                  Original capital taken from Remaining Money was <strong>{formatCurrency(selectedInvestment.allocated_amount)}</strong>.
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Final Challenges & Lessons</label>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, display: 'block', marginBottom: '0.5rem', color: '#334155' }}>
+                  Final Challenges & Lessons
+                </label>
                 <textarea 
                   placeholder="What went well? What were the challenges?" 
                   value={completionForm.challenges} 
                   onChange={e => setCompletionForm({...completionForm, challenges: e.target.value})} 
-                  style={{ width:'100%', padding:'0.8rem', borderRadius:'12px', border:'1px solid #E5E7EB', minHeight: '100px', fontFamily: 'inherit' }} 
+                  style={{ width:'100%', padding:'0.8rem 1rem', borderRadius:'12px', border:'1.5px solid #CBD5E1', minHeight: '90px', fontFamily: 'inherit', fontSize: '0.9rem' }} 
                 />
               </div>
 
-              {completionForm.finalProfit && selectedInvestment && (
-                <div style={{ background: (parseFloat(completionForm.finalProfit) || 0) - (selectedInvestment.allocated_amount || 0) >= 0 ? '#F0FDF4' : '#FEF2F2', padding: '1rem', borderRadius: '12px', border: `1px solid ${(parseFloat(completionForm.finalProfit) || 0) - (selectedInvestment.allocated_amount || 0) >= 0 ? '#BBF7D0' : '#FECACA'}` }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Calculated Net Profit</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: (parseFloat(completionForm.finalProfit) || 0) - (selectedInvestment.allocated_amount || 0) >= 0 ? '#16A34A' : '#DC2626' }}>
-                    {formatCurrency((parseFloat(completionForm.finalProfit) || 0) - (selectedInvestment.allocated_amount || 0))}
+              {completionForm.finalProfit && selectedInvestment && (() => {
+                const totalReturned = parseFloat(completionForm.finalProfit) || 0;
+                const capital = selectedInvestment.allocated_amount || 0;
+                const netProfit = totalReturned - capital;
+                const newRemaining = remainingMoney + totalReturned;
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ background: netProfit >= 0 ? '#F0FDF4' : '#FEF2F2', padding: '1rem', borderRadius: '14px', border: `1px solid ${netProfit >= 0 ? '#BBF7D0' : '#FECACA'}` }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Calculated Net Profit</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 800, color: netProfit >= 0 ? '#16A34A' : '#DC2626' }}>
+                        {netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#FFFDF5', padding: '1rem', borderRadius: '14px', border: '1px solid #FDE68A', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#92400E', textTransform: 'uppercase' }}>
+                        🟡 Effect on Remaining Money:
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                        <span style={{ color: '#475569' }}>Current Remaining Money:</span>
+                        <strong style={{ color: '#D97706' }}>{formatCurrency(remainingMoney)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                        <span style={{ color: '#475569' }}>Total Returned (Capital + Profit):</span>
+                        <strong style={{ color: '#16A34A' }}>+{formatCurrency(totalReturned)}</strong>
+                      </div>
+                      <div style={{ borderTop: '1px solid #FDE68A', paddingTop: '0.45rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.05rem', fontWeight: 800 }}>
+                        <span style={{ color: '#92400E' }}>New Remaining Money:</span>
+                        <strong style={{ color: '#D97706', fontSize: '1.25rem' }}>{formatCurrency(newRemaining)}</strong>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: 600, marginTop: '0.2rem' }}>
+                        ✓ {formatCurrency(remainingMoney)} + {formatCurrency(totalReturned)} = {formatCurrency(newRemaining)}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <button 
                 onClick={handleCompleteInvestment} 
-                style={{ width:'100%', padding:'1.1rem', borderRadius:'16px', background: '#3B82F6', color:'white', border:'none', fontWeight: 700, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.4)' }}
+                style={{ width:'100%', padding:'1.1rem', borderRadius:'16px', background: '#2563EB', color:'white', border:'none', fontWeight: 800, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 14px 0 rgba(37, 99, 235, 0.4)' }}
               >
-                Record Income
+                Record Return & Complete
               </button>
             </div>
           </Modal>
@@ -1479,40 +2139,75 @@ const SavingsTracker = ({ user }) => {
           </Modal>
         )}
         {showWealthModal && (
-          <Modal title="Financial Breakdown" onClose={() => setShowWealthModal(false)}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ background: '#F0FDF4', padding: '1.5rem', borderRadius: '24px', border: '1px solid #BBF7D0', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Total Money</div>
-                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#16A34A' }}>
-                  {formatCurrency(totalPool)}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.25rem', background: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+          <Modal title="Financial Overview" onClose={() => setShowWealthModal(false)}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {/* 1. Remaining Money */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.25rem', background: '#FFFBEB', borderRadius: '18px', border: '1px solid #FDE68A' }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>Money in Hand</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>Ready to deploy / Savings</div>
+                    <div style={{ fontWeight: 800, color: '#B45309', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem' }}>
+                      <span>🟡</span> Remaining Money
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#92400E', marginTop: '0.25rem' }}>
+                      Available physically in cash or bank account ready to deploy
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 700, color: '#3B82F6', fontSize: '1.1rem' }}>{formatCurrency(finalTotalAvailable)}</div>
+                  <div style={{ fontWeight: 800, color: '#B45309', fontSize: '1.25rem', textAlign: 'right' }}>
+                    {formatCurrency(remainingMoney)}
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontWeight: 700, fontSize: '1.2rem' }}>+</div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.25rem', background: '#F9FAFB', borderRadius: '16px', border: '1px solid #E5E7EB' }}>
+                {/* 2. Money at Work */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.25rem', background: '#EFF6FF', borderRadius: '18px', border: '1px solid #BFDBFE' }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>Working Capital</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>Currently out in businesses</div>
+                    <div style={{ fontWeight: 800, color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem' }}>
+                      <span>🔵</span> Money at Work
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#1E40AF', marginTop: '0.25rem' }}>
+                      Currently deployed in active investments & projects
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 700, color: '#8B5CF6', fontSize: '1.1rem' }}>{formatCurrency(totalActiveCapital)}</div>
+                  <div style={{ fontWeight: 800, color: '#1D4ED8', fontSize: '1.25rem', textAlign: 'right' }}>
+                    {formatCurrency(moneyAtWork)}
+                  </div>
                 </div>
+
+                {/* 3. Total Saving */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.25rem', background: '#F0FDF4', borderRadius: '18px', border: '1px solid #BBF7D0' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#15803D', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '1rem' }}>
+                      <span>🟢</span> Total Saving
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#166534', marginTop: '0.25rem' }}>
+                      Cumulative historical contributions of all members (never decreases)
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 800, color: '#16A34A', fontSize: '1.25rem', textAlign: 'right' }}>
+                    {formatCurrency(totalSaving)}
+                  </div>
+                </div>
+
+                {completedProfits > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem 1.25rem', background: '#FAF5FF', borderRadius: '18px', border: '1px solid #E9D5FF' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#6B21A8' }}>✨ Completed Business Profits</div>
+                      <div style={{ fontSize: '0.75rem', color: '#7E22CE' }}>Extra earnings tracked separately & added into Remaining Money</div>
+                    </div>
+                    <div style={{ fontWeight: 800, color: '#6B21A8', fontSize: '1.15rem' }}>+{formatCurrency(completedProfits)}</div>
+                  </div>
+                )}
               </div>
 
-              <div style={{ padding: '1.25rem', background: '#F8FAFC', borderRadius: '16px', border: '1px dotted #CBD5E1', fontSize: '0.85rem', color: '#64748B', lineHeight: 1.5 }}>
-                <strong>How it works:</strong> Your wealth is the sum of all money the group possesses. It is either sitting in your hands (Ready to deploy) or working to generate profit (Working Capital).
+              <div style={{ padding: '1.25rem', background: '#F8FAFC', borderRadius: '18px', border: '1px dashed #CBD5E1', fontSize: '0.85rem', color: '#475569', lineHeight: 1.6 }}>
+                <strong style={{ color: '#0F172A' }}>The Three Views & Money Flow:</strong>
+                <ul style={{ margin: '0.5rem 0 0 1.2rem', padding: 0 }}>
+                  <li><strong>🟢 Total Saving:</strong> Historical cumulative record of all contributions made since day one. It never decreases when money is invested or spent.</li>
+                  <li><strong>🟡 Remaining Money:</strong> Money currently available in cash or bank ready to use for an investment or expense.</li>
+                  <li><strong>🔵 Money at Work:</strong> Money taken from Remaining Money and put into an active investment. When returned with profit, Remaining Money increases while Total Saving stays constant.</li>
+                </ul>
               </div>
 
-              <button onClick={() => setShowWealthModal(false)} style={{ width: '100%', padding: '1.1rem', borderRadius: '16px', background: '#111827', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Got it</button>
+              <button onClick={() => setShowWealthModal(false)} style={{ width: '100%', padding: '1.1rem', borderRadius: '16px', background: '#0F172A', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem' }}>Got it</button>
             </div>
           </Modal>
         )}
@@ -1547,78 +2242,944 @@ const SavingsTracker = ({ user }) => {
             </div>
           </Modal>
         )}
+
+        {/* Cash In / Cash Out Modal Screen (Matching Uploaded Design) */}
+        {showCashEntryModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 25 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              style={{
+                background: '#F8FAFC',
+                width: '100%',
+                maxWidth: '460px',
+                maxHeight: 'min(90vh, 700px)',
+                borderRadius: '28px',
+                overflow: 'hidden',
+                boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid #E2E8F0',
+                margin: 'auto'
+              }}
+            >
+              {/* Top Blue Header Bar - Always Visible */}
+              <div style={{
+                background: '#0284C7',
+                color: 'white',
+                padding: '1.15rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.2)',
+                flexShrink: 0
+              }}>
+                <button
+                  onClick={() => setShowCashEntryModal(false)}
+                  style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.2rem' }}
+                  title="Close / Back"
+                >
+                  <ArrowLeft size={24} />
+                </button>
+                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, letterSpacing: '0.5px' }}>
+                  {cashMode}
+                </h2>
+              </div>
+
+              {/* Form Body - Smoothly Scrollable */}
+              <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.15rem', overflowY: 'auto', flex: 1 }}>
+
+                {/* Cash In / Cash Out Mode Selector Pills */}
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCashMode('Cash In')}
+                    style={{
+                      padding: '0.6rem 1.4rem',
+                      borderRadius: '50px',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      cursor: 'pointer',
+                      background: cashMode === 'Cash In' ? '#16A34A' : '#E2E8F0',
+                      color: cashMode === 'Cash In' ? 'white' : '#475569',
+                      transition: 'all 0.2s ease',
+                      boxShadow: cashMode === 'Cash In' ? '0 4px 12px rgba(22, 163, 74, 0.3)' : 'none'
+                    }}
+                  >
+                    Cash In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCashMode('Cash Out')}
+                    style={{
+                      padding: '0.6rem 1.4rem',
+                      borderRadius: '50px',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      cursor: 'pointer',
+                      background: cashMode === 'Cash Out' ? '#EF4444' : '#E2E8F0',
+                      color: cashMode === 'Cash Out' ? 'white' : '#475569',
+                      transition: 'all 0.2s ease',
+                      boxShadow: cashMode === 'Cash Out' ? '0 4px 12px rgba(239, 68, 68, 0.3)' : 'none'
+                    }}
+                  >
+                    Cash Out
+                  </button>
+                </div>
+
+                {/* Member/Friend Selection Dropdown */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748B', letterSpacing: '0.5px' }}>
+                    Select Friend / Member
+                  </label>
+                  <select
+                    value={cashMemberId}
+                    onChange={(e) => setCashMemberId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.9rem 1rem',
+                      borderRadius: '16px',
+                      border: '1.5px solid #CBD5E1',
+                      background: 'white',
+                      fontSize: '0.95rem',
+                      fontWeight: 600,
+                      color: '#0F172A',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="">-- Choose Member --</option>
+                    {members.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date and Time Selector Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '0.75rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '16px',
+                    padding: '0.75rem 1rem',
+                    background: 'white'
+                  }}>
+                    <Calendar size={18} color="#0284C7" />
+                    <input
+                      type="date"
+                      value={cashDate}
+                      onChange={(e) => setCashDate(e.target.value)}
+                      style={{ border: 'none', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', width: '100%' }}
+                    />
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '16px',
+                    padding: '0.75rem 1rem',
+                    background: 'white'
+                  }}>
+                    <Clock size={18} color="#0284C7" />
+                    <input
+                      type="time"
+                      value={cashTime}
+                      onChange={(e) => setCashTime(e.target.value)}
+                      style={{ border: 'none', background: 'transparent', outline: 'none', fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', width: '100%' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Amount Input Field with Inset Label */}
+                <div style={{
+                  position: 'relative',
+                  border: `1.5px solid ${cashMode === 'Cash Out' ? '#FCA5A5' : '#86EFAC'}`,
+                  borderRadius: '16px',
+                  padding: '0.85rem 1rem',
+                  background: 'white'
+                }}>
+                  <label style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    left: '14px',
+                    background: 'white',
+                    padding: '0 6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    color: cashMode === 'Cash Out' ? '#EF4444' : '#16A34A'
+                  }}>
+                    {cashMode} Amount (ETB)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={cashAmount}
+                      onChange={(e) => setCashAmount(e.target.value)}
+                      style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', width: '80%' }}
+                    />
+                    <Calculator size={22} color="#0284C7" />
+                  </div>
+                </div>
+
+                {/* Quick Consecutive Saturday Presets for Cash In */}
+                {cashMode === 'Cash In' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                      🗓️ Store Savings for Consecutive Saturdays:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                      {[
+                        { label: '1 Sat', amount: weeklyRate },
+                        { label: '2 Sats', amount: weeklyRate * 2 },
+                        { label: '4 Sats (1 Mo)', amount: weeklyRate * 4 },
+                        { label: '8 Sats (2 Mo)', amount: weeklyRate * 8 },
+                      ].map(preset => (
+                        <button
+                          key={preset.amount}
+                          type="button"
+                          onClick={() => setCashAmount(preset.amount)}
+                          style={{
+                            padding: '0.55rem 0.2rem',
+                            borderRadius: '12px',
+                            border: String(cashAmount) === String(preset.amount) ? '1.5px solid #16A34A' : '1px solid #CBD5E1',
+                            background: String(cashAmount) === String(preset.amount) ? '#F0FDF4' : 'white',
+                            color: String(cashAmount) === String(preset.amount) ? '#16A34A' : '#475569',
+                            fontWeight: 700,
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Helper Banner for Consecutive Saturdays covered */}
+                {cashMode === 'Cash In' && parseFloat(cashAmount) >= weeklyRate && (() => {
+                  const totalSats = Math.floor(parseFloat(cashAmount) / weeklyRate);
+                  const remainingNextSats = Math.max(0, totalSats - 1);
+                  const remainingAdvanceAmt = remainingNextSats * weeklyRate;
+                  return (
+                    <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', padding: '0.75rem 1rem', borderRadius: '14px', color: '#0369A1', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.2rem' }}>🗓️</span>
+                      <div>
+                        <strong>Saturday Breakdown:</strong> {formatCurrency(cashAmount)} total —{' '}
+                        <strong style={{ color: '#0284C7' }}>{formatCurrency(weeklyRate)} for Today</strong>
+                        {remainingNextSats > 0 ? (
+                          <> + <strong style={{ color: '#16A34A' }}>remaining {formatCurrency(remainingAdvanceAmt)} saved in STORED ADVANCE SAVINGS</strong> ({remainingNextSats} future Sat{remainingNextSats > 1 ? 's' : ''})!</>
+                        ) : (
+                          <> (up to date for today)!</>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Notes Input Field */}
+                <div style={{
+                  position: 'relative',
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: '16px',
+                  padding: '0.85rem 1rem',
+                  background: 'white'
+                }}>
+                  <label style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    left: '14px',
+                    background: 'white',
+                    padding: '0 6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#64748B'
+                  }}>
+                    Notes
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <input
+                      type="text"
+                      placeholder="Add payment notes or description..."
+                      value={cashNotes}
+                      onChange={(e) => setCashNotes(e.target.value)}
+                      style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.95rem', fontWeight: 600, color: '#0F172A', width: '85%' }}
+                    />
+                    <FileText size={20} color="#94A3B8" />
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Bottom Action Footer */}
+              <div style={{
+                padding: '1.1rem 1.5rem',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0.85rem',
+                background: '#F1F5F9',
+                borderTop: '1px solid #E2E8F0',
+                flexShrink: 0
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCashEntryModal(false)}
+                  style={{
+                    padding: '0.95rem',
+                    borderRadius: '16px',
+                    border: 'none',
+                    background: '#BAE6FD',
+                    color: '#0369A1',
+                    fontWeight: 800,
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(186, 230, 253, 0.5)'
+                  }}
+                >
+                  Exit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveCashEntry(false)}
+                  style={{
+                    padding: '0.95rem',
+                    borderRadius: '16px',
+                    border: 'none',
+                    background: '#0284C7',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)'
+                  }}
+                >
+                  Save and continue
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+
+        {/* Super Admin Reset Cycle Modal */}
+        {/* Super Admin Reset Cycle Modal */}
+        {showResetModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              style={{
+                background: 'white',
+                width: '100%',
+                maxWidth: '520px',
+                maxHeight: 'min(90vh, 680px)',
+                borderRadius: '24px',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                margin: 'auto'
+              }}
+            >
+              {/* Header Pinned at Top - Always 100% Visible */}
+              <div style={{ background: '#DC2626', color: 'white', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>⚠️</span>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>Start New Savings Cycle</h3>
+                </div>
+                <button 
+                  onClick={() => setShowResetModal(false)} 
+                  title="Close Modal"
+                  style={{ background: 'rgba(255, 255, 255, 0.25)', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, transition: 'background 0.2s' }}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.4)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.25)'}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Scrollable Modal Content */}
+              <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', flex: 1 }}>
+                <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', padding: '0.85rem 1rem', borderRadius: '14px', color: '#991B1B', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                  ⚠️ <strong>Archive & Reset Action:</strong> This action will archive all current member balances, total savings, and transaction history into <strong>Cycle History</strong>, then reset active savings to <strong>ETB 0.00</strong> to start a fresh cycle.
+                </div>
+
+                {/* Wealth Summary Cards */}
+                <div style={{ background: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Snapshot to be Archived:</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>Remaining Money:</span>
+                    <strong style={{ color: '#D97706' }}>{formatCurrency(remainingMoney)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>Money at Work:</span>
+                    <strong style={{ color: '#2563EB' }}>{formatCurrency(moneyAtWork)}</strong>
+                  </div>
+                  <div style={{ borderTop: '1px solid #CBD5E1', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 800 }}>
+                    <span style={{ color: '#0F172A' }}>Total Saving (Cumulative):</span>
+                    <strong style={{ color: '#16A34A' }}>{formatCurrency(totalSaving)}</strong>
+                  </div>
+                </div>
+
+                {/* Individual Member Savings Snapshot Preview */}
+                <div style={{ background: '#F8FAFC', padding: '1rem', borderRadius: '16px', border: '1px solid #E2E8F0', maxHeight: '140px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.4rem' }}>👤 Individual Member Savings To Archive:</div>
+                  {members && members.length > 0 ? (
+                    members.map(m => (
+                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E2E8F0', fontSize: '0.85rem' }}>
+                        <span style={{ fontWeight: 600, color: '#334155' }}>{m.name}</span>
+                        <strong style={{ color: '#16A34A' }}>{formatCurrency(m.total_paid || 0)}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: '0.85rem', color: '#94A3B8' }}>No member savings recorded</div>
+                  )}
+                </div>
+
+                {/* Cycle Title Input */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155' }}>Cycle Name / Title (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder={`e.g. Cycle 1 (${new Date().getFullYear()})`}
+                    value={resetCycleName}
+                    onChange={(e) => setResetCycleName(e.target.value)}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      borderRadius: '12px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons Pinned at Bottom - Always 100% Visible */}
+              <div style={{ padding: '1rem 1.5rem', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
+                  style={{
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: '1.5px solid #CBD5E1',
+                    background: 'white',
+                    color: '#475569',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCycle}
+                  style={{
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: '#DC2626',
+                    color: 'white',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)'
+                  }}
+                >
+                  Archive & Start Scratch
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Cycle History Viewer Modal */}
+        {showCycleHistoryModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '1rem' }}>
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              style={{
+                background: '#F8FAFC',
+                width: '100%',
+                maxWidth: '650px',
+                maxHeight: '85vh',
+                borderRadius: '24px',
+                overflow: 'hidden',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid #E2E8F0'
+              }}
+            >
+              <div style={{ background: '#0284C7', color: 'white', padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>📜 Archived Savings Cycles</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {isSuperAdmin && cycles.length > 0 && !selectedCycleSnapshot && (
+                    <button
+                      onClick={handleClearAllCycles}
+                      style={{
+                        background: '#EF4444',
+                        color: 'white',
+                        border: 'none',
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(239, 68, 68, 0.3)'
+                      }}
+                    >
+                      🗑️ Clear All
+                    </button>
+                  )}
+                  <button onClick={() => { setShowCycleHistoryModal(false); setSelectedCycleSnapshot(null); }} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+                </div>
+              </div>
+
+              <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
+                {cycles.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748B' }}>
+                    <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.5rem' }}>No archived cycles yet</p>
+                    <p style={{ fontSize: '0.85rem', margin: 0 }}>When a Super Admin starts a new cycle from scratch, all previous wealth totals and member records will be safely stored here.</p>
+                  </div>
+                ) : selectedCycleSnapshot ? (
+                  /* Snapshot Details View */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <button
+                        onClick={() => setSelectedCycleSnapshot(null)}
+                        style={{ background: 'none', border: 'none', color: '#0284C7', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        ← Back to Cycles List
+                      </button>
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => handleDeleteCycle(selectedCycleSnapshot.id, selectedCycleSnapshot.cycle_name)}
+                          style={{
+                            background: '#FEF2F2',
+                            border: '1.5px solid #FCA5A5',
+                            color: '#DC2626',
+                            padding: '0.4rem 0.85rem',
+                            borderRadius: '10px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🗑️ Delete This Archive
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ background: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>{selectedCycleSnapshot.cycle_name}</h4>
+                      <span style={{ fontSize: '0.8rem', color: '#64748B' }}>Archived on {new Date(selectedCycleSnapshot.created_at).toLocaleString()} by {selectedCycleSnapshot.archived_by}</span>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginTop: '0.75rem', background: '#F1F5F9', padding: '1rem', borderRadius: '14px' }}>
+                        <div>
+                          <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700 }}>CASH IN HAND</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0284C7' }}>{formatCurrency(selectedCycleSnapshot.cash_in_hand)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700 }}>MONEY AT WORK</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#7C3AED' }}>{formatCurrency(selectedCycleSnapshot.money_at_work)}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 700 }}>TOTAL WEALTH</div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#16A34A' }}>{formatCurrency(selectedCycleSnapshot.total_wealth)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Member Individual Savings Breakdown at archiving time */}
+                    {selectedCycleSnapshot.snapshot && selectedCycleSnapshot.snapshot.members && (
+                      <div style={{ background: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0' }}>
+                        <h5 style={{ margin: '0 0 0.85rem', fontSize: '0.9rem', color: '#0F172A', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                          👤 Individual Member Savings Breakdown
+                        </h5>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          {selectedCycleSnapshot.snapshot.members.map(m => {
+                            const paid = m.total_paid !== undefined ? m.total_paid : (
+                              (selectedCycleSnapshot.snapshot.history || [])
+                                .filter(t => String(t.member_id) === String(m.id) && t.type === 'payment')
+                                .reduce((acc, t) => acc + parseFloat(t.amount || 0), 0)
+                            );
+                            const totalCyclePaid = selectedCycleSnapshot.snapshot.members.reduce((sum, mem) => {
+                              const p = mem.total_paid !== undefined ? mem.total_paid : (
+                                (selectedCycleSnapshot.snapshot.history || [])
+                                  .filter(t => String(t.member_id) === String(mem.id) && t.type === 'payment')
+                                  .reduce((acc, t) => acc + parseFloat(t.amount || 0), 0)
+                              );
+                              return sum + p;
+                            }, 0);
+                            const pct = totalCyclePaid > 0 ? ((paid / totalCyclePaid) * 100).toFixed(1) : 0;
+
+                            return (
+                              <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#F8FAFC', borderRadius: '14px', border: '1px solid #F1F5F9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#E0F2FE', color: '#0284C7', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.95rem' }}>
+                                    {m.name ? m.name.charAt(0).toUpperCase() : '?'}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.95rem' }}>{m.name}</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748B' }}>Pool Share: {pct}%</div>
+                                  </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontWeight: 800, color: '#16A34A', fontSize: '1.05rem' }}>
+                                    {formatCurrency(paid)}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>Total Saved</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Working Capital & Investments Archived in this Cycle */}
+                    {selectedCycleSnapshot.snapshot && selectedCycleSnapshot.snapshot.investments && selectedCycleSnapshot.snapshot.investments.length > 0 && (
+                      <div style={{ background: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0' }}>
+                        <h5 style={{ margin: '0 0 0.85rem', fontSize: '0.9rem', color: '#0F172A', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                          💼 Archived Working Capital & Projects ({selectedCycleSnapshot.snapshot.investments.length})
+                        </h5>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          {selectedCycleSnapshot.snapshot.investments.map((inv, idx) => (
+                            <div key={inv.id || idx} style={{ padding: '0.85rem 1rem', background: '#F8FAFC', borderRadius: '14px', border: '1px solid #F1F5F9', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.95rem' }}>{inv.project_name}</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '8px', background: inv.status === 'completed' ? '#DCFCE7' : '#FEF3C7', color: inv.status === 'completed' ? '#15803D' : '#D97706' }}>
+                                  {inv.status ? inv.status.toUpperCase() : 'ARCHIVED'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                <div>
+                                  <span style={{ color: '#64748B', fontSize: '0.75rem' }}>Capital Invested:</span>{' '}
+                                  <strong style={{ color: '#0284C7' }}>{formatCurrency(inv.allocated_amount)}</strong>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', fontSize: '0.75rem' }}>Projected/Profit:</span>{' '}
+                                  <strong style={{ color: '#16A34A' }}>{formatCurrency(inv.projected_profit || 0)}</strong>
+                                </div>
+                              </div>
+                              {inv.challenges && (
+                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>
+                                  Notes: {inv.challenges}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Transaction History Archived in this Cycle */}
+                    {selectedCycleSnapshot.snapshot && selectedCycleSnapshot.snapshot.history && selectedCycleSnapshot.snapshot.history.length > 0 && (
+                      <div style={{ background: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0' }}>
+                        <h5 style={{ margin: '0 0 0.85rem', fontSize: '0.9rem', color: '#0F172A', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                          📜 Archived Transaction History ({selectedCycleSnapshot.snapshot.history.length} records)
+                        </h5>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto' }}>
+                          {selectedCycleSnapshot.snapshot.history.map((tx, idx) => (
+                            <div key={tx.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #F1F5F9', fontSize: '0.85rem' }}>
+                              <div>
+                                <div style={{ fontWeight: 700, color: '#0F172A' }}>{tx.member_name || 'Member'}</div>
+                                <div style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                                  {new Date(tx.created_at).toLocaleString()} • {tx.type === 'payment' ? 'Cash In' : 'Cash Out/Missed'}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontWeight: 800, color: tx.type === 'payment' ? '#16A34A' : '#DC2626' }}>
+                                  {tx.type === 'payment' ? '+' : '-'}{formatCurrency(tx.amount)}
+                                </div>
+                                {tx.notes && <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{tx.notes}</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Cycle Cards List */
+                  cycles.map(c => (
+                    <div key={c.id} style={{ background: 'white', padding: '1.25rem', borderRadius: '18px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ margin: '0 0 0.25rem', fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>{c.cycle_name}</h4>
+                        <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                          Archived by <strong>{c.archived_by}</strong> on {new Date(c.created_at).toLocaleDateString()}
+                        </div>
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', fontWeight: 700, color: '#16A34A' }}>
+                          Total Wealth Saved: {formatCurrency(c.total_wealth)}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button
+                          onClick={() => setSelectedCycleSnapshot(c)}
+                          style={{
+                            padding: '0.6rem 1rem',
+                            borderRadius: '12px',
+                            border: '1.5px solid #0284C7',
+                            background: '#F0F9FF',
+                            color: '#0284C7',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          View Details →
+                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={() => handleDeleteCycle(c.id, c.cycle_name)}
+                            title="Delete archived cycle"
+                            style={{
+                              padding: '0.6rem 0.75rem',
+                              borderRadius: '12px',
+                              border: '1.5px solid #FCA5A5',
+                              background: '#FEF2F2',
+                              color: '#DC2626',
+                              fontWeight: 700,
+                              fontSize: '0.85rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={{ padding: '1rem 1.5rem', background: '#F1F5F9', borderTop: '1px solid #E2E8F0', textAlign: 'right' }}>
+                <button onClick={() => { setShowCycleHistoryModal(false); setSelectedCycleSnapshot(null); }} style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', background: '#0284C7', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Close History</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Confirmation Modal */}
+        {confirmation.isOpen && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1rem' }}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              style={{
+                background: 'white',
+                borderRadius: '24px',
+                padding: '2rem',
+                maxWidth: '420px',
+                width: '100%',
+                textAlign: 'center',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div style={{ width: '56px', height: '56px', background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', color: '#16A34A' }}>
+                <AlertCircle size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.5rem', color: '#0F172A' }}>{confirmation.title}</h3>
+              <p style={{ color: '#64748B', fontSize: '0.9rem', lineHeight: 1.5, margin: '0 0 1.5rem' }}>{confirmation.message}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <button
+                  onClick={() => setConfirmation(prev => ({ ...prev, isOpen: false }))}
+                  style={{ padding: '0.85rem', borderRadius: '14px', border: '1.5px solid #CBD5E1', background: 'white', color: '#475569', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {confirmation.cancelText || 'No'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirmation.onConfirm) confirmation.onConfirm();
+                  }}
+                  style={{ padding: '0.85rem', borderRadius: '14px', border: 'none', background: '#16A34A', color: 'white', fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)' }}
+                >
+                  {confirmation.confirmText || 'Yes'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Success Modal */}
+        {successModal.isOpen && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001, padding: '1rem' }}>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              style={{
+                background: 'white',
+                borderRadius: '24px',
+                padding: '2rem 1.75rem',
+                maxWidth: '420px',
+                width: '100%',
+                textAlign: 'center',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+              }}
+            >
+              <div style={{ width: '64px', height: '64px', background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', color: '#16A34A' }}>
+                <CheckCircle size={36} />
+              </div>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 0.5rem', color: '#0F172A' }}>Success! 🎉</h3>
+              <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.5, margin: '0 0 1.75rem' }}>{successModal.message}</p>
+              <button
+                onClick={() => setSuccessModal({ isOpen: false, message: '' })}
+                style={{
+                  width: '100%',
+                  padding: '0.9rem',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: '#0284C7',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)'
+                }}
+              >
+                Awesome, Got it!
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', background: '#0F172A', color: 'white', padding: '0.9rem 1.5rem', borderRadius: '16px', zIndex: 10002, fontWeight: 700, boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>🔔</span> {toastMessage}
+          </div>
+        )}
       </div>
   );
 };
 
 // Sub-components
-const StatCard = ({ label, value, subValue, color, onClick }) => {
+const StatCard = ({ label, value, subValue, color, badge, bgGradient, borderColor, onClick }) => {
   const isLong = value?.toString().length > 13;
   return (
     <div 
       onClick={onClick} 
       style={{ 
-        background:'white', 
+        background: bgGradient || 'white', 
         padding:'1.5rem', 
         borderRadius:'24px', 
-        border:'1px solid #E5E7EB', 
+        border:`1px solid ${borderColor || '#E5E7EB'}`, 
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
-        minHeight: '130px'
+        justifyContent: 'space-between',
+        minHeight: '135px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        position: 'relative',
+        overflow: 'hidden'
       }}
-      onMouseOver={e => onClick && (e.currentTarget.style.transform = 'translateY(-4px)')}
-      onMouseOut={e => onClick && (e.currentTarget.style.transform = 'translateY(0)')}
+      onMouseOver={e => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.08)';
+        }
+      }}
+      onMouseOut={e => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
+        }
+      }}
     >
-      <div style={{ fontSize:'0.75rem', color:'#6B7280', fontWeight:700, textTransform:'uppercase', marginBottom:'0.6rem', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: isLong ? '1.4rem' : '1.8rem', fontWeight: 700, color, lineHeight: 1.1, wordBreak: 'break-all' }}>{value}</div>
-      {subValue && <div style={{ fontSize:'0.8rem', color:'#6B7280', marginTop: '0.4rem', fontWeight: 500 }}>{subValue}</div>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'0.6rem' }}>
+        <div style={{ fontSize:'0.75rem', color: '#475569', fontWeight: 800, textTransform:'uppercase', letterSpacing: '0.05em' }}>
+          {label}
+        </div>
+        {badge && (
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '100px', background: `${color}18`, color: color }}>
+            {badge}
+          </span>
+        )}
+      </div>
+      <div>
+        <div style={{ fontSize: isLong ? '1.4rem' : '1.85rem', fontWeight: 800, color, lineHeight: 1.1, wordBreak: 'break-all', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+          {value}
+        </div>
+        {subValue && (
+          <div style={{ fontSize:'0.8rem', color:'#64748B', marginTop: '0.45rem', fontWeight: 600 }}>
+            {subValue}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 const Section = ({ title, onAction, actionLabel, children }) => (<div style={{ background:'white', padding:'1.5rem', borderRadius:'24px', border:'1px solid #E5E7EB' }}><div style={{ display:'flex', justifyContent:'space-between', marginBottom:'1.5rem' }}><h3 style={{ margin:0, fontSize:'0.85rem', color:'#6B7280', fontWeight:700, fontFamily:'inherit', textTransform:'uppercase' }}>{title}</h3>{onAction && <button onClick={onAction} style={{ background:'none', border:'none', color:'#16A34A', fontWeight:700, cursor:'pointer' }}>{actionLabel}</button>}</div>{children}</div>);
 const MemberListItem = ({ member, index, onClick, formatCurrency }) => (<div onClick={onClick} style={{ display:'flex', justifyContent:'space-between', padding:'1rem 0', borderTop: index === 0 ? 'none' : '1px solid #F3F4F6', cursor:'pointer' }}><div style={{ display:'flex', gap:'1rem', alignItems:'center' }}><Avatar name={member.name} index={index} /><div><div style={{ fontWeight:700 }}>{member.name}</div><div style={{ fontSize:'0.85rem', color:'#6B7280' }}>paid {formatCurrency(member.total_paid)}</div></div></div><div style={{ fontWeight: 700, color: member.currentDebt === 0 ? '#F59E0B' : '#DC2626' }}>{member.currentDebt === 0 ? '+' : ''}{formatCurrency(member.genuineBalance)}</div></div>);
-const MemberCard = ({ member, onClick, formatCurrency }) => (
-  <div onClick={onClick} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center', justifyContent: 'space-between', background:'white', borderRadius:'24px', padding:'1.5rem', border:'1px solid #E5E7EB', cursor:'pointer' }}>
-    <div style={{ display:'flex', gap:'1rem', alignItems:'center', flex: '1 1 250px' }}>
-      <Avatar name={member.name} size="56px" />
-      <div>
-        <div style={{ fontSize:'1.25rem', fontWeight: 700 }}>{member.name}</div>
-        <div style={{ fontSize:'0.9rem', color:'#6B7280' }}>Joined Since {new Date(member.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-          {member.role === 'super_admin' && <Badge label="Super Admin" type="info" />}
-          {member.role === 'admin' && <Badge label="Admin" type="info" />}
-        </div>
-      </div>
-    </div>
-    
-    <div style={{ display:'flex', gap: '1.5rem', flex: '2 1 300px', justifyContent: 'space-around', alignItems: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#6B7280', fontWeight:700 }}>Paid</div>
-        <div style={{ fontWeight: 700, color:'#16A34A', marginTop:'0.25rem' }}>{formatCurrency(member.total_paid)}</div>
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#6B7280', fontWeight:700 }}>Expected</div>
-        <div style={{ fontWeight: 700, color: member.currentDebt === 0 ? '#16A34A' : '#DC2626', marginTop:'0.25rem' }}>
-          {member.currentDebt === 0 ? formatCurrency(0) : formatCurrency(member.currentDebt)}
-        </div>
-        {member.currentDebt === 0 && <div style={{ fontSize:'0.65rem', color:'#16A34A', fontWeight:600, marginTop:'0.15rem' }}>Up to date ✓</div>}
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#6B7280', fontWeight:700 }}>Remaining</div>
-        <div style={{ fontWeight: 700, color: member.currentDebt === 0 ? '#3B82F6' : '#DC2626', marginTop:'0.25rem' }}>
-          {formatCurrency(Math.max(0, member.genuineBalance))}
-        </div>
-      </div>
-    </div>
+const MemberCard = ({ member, onClick, formatCurrency }) => {
+  const isAdvance = (member.advanceBalance || Math.max(0, member.genuineBalance || 0)) > 0;
+  const advanceAmount = member.advanceBalance || Math.max(0, member.genuineBalance || 0);
+  const advanceWeeks = member.advanceWeeks || Math.floor(advanceAmount / 300);
+  const isDebt = member.currentDebt > 0;
 
-    <div style={{ flex: '0 0 auto' }}>
-      <Badge label={member.currentDebt === 0 ? 'On Track' : 'In Debt'} type={member.currentDebt === 0 ? 'warning' : 'danger'} />
+  return (
+    <div onClick={onClick} style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center', justifyContent: 'space-between', background:'white', borderRadius:'24px', padding:'1.5rem', border:'1px solid #E5E7EB', cursor:'pointer' }}>
+      <div style={{ display:'flex', gap:'1rem', alignItems:'center', flex: '1 1 250px' }}>
+        <Avatar name={member.name} size="56px" />
+        <div>
+          <div style={{ fontSize:'1.25rem', fontWeight: 700 }}>{member.name}</div>
+          <div style={{ fontSize:'0.9rem', color:'#6B7280' }}>Joined Since {new Date(member.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
+            {member.role === 'super_admin' && <Badge label="Super Admin" type="info" />}
+            {member.role === 'admin' && <Badge label="Admin" type="info" />}
+          </div>
+        </div>
+      </div>
+      
+      <div style={{ display:'flex', gap: '1.5rem', flex: '2 1 300px', justifyContent: 'space-around', alignItems: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#6B7280', fontWeight:700 }}>Total Paid</div>
+          <div style={{ fontWeight: 700, color:'#16A34A', marginTop:'0.25rem' }}>{formatCurrency(member.total_paid)}</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#6B7280', fontWeight:700 }}>Status / Debt</div>
+          <div style={{ fontWeight: 700, color: isDebt ? '#DC2626' : '#16A34A', marginTop:'0.25rem' }}>
+            {isDebt ? formatCurrency(member.currentDebt) : formatCurrency(0)}
+          </div>
+          {!isDebt && <div style={{ fontSize:'0.65rem', color:'#16A34A', fontWeight:600, marginTop:'0.15rem' }}>Up to date ✓</div>}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize:'0.65rem', textTransform:'uppercase', color:'#0284C7', fontWeight:700 }}>Stored Advance Savings</div>
+          <div style={{ fontWeight: 800, color: isAdvance ? '#0284C7' : '#64748B', marginTop:'0.25rem' }}>
+            {formatCurrency(advanceAmount)}
+          </div>
+          {isAdvance ? (
+            <div style={{ fontSize:'0.65rem', color:'#0284C7', fontWeight:700, marginTop:'0.15rem' }}>
+              Covers {advanceWeeks} next Sat{advanceWeeks !== 1 ? 's' : ''} 🗓️
+            </div>
+          ) : (
+            <div style={{ fontSize:'0.65rem', color:'#94A3B8', fontWeight:500, marginTop:'0.15rem' }}>
+              0 advance Saturdays
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ flex: '0 0 auto' }}>
+        <Badge 
+          label={isDebt ? 'In Debt' : isAdvance ? `Prepaid (${advanceWeeks} Wks)` : 'On Track'} 
+          type={isDebt ? 'danger' : isAdvance ? 'success' : 'info'} 
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 const TransactionItem = ({ transaction, full, showBorder, formatCurrency, systemUsers = [], members = [] }) => {
   const isPayment = transaction.type === 'payment';
   const member = members.find(m => m.id === transaction.member_id);
@@ -1630,8 +3191,8 @@ const TransactionItem = ({ transaction, full, showBorder, formatCurrency, system
   let bgColor = isPayment ? '#F0FDF4' : '#FEF2F2';
   let textColor = isPayment ? '#16A34A' : '#DC2626';
   let icon = isPayment ? '↑' : '✕';
-  let title = isPayment ? 'Payment' : 'Missed Week';
-  let badgeLabel = isPayment ? 'Paid' : 'Unpaid';
+  let title = isPayment ? 'Cash In (Saving Paid)' : 'Cash Out (Saving Unpaid)';
+  let badgeLabel = isPayment ? 'Cash In' : 'Cash Out';
   let badgeType = isPayment ? 'success' : 'danger';
 
   return (
@@ -1679,17 +3240,25 @@ const FilterPill = ({ label, active, onClick }) => (<button onClick={onClick} st
 const NavItem = ({ id, icon: Icon, label, active, onClick }) => (<button onClick={() => onClick(id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:'none', border:'none', color: active === id ? '#16A34A' : '#6B7280', cursor: 'pointer', transition: 'color 0.2s' }}><Icon size={24} /><span style={{ fontSize:'0.7rem', marginTop: '0.2rem', fontWeight: active === id ? 700 : 500 }}>{label}</span></button>);
 const ActionButton = ({ label, color, onClick }) => (<button onClick={onClick} style={{ flex:1, padding:'1rem', borderRadius:'12px', background:`${color}10`, color, border:`1px solid ${color}20`, fontWeight:700 }}>{label}</button>);
 const Modal = ({ title, children, onClose }) => (
-  <div style={{ position:'fixed', inset:0, background:'rgba(17, 24, 39, 0.7)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: '1rem' }}>
+  <div style={{ position:'fixed', inset:0, background:'rgba(17, 24, 39, 0.7)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: '1rem', overflowY: 'auto' }}>
     <motion.div 
       initial={{ scale: 0.9, opacity: 0, y: 20 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
-      style={{ background:'white', width:'100%', maxWidth:'480px', borderRadius:'32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}
+      style={{ background:'white', width:'100%', maxWidth:'480px', maxHeight: 'min(90vh, 650px)', borderRadius:'28px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', margin: 'auto' }}
     >
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding: '1.5rem 2rem', borderBottom: '1px solid #F3F4F6' }}>
-        <h2 style={{ margin:0, fontSize: '1.25rem', fontWeight: 700, color: '#111827', fontFamily:"'Inter', sans-serif", maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h2>
-        <button onClick={onClose} style={{ background:'#F3F4F6', border:'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6B7280', fontWeight: 700 }}>×</button>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding: '1.25rem 1.75rem', borderBottom: '1px solid #F3F4F6', flexShrink: 0 }}>
+        <h2 style={{ margin:0, fontSize: '1.2rem', fontWeight: 800, color: '#111827', fontFamily:"'Inter', sans-serif", maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</h2>
+        <button 
+          onClick={onClose} 
+          title="Close Modal"
+          style={{ background:'#F1F5F9', border:'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', fontWeight: 800, fontSize: '1.2rem', transition: 'background 0.2s' }}
+          onMouseOver={e => e.currentTarget.style.background = '#E2E8F0'}
+          onMouseOut={e => e.currentTarget.style.background = '#F1F5F9'}
+        >
+          ×
+        </button>
       </div>
-      <div style={{ padding: '2rem', maxHeight: '80vh', overflowY: 'auto' }}>
+      <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1 }}>
         {children}
       </div>
     </motion.div>

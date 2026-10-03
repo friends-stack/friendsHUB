@@ -38,6 +38,11 @@ Thumbs.db
 .idea/
 *.suo
 *.ntvs*
-*.njsproj
-*.sln
 *.sw?
+
+# Scratch & diagnostic scripts
+check_db.js
+fix_axios.js
+server/check_*.js
+server/clean_db.js
+server/test_*.js

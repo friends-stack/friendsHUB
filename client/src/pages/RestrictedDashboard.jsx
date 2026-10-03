@@ -71,7 +71,7 @@ const RestrictedDashboard = ({ user }) => {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem' }}>
-          <button style={activeSidebarStyle} onClick={() => navigate('/messaging')}><MessageSquare size={18} /> Internal Pulse</button>
+          <button style={activeSidebarStyle} onClick={() => navigate('/messaging')}><MessageSquare size={18} /> Friends Chat</button>
           <button style={activeSidebarStyle} onClick={() => navigate(`/profile/${user.id}`)}><User size={18} /> My Identity</button>
           <button style={lockedSidebarStyle}><Lock size={18} /> Admin Console</button>
         </nav>

@@ -748,19 +748,17 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
     };
   }, []);
 
-  const handleSearchTripleTap = () => {
+  const handleSearchTripleTap = (e) => {
+    if (e) e.stopPropagation();
     if (searchResetRef.current) clearTimeout(searchResetRef.current);
     searchTapRef.current += 1;
     if (searchTapRef.current >= 3) {
       searchTapRef.current = 0;
-      setHiddenEmail('');
-      setHiddenPassword('');
-      setHiddenError('');
-      setShowHiddenLogin(true);
+      navigate('/private');
     } else {
       searchResetRef.current = setTimeout(() => {
         searchTapRef.current = 0;
-      }, 1500);
+      }, 1200);
     }
   };
 
@@ -1124,7 +1122,6 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           <div
             className="public-search-wrapper"
             style={{ position: 'relative', width: '100%', maxWidth: '400px' }}
-            onClick={handleSearchTripleTap}
           >
             <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
@@ -1132,7 +1129,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               placeholder="Search estates, locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
+              onClick={handleSearchTripleTap}
               style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem', cursor: 'text' }}
             />
           </div>

@@ -13,27 +13,10 @@ const fs = require('fs');
 const multer = require('multer');
 const cron = require('node-cron');
 
-// Resolve connection string with dynamic fallback for Supabase hosting
-let connectionString = process.env.DATABASE_URL;
-if (!connectionString || connectionString.startsWith('http')) {
-  console.log('ℹ️ DATABASE_URL is missing or is a REST URL. Auto-constructing connection string from Supabase project credentials...');
-  const projectRef = 'zbmfruntrdeyyxjnvhiy';
-  const dbPassword = encodeURIComponent('FriendsInfo@1361e');
-  connectionString = `postgresql://postgres:${dbPassword}@db.${projectRef}.supabase.co:5432/postgres`;
-}
-
-const { Pool } = require('pg');
-const pool = new Pool({
-  connectionString: connectionString,
-  ssl: connectionString && (connectionString.includes('localhost') || connectionString.includes('127.0.0.1'))
-    ? false
-    : { rejectUnauthorized: false }
-});
-
-// Handle idle client errors securely to prevent process crashes
-pool.on('error', (err) => {
-  console.error('⚠️ Unexpected error on idle database client:', err.message);
-});
+const Database = require('better-sqlite3');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
+const sqliteDb = new Database(dbPath);
+console.log('✅ SQLite Database connected successfully at:', dbPath);
 
 // Ensure upload directory exists
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
@@ -82,18 +65,24 @@ const uploadToSupabase = async (file) => {
   const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '');
   const fileName = Date.now() + '-' + baseName + ext;
   
-  const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
-    contentType: file.mimetype,
-    upsert: true
-  });
-  
-  if (error) throw error;
-  
-  const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
-  return urlData.publicUrl;
+  try {
+    const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true
+    });
+    if (error) throw error;
+    const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.warn('⚠️ Supabase upload failed, saving to local uploads folder:', err.message);
+    const localPath = path.join(UPLOADS_DIR, fileName);
+    fs.writeFileSync(localPath, file.buffer);
+    return `/uploads/${fileName}`;
+  }
 };
 
 const app = express();
+app.use('/uploads', express.static(UPLOADS_DIR));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -102,56 +91,39 @@ const io = new Server(server, {
   }
 });
 
-class Statement {
-  constructor(sql) {
-    let paramCounter = 1;
-    this.sql = sql.replace(/\?/g, () => `$${paramCounter++}`);
-    if (this.sql.trim().toUpperCase().startsWith('INSERT') && !this.sql.toUpperCase().includes('RETURNING')) {
-      this.sql += ' RETURNING id';
-    }
-  }
-  async get(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return res.rows[0];
-  }
-  async all(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return res.rows;
-  }
-  async run(...args) {
-    const res = await pool.query(this.sql, args.flat());
-    return { changes: res.rowCount, lastInsertRowid: res.rows[0]?.id };
-  }
-}
-
 const db = {
-  prepare: (sql) => new Statement(sql),
+  prepare: (sql) => {
+    // Normalize Postgres parameter placeholders ($1, $2) to SQLite placeholders (?)
+    let normalizedSql = sql.replace(/\$\d+/g, '?');
+    // Strip Postgres RETURNING clauses if present
+    normalizedSql = normalizedSql.replace(/\s+RETURNING\s+[\w\*]+$/i, '');
+    const stmt = sqliteDb.prepare(normalizedSql);
+    return {
+      get: async (...args) => stmt.get(...args.flat()),
+      all: async (...args) => stmt.all(...args.flat()),
+      run: async (...args) => {
+        const res = stmt.run(...args.flat());
+        return { changes: res.changes, lastInsertRowid: res.lastInsertRowid };
+      }
+    };
+  },
   exec: async (sql) => {
     try {
-      await pool.query(sql);
-    } catch(e) {
-      console.error(`⚠️ DB Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
-      if (e.code === '28P01' || e.code === 'ECONNREFUSED' || e.message.includes('connect')) {
-        throw e;
+      let cleanSql = sql
+        .replace(/BIGSERIAL PRIMARY KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
+        .replace(/TIMESTAMP DEFAULT now\(\)/gi, 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+        .replace(/JSONB/gi, 'TEXT')
+        .replace(/::jsonb/gi, '');
+      if (cleanSql.toUpperCase().includes('ALTER TABLE') && cleanSql.toUpperCase().includes('ADD COLUMN IF NOT EXISTS')) {
+        cleanSql = cleanSql.replace(/ADD COLUMN IF NOT EXISTS/gi, 'ADD COLUMN');
       }
+      return sqliteDb.exec(cleanSql);
+    } catch(e) {
+      if (e.message.includes('duplicate column name') || e.message.includes('already exists')) return;
+      console.error(`⚠️ DB Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
     }
   },
-  transaction: (fn) => {
-    return async (...args) => {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const res = await fn(...args); 
-        await client.query('COMMIT');
-        return res;
-      } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-      } finally {
-        client.release();
-      }
-    }
-  }
+  transaction: (fn) => sqliteDb.transaction(fn)
 };
 
 // Run all startup init tasks inside an async IIFE (CommonJS does not support top-level await)
@@ -200,6 +172,14 @@ const db = {
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS cover_photo TEXT");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by_admin INTEGER DEFAULT 0");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT");
+
+  // Automatically link Super Admin Telegram ID if configured
+  if (process.env.ADMIN_CHAT_ID) {
+    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+    await db.prepare('UPDATE users SET telegram_id = ? WHERE LOWER(email) = ?').run(process.env.ADMIN_CHAT_ID, superAdminEmail);
+  }
+
   await db.exec("ALTER TABLE savings_transactions ADD COLUMN IF NOT EXISTS notes TEXT");
   await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_id INTEGER");
   await db.exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER");
@@ -254,9 +234,13 @@ const db = {
       id BIGSERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       status TEXT DEFAULT 'active',
+      custom_advance_balance NUMERIC DEFAULT NULL,
       created_at TIMESTAMP DEFAULT now()
     )
   `);
+  try {
+    await db.exec(`ALTER TABLE savings_members ADD COLUMN custom_advance_balance NUMERIC DEFAULT NULL`);
+  } catch (e) {}
   await db.exec(`
     CREATE TABLE IF NOT EXISTS savings_transactions (
       id BIGSERIAL PRIMARY KEY,
@@ -272,9 +256,24 @@ const db = {
     CREATE TABLE IF NOT EXISTS savings_config (
       id BIGSERIAL PRIMARY KEY,
       weekly_amount NUMERIC NOT NULL,
+      week_number INTEGER,
       effective_date TIMESTAMP DEFAULT now()
     )
   `);
+  try {
+    await db.exec(`ALTER TABLE savings_config ADD COLUMN week_number INTEGER`);
+  } catch (e) {}
+
+  try {
+    const existingConfigs = await db.prepare('SELECT id, week_number FROM savings_config ORDER BY id ASC').all();
+    let counter = 1;
+    for (const cfg of existingConfigs) {
+      if (!cfg.week_number) {
+        await db.prepare('UPDATE savings_config SET week_number = ? WHERE id = ?').run(counter, cfg.id);
+      }
+      counter++;
+    }
+  } catch (e) {}
   await db.exec(`
     CREATE TABLE IF NOT EXISTS savings_investments (
       id BIGSERIAL PRIMARY KEY,
@@ -285,6 +284,18 @@ const db = {
       expected_days INTEGER,
       status TEXT DEFAULT 'active',
       completed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_cycles (
+      id BIGSERIAL PRIMARY KEY,
+      cycle_name TEXT NOT NULL,
+      cash_in_hand NUMERIC NOT NULL,
+      money_at_work NUMERIC NOT NULL,
+      total_wealth NUMERIC NOT NULL,
+      archived_by TEXT NOT NULL,
+      snapshot_data TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT now()
     )
   `);
@@ -341,6 +352,22 @@ const db = {
     )
   `);
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS bot_access (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id TEXT UNIQUE NOT NULL,
+      first_name TEXT,
+      last_name TEXT,
+      username TEXT,
+      role TEXT DEFAULT 'pending',
+      user_id INTEGER,
+      created_at TIMESTAMP DEFAULT now(),
+      updated_at TIMESTAMP DEFAULT now()
+    )
+  `);
+  try {
+    await db.exec(`ALTER TABLE users ADD COLUMN telegram_id TEXT`);
+  } catch (e) {}
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       name TEXT PRIMARY KEY,
       permissions JSONB NOT NULL
@@ -375,12 +402,15 @@ const db = {
       INSERT INTO users (
         email, password, role, nickname, created_by_admin, status
       ) VALUES (?, ?, ?, ?, 1, 'active')
-    `).run(superAdminEmail, hashedSA, 'super_admin', 'Super Admin');
+    `).run(superAdminEmail, hashedSA, 'super_admin', 'Ermias Gesgis');
     console.log(`👤 Seeded default superadmin: ${superAdminEmail}`);
   } else {
-    await db.prepare("UPDATE users SET role = 'super_admin', password = ?, totp_secret = NULL WHERE LOWER(email) = LOWER(?)").run(hashedSA, superAdminEmail);
+    await db.prepare("UPDATE users SET role = 'super_admin', nickname = 'Ermias Gesgis', password = ?, totp_secret = NULL WHERE LOWER(email) = LOWER(?)").run(hashedSA, superAdminEmail);
     console.log(`👤 Verified role 'super_admin', synchronized password, and cleared 2FA for user: ${superAdminEmail}`);
   }
+
+  // Demote any other users who have super_admin role to admin (Ermias Gesgis is the ONLY Super Admin)
+  await db.prepare("UPDATE users SET role = 'admin' WHERE role = 'super_admin' AND LOWER(email) != LOWER(?)").run(superAdminEmail);
 
   console.log('✅ Database initialized successfully');
 })().catch(err => {
@@ -439,13 +469,15 @@ const checkPaymentClerk = async (req, res, next) => {
 };
 
 const checkSavingsManager = async (req, res, next) => {
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
-  if (user.role === 'super_admin') {
+  const user = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+  if (user && user.role === 'super_admin' && user.email && user.email.toLowerCase() === superAdminEmail) {
     next();
   } else {
-    res.status(403).json({ error: 'Only Super Admin can manage members and settings' });
+    res.status(403).json({ error: 'Only Super Admin (ermiasgesgis@gmail.com) can manage members and savings settings' });
   }
 };
+
 
 // Generic Image Upload for all authenticated users
 app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
@@ -737,18 +769,11 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   // Get acting user
   const actingAdmin = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(req.user.id);
 
-  // Only Super Admin can create another Super Admin
-  if (role === 'super_admin' && (!actingAdmin || actingAdmin.role !== 'super_admin')) {
-    return res.status(403).json({ error: 'Only a Super Admin can create another Super Admin' });
-  }
-
-  // Admins cannot create Admin or Super Admin identities
-  if (actingAdmin && actingAdmin.role === 'admin' && ['admin', 'super_admin'].includes(role)) {
-    return res.status(403).json({ error: 'Admins can only create User or Authorized identities' });
-  }
+  // Ermias Gesgis is the ONLY Super Admin. Force role to admin if super_admin is requested for anyone else.
+  const assignedRole = (role === 'super_admin' && (email || '').toLowerCase() !== 'ermiasgesgis@gmail.com') ? 'admin' : role;
 
   try {
-    const resInsert = await db.prepare('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES (?, ?, ?, ?, 1)').run(email, hashedPassword, nickname, role);
+    const resInsert = await db.prepare('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES (?, ?, ?, ?, 1)').run(email, hashedPassword, nickname, assignedRole);
     
     try {
       await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(nickname || email);
@@ -759,12 +784,7 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
     const adminName = actingAdmin ? (actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
     const targetName = nickname || email;
     
-    if (role === 'super_admin') {
-      await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(req.user.id);
-      logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created a new Super Admin named ${targetName}. Current Super Admin is automatically demoted to Admin.`);
-    } else {
-      logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created user named by ${targetName}`);
-    }
+    logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created user "${targetName}" with role ${assignedRole}`);
 
     res.json({ success: true, id: resInsert.lastInsertRowid });
   } catch (err) {
@@ -848,11 +868,27 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
     m.total_paid = totals?.total_paid ? parseFloat(totals.total_paid) : 0;
     m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
     m.balance = m.total_paid - m.total_expected;
+    m.custom_advance_balance = m.custom_advance_balance !== null && m.custom_advance_balance !== undefined ? parseFloat(m.custom_advance_balance) : null;
     
     // Add to filtered response
     filteredMembers.push(m);
   }
   res.json(filteredMembers);
+});
+
+app.put('/api/savings/members/:id/advance', checkAuth, checkSavingsManager, async (req, res) => {
+  const { custom_advance_balance } = req.body;
+  const val = (custom_advance_balance === null || custom_advance_balance === '' || isNaN(custom_advance_balance)) ? null : parseFloat(custom_advance_balance);
+  await db.prepare('UPDATE savings_members SET custom_advance_balance = ? WHERE id = ?').run(val, req.params.id);
+  const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(req.params.id);
+  
+  const userNickname = req.user.nickname || 'Super Admin';
+  const msg = val === null 
+    ? `Super Admin ${userNickname} reset stored advance savings to automatic calculation for ${member ? member.name : 'Member'}`
+    : `Super Admin ${userNickname} manually updated stored advance savings to ${val} ETB for ${member ? member.name : 'Member'}`;
+  
+  logAction(req.user.id, 'SAVINGS_UPDATE', msg);
+  res.json({ success: true, custom_advance_balance: val });
 });
 
 app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res) => {
@@ -894,12 +930,26 @@ app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, 
   query += ') ' + valuesQuery + ')';
   const result = await db.prepare(query).run(...params);
 
-  const clerk = await db.prepare('SELECT nickname FROM users WHERE id = ?').get(req.user.id);
+  const clerk = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(req.user.id);
+  const clerkName = clerk ? (clerk.nickname || clerk.email.split('@')[0]) : 'Admin';
   const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(member_id);
   
-  const humanMessage = type === 'payment' 
-    ? `New payment of ${amount} ETB signed by ${clerk.nickname} for ${member.name}${notes ? ` (Notes: "${notes}")` : ''}`
-    : `Missed week of ${amount} ETB signed by ${clerk.nickname} for ${member.name}${notes ? ` (Notes: "${notes}")` : ''}`;
+  const totalSaved = (await db.prepare("SELECT SUM(amount) as total FROM savings_transactions WHERE type = 'payment'").get()).total || 0;
+  const completedCapital = (await db.prepare("SELECT SUM(allocated_amount) as total FROM savings_investments WHERE status = 'completed'").get()).total || 0;
+  const completedProfits = (await db.prepare("SELECT SUM(projected_profit) as total FROM savings_investments WHERE status = 'completed'").get()).total || 0;
+  const currentTotalMoney = parseFloat(totalSaved || 0) + parseFloat(completedCapital || 0) + parseFloat(completedProfits || 0);
+  const formattedTotal = new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(currentTotalMoney);
+
+  // Calculate individual total missed amount for this member
+  const memberPaid = (await db.prepare("SELECT SUM(amount) as total FROM savings_transactions WHERE member_id = ? AND type = 'payment'").get(member_id)).total || 0;
+  const memberExpected = (await db.prepare("SELECT SUM(amount) as total FROM savings_transactions WHERE member_id = ? AND type IN ('missed', 'expected')").get(member_id)).total || 0;
+  const memberMissedDebt = Math.max(0, parseFloat(memberExpected || 0) - parseFloat(memberPaid || 0));
+  const formattedMemberMissed = new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(memberMissedDebt);
+
+  const memberNameStr = member ? member.name : 'Member';
+  const humanMessage = type === 'payment'
+    ? `🔔 New payment of ${amount} ETB signed by ${clerkName} for ${memberNameStr} (total missed: ${formattedMemberMissed}), now you all have ${formattedTotal}${notes ? ` (Notes: "${notes}")` : ''}`
+    : `🔔 Missed record of ${amount} ETB signed by ${clerkName} for ${memberNameStr} (total missed: ${formattedMemberMissed}), now you all have ${formattedTotal}${notes ? ` (Notes: "${notes}")` : ''}`;
 
   logAction(req.user.id, 'SAVINGS_UPDATE', humanMessage);
   res.json({ success: true, id: result.lastInsertRowid });
@@ -927,14 +977,184 @@ app.get('/api/savings/config', checkAuth, async (req, res) => {
 });
 
 app.get('/api/savings/config/all', checkAuth, async (req, res) => {
-  const history = await db.prepare('SELECT * FROM savings_config ORDER BY effective_date DESC').all();
+  const history = await db.prepare('SELECT * FROM savings_config ORDER BY effective_date DESC, id DESC').all();
   res.json(history);
 });
 
 app.post('/api/savings/config', checkAuth, checkSavingsManager, async (req, res) => {
   const { amount } = req.body;
-  await db.prepare('INSERT INTO savings_config (weekly_amount) VALUES (?)').run(amount);
+  const maxRow = await db.prepare('SELECT MAX(week_number) as max_num FROM savings_config').get();
+  const nextNum = (maxRow && maxRow.max_num) ? (parseInt(maxRow.max_num) + 1) : 1;
+  await db.prepare('INSERT INTO savings_config (weekly_amount, week_number) VALUES (?, ?)').run(amount, nextNum);
+  res.json({ success: true, week_number: nextNum });
+});
+
+app.delete('/api/savings/config/:id', checkAuth, checkSavingsManager, async (req, res) => {
+  const latestConfig = await db.prepare('SELECT id FROM savings_config ORDER BY effective_date DESC, id DESC LIMIT 1').get();
+  if (latestConfig && String(latestConfig.id) === String(req.params.id)) {
+    return res.status(400).json({ error: 'The current active week configuration cannot be deleted as the system requires at least 1 active weekly setting.' });
+  }
+  await db.prepare('DELETE FROM savings_config WHERE id = ?').run(req.params.id);
+  const userNickname = req.user.nickname || 'Super Admin';
+  logAction(req.user.id, 'SETTING_CHANGE', `Super Admin ${userNickname} deleted week configuration ID ${req.params.id}`);
   res.json({ success: true });
+});
+
+app.post('/api/savings/config/bulk-delete', checkAuth, checkSavingsManager, async (req, res) => {
+  const { ids } = req.body;
+  const userNickname = req.user.nickname || 'Super Admin';
+  const latestConfig = await db.prepare('SELECT id FROM savings_config ORDER BY effective_date DESC, id DESC LIMIT 1').get();
+
+  if (ids === 'all') {
+    if (latestConfig) {
+      await db.prepare('DELETE FROM savings_config WHERE id != ?').run(latestConfig.id);
+    } else {
+      await db.prepare('DELETE FROM savings_config').run();
+    }
+    logAction(req.user.id, 'SETTING_CHANGE', `Super Admin ${userNickname} cleared all previous week configurations`);
+  } else if (Array.isArray(ids) && ids.length > 0) {
+    const filteredIds = latestConfig ? ids.filter(id => String(id) !== String(latestConfig.id)) : ids;
+    if (filteredIds.length > 0) {
+      const placeholders = filteredIds.map(() => '?').join(',');
+      await db.prepare(`DELETE FROM savings_config WHERE id IN (${placeholders})`).run(...filteredIds);
+      logAction(req.user.id, 'SETTING_CHANGE', `Super Admin ${userNickname} deleted ${filteredIds.length} week configuration(s)`);
+    }
+  }
+  
+  res.json({ success: true });
+});
+
+// Super Admin Reset Cycle & Archive Endpoint
+app.post('/api/savings/reset-cycle', checkAuth, async (req, res) => {
+  const user = await db.prepare('SELECT role, nickname, email FROM users WHERE id = ?').get(req.user.id);
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+  if (!user || user.role !== 'super_admin' || !user.email || user.email.toLowerCase() !== superAdminEmail) {
+    return res.status(403).json({ error: 'Super Admin (ermiasgesgis@gmail.com) privileges required to archive and reset savings pool.' });
+  }
+
+  const { cycle_name, cash_in_hand, money_at_work, total_wealth } = req.body;
+
+  try {
+    const members = await db.prepare('SELECT * FROM savings_members').all();
+    const history = await db.prepare('SELECT * FROM savings_transactions').all();
+    const investments = await db.prepare('SELECT * FROM savings_investments').all();
+    const archivedBy = user.nickname || user.email;
+
+    // Calculate individual total savings for each member at archiving time
+    for (const m of members) {
+      const totals = await db.prepare(`
+        SELECT 
+          SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as total_paid,
+          SUM(CASE WHEN type IN ('missed', 'expected') THEN amount ELSE 0 END) as total_expected
+        FROM savings_transactions 
+        WHERE member_id = ?
+      `).get(m.id);
+      m.total_paid = totals?.total_paid ? parseFloat(totals.total_paid) : 0;
+      m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
+      m.balance = m.total_paid - m.total_expected;
+    }
+
+    const snapshot = {
+      archived_at: new Date().toISOString(),
+      archived_by: archivedBy,
+      members,
+      history,
+      investments,
+      totals: {
+        cash_in_hand: parseFloat(cash_in_hand || 0),
+        money_at_work: parseFloat(money_at_work || 0),
+        total_wealth: parseFloat(total_wealth || 0)
+      }
+    };
+
+    const cycleTitle = cycle_name || `Cycle ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+    const result = await db.prepare(`
+      INSERT INTO savings_cycles (cycle_name, cash_in_hand, money_at_work, total_wealth, archived_by, snapshot_data)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      cycleTitle,
+      parseFloat(cash_in_hand || 0),
+      parseFloat(money_at_work || 0),
+      parseFloat(total_wealth || 0),
+      archivedBy,
+      JSON.stringify(snapshot)
+    );
+
+    // Reset active transactions and archive all investments (active and completed) for brand new account zero state
+    await db.prepare('DELETE FROM savings_transactions').run();
+    await db.prepare("UPDATE savings_investments SET status = 'archived' WHERE status IN ('active', 'completed')").run();
+
+    logAction(req.user.id, 'SAVINGS_CYCLE_RESET', `Super Admin archived cycle "${cycleTitle}" (Total Wealth: ETB ${total_wealth}) and reset savings for a fresh cycle.`);
+
+    res.json({ success: true, cycle_id: result.lastInsertRowid, message: 'Savings cycle archived and reset successfully!' });
+  } catch (err) {
+    console.error('Error resetting savings cycle:', err);
+    res.status(500).json({ error: 'Failed to archive and reset savings cycle.' });
+  }
+});
+
+// Fetch All Archived Cycles Endpoint
+app.get('/api/savings/cycles', checkAuth, async (req, res) => {
+  try {
+    const cycles = await db.prepare('SELECT * FROM savings_cycles ORDER BY created_at DESC').all();
+    cycles.forEach(c => {
+      if (c.snapshot_data) {
+        try { 
+          c.snapshot = JSON.parse(c.snapshot_data);
+          // Fallback calculation for older archived snapshots missing calculated member totals
+          if (c.snapshot && c.snapshot.members && c.snapshot.history) {
+            c.snapshot.members.forEach(m => {
+              if (m.total_paid === undefined) {
+                const memberTx = c.snapshot.history.filter(t => String(t.member_id) === String(m.id));
+                m.total_paid = memberTx.filter(t => t.type === 'payment').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+                m.total_expected = memberTx.filter(t => t.type === 'missed' || t.type === 'expected').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+                m.balance = m.total_paid - m.total_expected;
+              }
+            });
+          }
+        } catch(e) {}
+      }
+    });
+    res.json(cycles);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch archived cycles.' });
+  }
+});
+
+// Delete single cycle archive endpoint (Super Admin)
+app.delete('/api/savings/cycles/:id', checkAuth, async (req, res) => {
+  const user = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+  if (!user || user.role !== 'super_admin' || !user.email || user.email.toLowerCase() !== superAdminEmail) {
+    return res.status(403).json({ error: 'Super Admin (ermiasgesgis@gmail.com) privileges required to delete archived cycles.' });
+  }
+  try {
+    const cycle = await db.prepare('SELECT cycle_name FROM savings_cycles WHERE id = ?').get(req.params.id);
+    await db.prepare('DELETE FROM savings_cycles WHERE id = ?').run(req.params.id);
+    logAction(req.user.id, 'SAVINGS_CYCLE_DELETE', `Super Admin deleted archived cycle "${cycle?.cycle_name || req.params.id}"`);
+    res.json({ success: true, message: 'Archived cycle deleted successfully!' });
+  } catch (err) {
+    console.error('Error deleting cycle:', err);
+    res.status(500).json({ error: 'Failed to delete archived cycle.' });
+  }
+});
+
+// Clear all cycle archives endpoint (Super Admin)
+app.delete('/api/savings/cycles', checkAuth, async (req, res) => {
+  const user = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+  if (!user || user.role !== 'super_admin' || !user.email || user.email.toLowerCase() !== superAdminEmail) {
+    return res.status(403).json({ error: 'Super Admin (ermiasgesgis@gmail.com) privileges required to delete archived cycles.' });
+  }
+  try {
+    await db.prepare('DELETE FROM savings_cycles').run();
+    logAction(req.user.id, 'SAVINGS_CYCLE_CLEAR_ALL', 'Super Admin cleared all archived savings cycles.');
+    res.json({ success: true, message: 'All archived cycles cleared successfully!' });
+  } catch (err) {
+    console.error('Error clearing cycles:', err);
+    res.status(500).json({ error: 'Failed to clear archived cycles.' });
+  }
 });
 
 app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) => {
@@ -957,10 +1177,11 @@ app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) 
 
 // Investments
 app.get('/api/savings/investments', checkAuth, async (req, res) => {
-  const investments = await db.prepare('SELECT * FROM savings_investments ORDER BY created_at DESC').all();
+  const investments = await db.prepare("SELECT * FROM savings_investments WHERE status != 'archived' ORDER BY created_at DESC").all();
   investments.forEach(i => {
     if (i.allocated_amount) i.allocated_amount = parseFloat(i.allocated_amount);
-    if (i.projected_profit) i.projected_profit = parseFloat(i.projected_profit);
+    if (i.projected_profit !== undefined && i.projected_profit !== null) i.projected_profit = parseFloat(i.projected_profit);
+    if (i.profit !== undefined && i.profit !== null) i.profit = parseFloat(i.profit);
   });
   res.json(investments);
 });
@@ -979,11 +1200,12 @@ app.delete('/api/savings/investments/:id', checkAuth, checkSavingsManager, async
 
 app.put('/api/savings/investments/:id/status', checkAuth, checkSavingsManager, async (req, res) => {
   const { status, profit, challenges } = req.body;
+  const netProfit = (profit !== undefined && profit !== null && !isNaN(profit)) ? parseFloat(profit) : 0;
   if (status === 'completed') {
-    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = CURRENT_TIMESTAMP, projected_profit = ?, challenges = ? WHERE id = ?')
-      .run(status, profit, challenges, req.params.id);
+    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = CURRENT_TIMESTAMP, profit = ?, projected_profit = ?, challenges = ? WHERE id = ?')
+      .run(status, netProfit, netProfit, challenges || '', req.params.id);
   } else {
-    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = NULL WHERE id = ?').run(status, req.params.id);
+    await db.prepare('UPDATE savings_investments SET status = ?, completed_at = NULL, profit = 0 WHERE id = ?').run(status, req.params.id);
   }
   res.json({ success: true });
 });
@@ -1153,11 +1375,16 @@ app.get('/api/admin/settings', checkAuth, checkPermission('canToggleFeatures'), 
 
 app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeatures'), async (req, res) => {
   const { key, value } = req.body;
-  await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
   
   if (key === 'clerk_id') {
-    const actingAdmin = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
-    const roleText = actingAdmin && actingAdmin.role === 'super_admin' ? 'superadmin' : 'admin';
+    const actingAdmin = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
+    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+    if (!actingAdmin || actingAdmin.role !== 'super_admin' || !actingAdmin.email || actingAdmin.email.toLowerCase() !== superAdminEmail) {
+      return res.status(403).json({ error: 'Setting clerk is the role of the Super Admin (ermiasgesgis@gmail.com)' });
+    }
+    
+    await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
+    const roleText = 'superadmin';
     const clerkId = parseInt(value);
     
     if (clerkId) {
@@ -1168,6 +1395,7 @@ app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeat
       logAction(req.user.id, 'SETTING_CHANGE', `Clerk has been unassigned by ${roleText}`);
     }
   } else {
+    await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
     logAction(req.user.id, 'SETTING_CHANGE', `${key} set to ${value}`);
   }
   
@@ -1394,179 +1622,9 @@ io.on('connection', (socket) => {
 });
 
 
-// Telegram Bot Commands
-const AUTHORIZED_TG_USERS = (process.env.AUTHORIZED_TG_USERS || '').split(',').map(id => id.trim());
-
-if (bot && process.env.TG_TOKEN && process.env.TG_TOKEN !== 'YOUR_TELEGRAM_BOT_TOKEN') {
-  bot.use(async (ctx, next) => {
-    const userId = ctx.from?.id.toString();
-    ctx.state.isAuthorized = AUTHORIZED_TG_USERS.includes(userId) || userId === process.env.ADMIN_CHAT_ID;
-    return next();
-  });
-
-  const WELCOME_MSG = `👋 Welcome!\n\nHow can we serve you today?\n/newbot\n/mybots\n\n• Games\n/mygames \n/newgame\n/playgame\n\n• Bot Settings\n/setname\n/setdescription\n/deletebot\n/token\n/revoke\n\n\n/Help\n\nUse the available options`;
-
-  // Registering decoy commands with Telegram API for the "Menu" button
-  bot.telegram.setMyCommands([
-    { command: 'newbot', description: 'Create a new bot' },
-    { command: 'mybots', description: 'List of your bots' },
-    { command: 'mygames', description: 'Manage your games' },
-    { command: 'newgame', description: 'Create a new game' },
-    { command: 'playgame', description: 'Play a game' },
-    { command: 'setname', description: 'Change bot name' },
-    { command: 'setdescription', description: 'Change bot description' },
-    { command: 'deletebot', description: 'Delete a bot' },
-    { command: 'token', description: 'Get bot token' },
-    { command: 'revoke', description: 'Revoke token' },
-    { command: 'help', description: 'Show help' }
-  ]).catch(console.error);
-
-  bot.start((ctx) => {
-    ctx.reply(WELCOME_MSG);
-    logAction(null, ctx.state.isAuthorized ? 'ADMIN_SESSION_START' : 'VISITOR_SESSION_START', `User: ${ctx.from.id}`);
-  });
-
-  bot.help((ctx) => {
-    ctx.reply('🛠️ BotFather Redux Help\n\nYou can use this bot to manage your custom game tokens and bot sub-nodes.\n\nFor primary bot creation, please contact @BotFather directly.');
-  });
-
-  // --- BOTFATHER DECOY COMMAND HANDLERS (Hard Redirect with Deep Links) ---
-  const botFatherRedirect = (msg, action = '') => (ctx) => {
-    const url = action ? `https://t.me/BotFather?start=${action}` : 'https://t.me/BotFather';
-    ctx.reply(`🔄 ${msg}\nRedirecting to Master Node...`,
-      Markup.inlineKeyboard([
-        [Markup.button.url('🚀 CONTINUE', url)]
-      ])
-    );
-  };
-
-  bot.command('newbot', botFatherRedirect('BotForge Initializing', 'newbot'));
-  bot.command('mybots', botFatherRedirect('Fetching Nodes', 'mybots'));
-  bot.command('mygames', botFatherRedirect('Accessing Matrix', 'mygames'));
-  bot.command('newgame', botFatherRedirect('Initializing GameForge', 'newgame'));
-  bot.command('playgame', botFatherRedirect('Select Node', 'playgame'));
-  bot.command('setname', botFatherRedirect('Identity Shift', 'setname'));
-  bot.command('setdescription', botFatherRedirect('Definition Update', 'setdescription'));
-  bot.command('deletebot', botFatherRedirect('Node Termination', 'deletebot'));
-  bot.command('token', botFatherRedirect('Retrieving Pulse Token', 'token'));
-  bot.command('revoke', botFatherRedirect('Revocation Sent', 'revoke'));
-
-  bot.hears(/Games/i, (ctx) => {
-    ctx.reply('🎲 SELECT GAME:\n1. Trivia Matrix\n2. Secure Chess\n3. Word Hack\n\n(Games under maintenance - Node Syncing)');
-  });
-
-  bot.hears(/Bot Settings/i, (ctx) => {
-    ctx.reply('⚙️ BOT CONFIGURATION\n\nNotification: ON\nLanguage: EN\nAuto-Reply: OFF\n\nTo change, use /config (Authorized users only)');
-  });
-
-  bot.hears(/Create/i, (ctx) => {
-    ctx.reply('➕ What would you like to create?\n1. New Profile\n2. Custom Badge\n3. Channel Link');
-  });
-  const adminOnly = (ctx, next) => {
-    if (ctx.state.isAuthorized) return next();
-    // SILENT: No response for unauthorized users
-    logAction(null, 'SILENT_UNAUTHORIZED_TRIGGER', `Attempt: ${ctx.message.text} from ${ctx.from.id}`);
-  };
-
-  bot.hears('2', adminOnly, async (ctx) => {
-    const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
-    const userCount = userCountRes?.count || 0;
-    const msgCountRes = await db.prepare('SELECT COUNT(*) as count FROM messages').get();
-    const msgCount = msgCountRes?.count || 0;
-    const settings = await db.prepare('SELECT * FROM system_settings').all();
-    const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
-
-    ctx.reply(`📊 SYSTEM STATUS REPORT\n\n👥 Registered Users: ${userCount}\n💬 Total Messages: ${msgCount}\n\n${settingsText}\n\nNode Status: VERIFIED`,
-      Markup.inlineKeyboard([
-        [Markup.button.callback('👥 SHOW ALL USERS', 'show_users')],
-        [Markup.button.callback('💬 SHOW ALL MESSAGES', 'show_messages')]
-      ])
-    );
-  });
-
-  bot.action('show_users', adminOnly, async (ctx) => {
-    const users = await db.prepare('SELECT email, role, created_at FROM users').all();
-    const userList = users.map(u => `👤 ${u.email}\n🏷️ Role: ${u.role}\n📅 Joined: ${new Date(u.created_at).toLocaleDateString()}`).join('\n\n');
-    ctx.editMessageText(`👥 USER DIRECTORY\n\n${userList || 'No users found.'}`, Markup.inlineKeyboard([[Markup.button.callback('⬅️ BACK', 'back_to_status')]]));
-  });
-
-  bot.action('show_messages', adminOnly, async (ctx) => {
-    const messages = (await db.prepare(`
-      SELECT m.content, u.email, m.created_at 
-      FROM messages m 
-      JOIN users u ON m.sender_id = u.id 
-      ORDER BY m.created_at DESC LIMIT 50
-    `).all()).reverse();
-
-    const msgList = messages.map(m => {
-      const time = new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-      return `📧 ${m.email} (${time}): ${m.content}`;
-    }).join('\n');
-
-    ctx.editMessageText(`💬 MESSAGE HISTORY\n\n${msgList || 'No messages found.'}`, Markup.inlineKeyboard([[Markup.button.callback('⬅️ BACK', 'back_to_status')]]));
-  });
-
-  bot.action('back_to_status', adminOnly, async (ctx) => {
-    const userCountRes = await db.prepare('SELECT COUNT(*) as count FROM users').get();
-    const userCount = userCountRes?.count || 0;
-    const msgCountRes = await db.prepare('SELECT COUNT(*) as count FROM messages').get();
-    const msgCount = msgCountRes?.count || 0;
-    const settings = await db.prepare('SELECT * FROM system_settings').all();
-    const settingsText = settings.map(s => `⚙️ ${s.key.toUpperCase()}: ${s.value === 'true' ? 'ON' : 'OFF'}`).join('\n');
-
-    ctx.editMessageText(`📊 SYSTEM STATUS REPORT\n\n👥 Registered Users: ${userCount}\n💬 Total Messages: ${msgCount}\n\n${settingsText}\n\nNode Status: VERIFIED`,
-      Markup.inlineKeyboard([
-        [Markup.button.callback('👥 SHOW ALL USERS', 'show_users')],
-        [Markup.button.callback('💬 SHOW ALL MESSAGES', 'show_messages')]
-      ])
-    );
-  });
-
-  bot.hears('3', adminOnly, async (ctx) => {
-    const logs = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 5').all();
-    const logText = logs.map(l => `🕒 ${l.timestamp}\n👤 ${l.user_id || 'sys'} | ${l.action}\n📝 ${l.details}`).join('\n\n');
-    ctx.reply(`📂 SYSTEM ACTIVITY LOGS\n\n${logText || 'No recent activity found.'}`);
-  });
-
-  bot.hears(/^4(?:\s+(.+))?$/, adminOnly, async (ctx) => {
-    const parts = ctx.message.text.split(' ');
-    if (parts.length < 3) return ctx.reply('Usage: 4 <email> <role>');
-    const email = parts[1];
-    const role = parts[2];
-    const result = await db.prepare('UPDATE users SET role = ? WHERE email = ?').run(role, email);
-    if (result.changes > 0) ctx.reply(`✅ Identity ${email} updated to ${role}.`);
-    else ctx.reply('❌ Identity not found in matrix.');
-  });
-
-  bot.hears('5', adminOnly, async (ctx) => {
-    const lastMessages = (await db.prepare(`
-      SELECT m.content, m.media_url, m.media_type, u.email, m.created_at
-      FROM messages m 
-      JOIN users u ON m.sender_id = u.id 
-      ORDER BY m.created_at DESC LIMIT 10
-    `).all()).reverse();
-
-    const historyText = lastMessages.map(m => {
-      // Force UTC parsing
-      const time = new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-      const indicator = m.media_url ? '[🖼️ MEDIA] ' : '';
-      return `📧 ${m.email} (${time}): ${indicator}${m.content || '(Media only)'}`;
-    }).join('\n');
-
-    ctx.reply(`⚡ CHAT HISTORY SYNC\n\n${historyText || 'No recent messages found.'}\n\nEncryption: ACTIVE | Status: SECURE`);
-    logAction(null, 'ADMIN_HISTORY_SYNC', `Admin ${ctx.from.id} synchronized chat history`);
-  });
-
-  bot.catch((err, ctx) => {
-    console.error(`⚠️ Telegram bot error for update type "${ctx.updateType}":`, err);
-  });
-
-  bot.launch().catch(err => {
-    console.error('Failed to launch Telegram bot:', err.message);
-  });
-} else {
-  console.log('Telegram bot skipped (invalid or missing token).');
-}
+// Telegram Bot Integration (Role-based & Access-Approved)
+const setupTelegramBot = require('./telegramBot');
+setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR });
 
 // Gallery Endpoints
 app.get('/api/gallery', async (req, res) => {
