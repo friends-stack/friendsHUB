@@ -67,7 +67,9 @@ const MIME_EXTENSIONS = {
 };
 
 const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 // Multer config (Memory Storage for Supabase upload)
 const storage = multer.memoryStorage();
@@ -84,20 +86,22 @@ const uploadToSupabase = async (file) => {
   const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '');
   const fileName = Date.now() + '-' + baseName + ext;
   
-  try {
-    const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
-      contentType: file.mimetype,
-      upsert: true
-    });
-    if (error) throw error;
-    const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
-    return urlData.publicUrl;
-  } catch (err) {
-    console.warn('⚠️ Supabase upload failed, saving to local uploads folder:', err.message);
-    const localPath = path.join(UPLOADS_DIR, fileName);
-    fs.writeFileSync(localPath, file.buffer);
-    return `/uploads/${fileName}`;
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: true
+      });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
+      return urlData.publicUrl;
+    } catch (err) {
+      console.warn('⚠️ Supabase upload failed, saving to local uploads folder:', err.message);
+    }
   }
+  const localPath = path.join(UPLOADS_DIR, fileName);
+  fs.writeFileSync(localPath, file.buffer);
+  return `/uploads/${fileName}`;
 };
 
 const app = express();
