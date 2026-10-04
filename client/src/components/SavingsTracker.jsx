@@ -3716,10 +3716,45 @@ const Section = ({ title, onAction, actionLabel, icon: Icon, children }) => (
     {children}
   </div>
 );
-const MemberListItem = ({ member, index, onClick, formatCurrency }) => (<div onClick={onClick} style={{ display:'flex', justifyContent:'space-between', padding:'1rem 0', borderTop: index === 0 ? 'none' : '1px solid #F3F4F6', cursor:'pointer' }}><div style={{ display:'flex', gap:'1rem', alignItems:'center' }}><Avatar name={member.name} index={index} /><div><div style={{ fontWeight:700 }}>{member.name}</div><div style={{ fontSize:'0.85rem', color:'#6B7280' }}>paid {formatCurrency(member.total_paid)}</div></div></div><div style={{ fontWeight: 700, color: member.currentDebt === 0 ? '#F59E0B' : '#DC2626' }}>{member.currentDebt === 0 ? '+' : ''}{formatCurrency(member.genuineBalance)}</div></div>);
+const MemberListItem = ({ member, index, onClick, formatCurrency }) => {
+  const hasAdvance = (member.advanceBalance || 0) > 0;
+  const isDebt = (member.currentDebt || 0) > 0;
+
+  return (
+    <div 
+      onClick={onClick} 
+      style={{ 
+        display:'flex', 
+        justifyContent:'space-between', 
+        padding:'1rem 0', 
+        borderTop: index === 0 ? 'none' : '1px solid #F3F4F6', 
+        cursor:'pointer',
+        alignItems: 'center'
+      }}
+    >
+      <div style={{ display:'flex', gap:'1rem', alignItems:'center' }}>
+        <Avatar name={member.name} index={index} />
+        <div>
+          <div style={{ fontWeight:700 }}>{member.name}</div>
+          <div style={{ fontSize:'0.85rem', color:'#6B7280' }}>paid {formatCurrency(member.total_paid)}</div>
+        </div>
+      </div>
+      {hasAdvance ? (
+        <div style={{ fontWeight: 700, color: '#F59E0B' }}>
+          +{formatCurrency(member.advanceBalance)}
+        </div>
+      ) : isDebt ? (
+        <div style={{ fontWeight: 700, color: '#DC2626' }}>
+          -{formatCurrency(member.currentDebt)}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const MemberCard = ({ member, onClick, formatCurrency }) => {
-  const isAdvance = (member.advanceBalance || Math.max(0, member.genuineBalance || 0)) > 0;
-  const advanceAmount = member.advanceBalance || Math.max(0, member.genuineBalance || 0);
+  const isAdvance = (member.advanceBalance || 0) > 0;
+  const advanceAmount = member.advanceBalance || 0;
   const advanceWeeks = member.advanceWeeks || Math.floor(advanceAmount / 300);
   const isDebt = member.currentDebt > 0;
 
