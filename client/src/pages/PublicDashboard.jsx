@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Home, Building, Layout, User, Search, Heart, MapPin,
   TrendingUp, Star, ArrowRight, Menu, Bell, LogIn, CheckCircle, LogOut,
-  Phone, Mail, MessageCircle, FileText, ShieldCheck
+  Phone, Mail, MessageCircle, FileText, ShieldCheck, Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -754,7 +754,11 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
     searchTapRef.current += 1;
     if (searchTapRef.current >= 3) {
       searchTapRef.current = 0;
-      navigate('/private');
+      if (user && !user.restricted) {
+        navigate('/private');
+      } else {
+        setShowHiddenLogin(true);
+      }
     } else {
       searchResetRef.current = setTimeout(() => {
         searchTapRef.current = 0;
@@ -792,10 +796,10 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
       setShowHiddenLogin(false);
-      if (['admin', 'super_admin'].includes(data.user.role)) {
+      if (!data.user.restricted) {
         navigate('/private');
       }
-      // Regular users just stay on public dashboard
+      // If user is restricted, they stay on public dashboard
     } catch (err) {
       setHiddenError('Connection error. Please try again.');
     }
@@ -1065,19 +1069,14 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   return (
     <div className="public-dashboard-container" style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', color: '#1e293b', overflowX: 'hidden', width: '100%', maxWidth: '100vw' }}>
       <style>{`
+        .mobile-ethio-header { display: none !important; }
         @media (max-width: 768px) {
+          .mobile-ethio-header { display: flex !important; }
           .public-dashboard-container { flex-direction: column !important; }
-          .public-sidebar { 
-            width: 100% !important; 
-            height: auto !important; 
-            position: static !important; 
-            padding: 1.5rem !important;
-            border-right: none !important;
-            border-bottom: 1px solid #e2e8f0;
-          }
+          .public-sidebar { display: none !important; }
           .public-main { padding: 1rem !important; }
-          .public-header { flex-direction: column !important; gap: 1rem !important; align-items: stretch !important; }
-          .public-search-wrapper { width: 100% !important; }
+          .public-header { flex-direction: column !important; gap: 1rem !important; align-items: stretch !important; margin-bottom: 1.5rem !important; }
+          .public-search-wrapper { width: 100% !important; max-width: 100% !important; }
           .footer-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
           .insights-grid { grid-template-columns: 1fr !important; }
           .details-specs-grid { grid-template-columns: 1fr 1fr !important; }
@@ -1101,8 +1100,11 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
           onClick={handleSupportClick}
           style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '3rem', cursor: 'pointer', userSelect: 'none' }}
         >
-          <div style={{ width: '32px', height: '32px', background: '#0f172a', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 800 }}>E</div>
-          <span style={{ fontWeight: 900, fontSize: '1rem', letterSpacing: '1px', color: '#0f172a' }}>ETHIOLUXURY</span>
+          <div style={{ width: '38px', height: '38px', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24', fontWeight: 900, fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(15,23,42,0.15)' }}>E</div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 900, fontSize: '1.1rem', letterSpacing: '1px', color: '#0f172a', lineHeight: 1.1 }}>ETHIO LUXURY</span>
+            <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>ESTATES & CONCIERGE</span>
+          </div>
         </div>
 
         <nav style={{ flex: 1 }}>
@@ -1117,11 +1119,126 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
       {/* Main Content */}
       <main className="public-main" style={{ flex: 1, padding: '2rem 4rem', maxWidth: '1400px', margin: '0 auto' }}>
 
+        {/* Dedicated Mobile Header Bar — Prominent ETHIO LUXURY branding on Mobile */}
+        <div className="mobile-ethio-header" style={{
+          display: 'none',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0.75rem 0.25rem 1.25rem 0.25rem',
+          marginBottom: '1rem',
+          borderBottom: '1px solid #e2e8f0',
+          width: '100%'
+        }}>
+          <div 
+            onClick={handleSupportClick}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', userSelect: 'none' }}
+          >
+            <div style={{ 
+              width: '40px', 
+              height: '40px', 
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', 
+              borderRadius: '10px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              color: '#fbbf24', 
+              fontWeight: 900,
+              fontSize: '1.25rem',
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)',
+              border: '1px solid rgba(251, 191, 36, 0.3)'
+            }}>
+              E
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '1px', color: '#0f172a', lineHeight: 1.1 }}>
+                  ETHIO LUXURY
+                </span>
+                <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>
+                  VIP
+                </span>
+              </div>
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                Exclusive Properties • Addis Ababa
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div 
+                  onClick={handleAvatarClick}
+                  style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    borderRadius: '50%', 
+                    background: getAvatarColor(user.nickname || user.email),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {user.profile_picture ? (
+                    <img src={user.profile_picture} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    (user.nickname || user.email || 'U').charAt(0).toUpperCase()
+                  )}
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '0.45rem',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  title="Logout"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            ) : (
+              <a 
+                href="https://wa.me/qr/E4DFLRL5BK54I1" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: '#25D366',
+                  color: 'white',
+                  padding: '0.5rem 0.9rem',
+                  borderRadius: '50px',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  textDecoration: 'none',
+                  boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)'
+                }}
+              >
+                <MessageCircle size={14} /> VIP Concierge
+              </a>
+            )}
+          </div>
+        </div>
+
         {/* Header Area */}
         <div className="public-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div
             className="public-search-wrapper"
             style={{ position: 'relative', width: '100%', maxWidth: '400px' }}
+            onClick={handleSearchTripleTap}
           >
             <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
@@ -1130,7 +1247,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onClick={handleSearchTripleTap}
-              style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem', cursor: 'text' }}
+              style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3.5rem', borderRadius: '50px', border: '1px solid #e2e8f0', background: 'white', outline: 'none', fontSize: '0.9rem', cursor: 'text', touchAction: 'manipulation' }}
             />
           </div>
           <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
@@ -1216,12 +1333,14 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 justifyContent: 'flex-end',
                 padding: '4rem'
               }}>
-                <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '1rem' }}>EXCELLENCE IN REAL ESTATE</span>
-                <h1 style={{ color: 'white', fontSize: '4.5rem', fontWeight: 900, margin: '0 0 1.5rem', lineHeight: 1.1 }}>
-                  Ermias Luxury <br /> Management
+                <span style={{ color: '#fbbf24', fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '4px', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Sparkles size={16} color="#fbbf24" /> EXCELLENCE IN REAL ESTATE
+                </span>
+                <h1 style={{ color: 'white', fontSize: '4.2rem', fontWeight: 900, margin: '0 0 1.5rem', lineHeight: 1.1 }}>
+                  ETHIO LUXURY <br /> Management
                 </h1>
-                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1.1rem', maxWidth: '500px', margin: '0 0 2rem', lineHeight: 1.6 }}>
-                  Manage and explore the most prestigious real estate portfolio in the Horn of Africa.
+                <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '1.1rem', maxWidth: '500px', margin: '0 0 2rem', lineHeight: 1.6 }}>
+                  Manage and explore the most prestigious real estate portfolio in Ethiopia & the Horn of Africa.
                 </p>
                 <div style={{ display: 'flex', gap: '1.5rem' }}>
                   <button
@@ -2114,9 +2233,9 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
             >✕</button>
 
             <div style={{ marginBottom: '2rem' }}>
-              <div style={{ width: '48px', height: '48px', background: '#0f172a', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: '1.25rem', marginBottom: '1rem' }}>E</div>
-              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Welcome back</h3>
-              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Sign in to access your dashboard</p>
+              <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24', fontWeight: 900, fontSize: '1.25rem', marginBottom: '1rem', border: '1px solid rgba(251, 191, 36, 0.3)' }}>E</div>
+              <h3 style={{ margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>ETHIO LUXURY Portal</h3>
+              <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Sign in to access your private dashboard</p>
             </div>
 
             {hiddenError && (
