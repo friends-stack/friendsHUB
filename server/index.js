@@ -484,12 +484,14 @@ const checkPermission = (permission) => async (req, res, next) => {
 const checkPaymentClerk = async (req, res, next) => {
   const clerkSetting = await db.prepare("SELECT value FROM system_settings WHERE key = 'clerk_id'").get();
   const clerkId = clerkSetting && clerkSetting.value ? parseInt(clerkSetting.value) : null;
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
+  const user = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+  const isSuperAdmin = (user && user.role === 'super_admin' && user.email && user.email.toLowerCase() === superAdminEmail);
   
-  if (req.user.id === clerkId || user?.role === 'super_admin') {
+  if (req.user.id === clerkId || user?.role === 'clerk' || isSuperAdmin) {
     next();
   } else {
-    res.status(403).json({ error: 'Only the designated clerk or Super Admin can manage payments' });
+    res.status(403).json({ error: 'Only the designated clerk or Super Admin can perform this action' });
   }
 };
 
@@ -1009,6 +1011,34 @@ app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, 
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
+app.delete('/api/savings/transactions/:id', checkAuth, checkPaymentClerk, async (req, res) => {
+  try {
+    const tx = await db.prepare('SELECT * FROM savings_transactions WHERE id = ?').get(req.params.id);
+    if (!tx) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(tx.member_id);
+    const memberName = member ? member.name : `Member #${tx.member_id}`;
+    const clerk = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(req.user.id);
+    const clerkName = clerk ? (clerk.nickname || clerk.email.split('@')[0]) : 'Clerk/Admin';
+
+    await db.prepare('DELETE FROM savings_transactions WHERE id = ?').run(req.params.id);
+
+    const txType = tx.type === 'payment' ? 'Cash In (Payment)' : 'Cash Out (Missed)';
+    const formattedAmount = new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(tx.amount || 0);
+
+    logAction(req.user.id, 'SAVINGS_TRANSACTION_DELETED', `🗑️ ${clerkName} deleted ${txType} of ${formattedAmount} for ${memberName}`);
+
+    res.json({ 
+      success: true, 
+      message: `${txType} of ${formattedAmount} for ${memberName} was successfully deleted.` 
+    });
+  } catch (err) {
+    console.error('Error deleting savings transaction:', err);
+    res.status(500).json({ error: 'Failed to delete savings transaction' });
+  }
+});
+
 app.get('/api/savings/history', checkAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
   let query = `SELECT t.*, m.name as member_name FROM savings_transactions t JOIN savings_members m ON t.member_id = m.id`;
@@ -1240,19 +1270,24 @@ app.get('/api/savings/investments', checkAuth, async (req, res) => {
   res.json(investments);
 });
 
-app.post('/api/savings/investments', checkAuth, checkSavingsManager, async (req, res) => {
+app.post('/api/savings/investments', checkAuth, checkPaymentClerk, async (req, res) => {
   const { project_name, allocated_amount, projected_profit, challenges, expected_days } = req.body;
   const result = await db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
     .run(project_name, allocated_amount, projected_profit || 0, challenges || '', expected_days || null);
+  
+  const actor = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(req.user.id);
+  const actorName = actor ? (actor.nickname || actor.email.split('@')[0]) : 'Clerk';
+  logAction(req.user.id, 'NEW_INVESTMENT', `💼 ${actorName} deployed ETB ${allocated_amount} into investment "${project_name}"`);
+
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
-app.delete('/api/savings/investments/:id', checkAuth, checkSavingsManager, async (req, res) => {
+app.delete('/api/savings/investments/:id', checkAuth, checkPaymentClerk, async (req, res) => {
   await db.prepare('DELETE FROM savings_investments WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
-app.put('/api/savings/investments/:id/status', checkAuth, checkSavingsManager, async (req, res) => {
+app.put('/api/savings/investments/:id/status', checkAuth, checkPaymentClerk, async (req, res) => {
   const { status, profit, challenges } = req.body;
   const netProfit = (profit !== undefined && profit !== null && !isNaN(profit)) ? parseFloat(profit) : 0;
   if (status === 'completed') {

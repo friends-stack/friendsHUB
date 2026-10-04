@@ -5,7 +5,7 @@ import {
   Users, History as HistoryIcon, LayoutDashboard, 
   Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
   Calendar, Clock, Calculator, ArrowLeft, FileText,
-  Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid
+  Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -63,9 +63,17 @@ const SavingsTracker = ({ user }) => {
   // Superadmin authorization strictly bound to ermiasgesgis@gmail.com
   const SUPER_ADMIN_EMAIL = 'ermiasgesgis@gmail.com';
   const isSuperAdmin = user?.role === 'super_admin' && (user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
-  const isClerk = user?.id === config.clerk_id;
+  const isClerk = Boolean((config.clerk_id && user?.id && Number(user.id) === Number(config.clerk_id)) || user?.role === 'clerk');
   const isPaymentManager = isClerk || isSuperAdmin;
   const isMemberManager = isSuperAdmin;
+  const canTrackInvestments = isSuperAdmin || isClerk;
+
+  // 3-Step Delete Confirmation State for Clerk / Admin
+  const [deleteModalState, setDeleteModalState] = useState({
+    isOpen: false,
+    step: 1, // 1, 2, or 3
+    transaction: null
+  });
 
   // Settings dashboard is only accessible to superadmin ermiasgesgis@gmail.com
   useEffect(() => {
@@ -983,7 +991,18 @@ const SavingsTracker = ({ user }) => {
                   {processedMembers.map((m, i) => <MemberListItem key={m.id} member={m} index={i} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
                 </Section>
                 <Section title="Recent Payments" onAction={() => setActiveView('history')} actionLabel="Full history →">
-                  {history.slice(0, 6).map((h, i) => <TransactionItem key={h.id} transaction={h} showBorder={i !== 0} formatCurrency={formatCurrency} systemUsers={systemUsers} members={members} />)}
+                  {history.slice(0, 6).map((h, i) => (
+                    <TransactionItem 
+                      key={h.id} 
+                      transaction={h} 
+                      showBorder={i !== 0} 
+                      formatCurrency={formatCurrency} 
+                      systemUsers={systemUsers} 
+                      members={members} 
+                      canDelete={isPaymentManager}
+                      onDelete={(tx) => setDeleteModalState({ isOpen: true, step: 1, transaction: tx })}
+                    />
+                  ))}
                 </Section>
               </div>
             </motion.div>
@@ -993,7 +1012,7 @@ const SavingsTracker = ({ user }) => {
             <motion.div key="members" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
               <h1 style={{ fontSize:'2rem', fontWeight: 700, fontFamily:'inherit' }}>Members</h1>
               {processedMembers.map(m => <MemberCard key={m.id} member={m} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
-              {isMemberManager && <FloatingAddButton onClick={() => handleOpenCashEntry('Cash In')} />}
+              {(isPaymentManager || isMemberManager) && <FloatingAddButton onClick={() => handleOpenCashEntry('Cash In')} />}
             </motion.div>
           )}
 
@@ -1203,6 +1222,8 @@ const SavingsTracker = ({ user }) => {
                           formatCurrency={formatCurrency} 
                           systemUsers={systemUsers} 
                           members={members} 
+                          canDelete={isPaymentManager}
+                          onDelete={(tx) => setDeleteModalState({ isOpen: true, step: 1, transaction: tx })}
                         />
                       ))}
                     </div>
@@ -1261,7 +1282,21 @@ const SavingsTracker = ({ user }) => {
 
 
 
-                <Section title={`Transactions (${filtered.length})`}>{filtered.map((h, i) => <TransactionItem key={h.id} transaction={h} full showBorder={i !== 0} formatCurrency={formatCurrency} systemUsers={systemUsers} members={members} />)}</Section>
+                <Section title={`Transactions (${filtered.length})`}>
+                  {filtered.map((h, i) => (
+                    <TransactionItem 
+                      key={h.id} 
+                      transaction={h} 
+                      full 
+                      showBorder={i !== 0} 
+                      formatCurrency={formatCurrency} 
+                      systemUsers={systemUsers} 
+                      members={members} 
+                      canDelete={isPaymentManager}
+                      onDelete={(tx) => setDeleteModalState({ isOpen: true, step: 1, transaction: tx })}
+                    />
+                  ))}
+                </Section>
               </motion.div>
             );
           })()}
@@ -1370,7 +1405,7 @@ const SavingsTracker = ({ user }) => {
                 )}
               </div>
               
-              {isMemberManager && <FloatingAddButton onClick={() => setShowInvestmentModal(true)} />}
+              {canTrackInvestments && <FloatingAddButton onClick={() => setShowInvestmentModal(true)} />}
             </motion.div>
           )}
 
@@ -3246,6 +3281,355 @@ const SavingsTracker = ({ user }) => {
           </div>
         )}
 
+        {/* 3-Step Transaction Deletion Confirmation Modal */}
+        {deleteModalState.isOpen && deleteModalState.transaction && (() => {
+          const tx = deleteModalState.transaction;
+          const isPayment = tx.type === 'payment';
+          const member = members.find(m => m.id === tx.member_id);
+          const memberName = member ? member.name : 'Member';
+          const txTypeLabel = isPayment ? 'Cash In (Payment)' : 'Cash Out (Missed)';
+          const formattedAmt = formatCurrency(tx.amount);
+
+          return (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.78)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10002,
+              padding: '1rem',
+              overflowY: 'auto'
+            }}>
+              <motion.div
+                key={`delete-step-${deleteModalState.step}`}
+                initial={{ scale: 0.94, opacity: 0, y: 15 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                style={{
+                  background: 'white',
+                  width: '100%',
+                  maxWidth: '490px',
+                  borderRadius: '24px',
+                  overflow: 'hidden',
+                  boxShadow: '0 25px 50px -12px rgba(220, 38, 38, 0.35)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  margin: 'auto',
+                  border: '1.5px solid #FCA5A5'
+                }}
+              >
+                {/* Step Progress Header */}
+                <div style={{
+                  background: '#DC2626',
+                  color: 'white',
+                  padding: '1.25rem 1.5rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.3rem' }}>🗑️</span>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                        Delete {txTypeLabel}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setDeleteModalState({ isOpen: false, step: 1, transaction: null })}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        border: 'none',
+                        color: 'white',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        cursor: 'pointer',
+                        fontSize: '1.2rem',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {/* 3-Step Indicator Bar */}
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {[1, 2, 3].map(stepNum => (
+                      <div
+                        key={stepNum}
+                        style={{
+                          flex: 1,
+                          height: '6px',
+                          borderRadius: '3px',
+                          background: stepNum <= deleteModalState.step ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)',
+                          transition: 'background 0.3s ease'
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#FEE2E2', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>STEP {deleteModalState.step} OF 3</span>
+                    <span>
+                      {deleteModalState.step === 1 && '1. Verify Transaction'}
+                      {deleteModalState.step === 2 && '2. Financial Impact'}
+                      {deleteModalState.step === 3 && '3. Final Purge Authorization'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Modal Body Based on Step */}
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {deleteModalState.step === 1 && (
+                    <>
+                      <div style={{ background: '#FEF2F2', padding: '1rem', borderRadius: '16px', border: '1px solid #FECDD3' }}>
+                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#991B1B', lineHeight: 1.5 }}>
+                          Did you mistakenly or suddenly add this payment? Please review the recorded transaction details before proceeding.
+                        </p>
+                      </div>
+
+                      {/* Transaction Summary Card */}
+                      <div style={{ background: '#F8FAFC', padding: '1.2rem', borderRadius: '18px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>Friend / Member:</span>
+                          <strong style={{ fontSize: '1rem', color: '#0F172A' }}>{memberName}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>Type:</span>
+                          <span style={{
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '8px',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                            background: isPayment ? '#DCFCE7' : '#FEE2E2',
+                            color: isPayment ? '#15803D' : '#B91C1C'
+                          }}>
+                            {txTypeLabel}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>Amount:</span>
+                          <strong style={{ fontSize: '1.2rem', color: isPayment ? '#16A34A' : '#DC2626' }}>
+                            {isPayment ? '+' : '-'}{formattedAmt}
+                          </strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>Date Recorded:</span>
+                          <span style={{ fontSize: '0.85rem', color: '#334155' }}>
+                            {new Date(tx.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        {tx.notes && (
+                          <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '0.5rem', fontSize: '0.85rem', color: '#475569' }}>
+                            📝 <strong>Notes:</strong> {tx.notes}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalState({ isOpen: false, step: 1, transaction: null })}
+                          style={{
+                            padding: '0.9rem',
+                            borderRadius: '14px',
+                            border: '1.5px solid #CBD5E1',
+                            background: 'white',
+                            color: '#475569',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalState(prev => ({ ...prev, step: 2 }))}
+                          style={{
+                            padding: '0.9rem',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: '#DC2626',
+                            color: 'white',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)'
+                          }}
+                        >
+                          Step 2: Check Impact →
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {deleteModalState.step === 2 && (
+                    <>
+                      <div style={{ background: '#FFFBEB', padding: '1.1rem', borderRadius: '16px', border: '1.5px solid #FDE68A' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800, color: '#B45309', marginBottom: '0.4rem', fontSize: '0.95rem' }}>
+                          <span>🚨</span> Financial Ledger Impact Notice
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#92400E', lineHeight: 1.5 }}>
+                          Deleting this record will immediately reverse the ledger calculations across the entire system.
+                        </p>
+                      </div>
+
+                      {/* Impact Breakdown */}
+                      <div style={{ background: '#F8FAFC', padding: '1.2rem', borderRadius: '18px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+                          Automatic Ledger Adjustments:
+                        </div>
+                        {isPayment ? (
+                          <>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.88rem', color: '#991B1B' }}>
+                              <span>🔻</span>
+                              <div>
+                                <strong>Deduct {formattedAmt} from Group Remaining Money:</strong>
+                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Total savings pool will decrease by {formattedAmt}.</div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.88rem', color: '#991B1B' }}>
+                              <span>🔻</span>
+                              <div>
+                                <strong>Deduct {formattedAmt} from {memberName}'s Saved Total:</strong>
+                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>{memberName}'s verified paid balance will decrease by {formattedAmt}.</div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.88rem', color: '#D97706' }}>
+                              <span>🔺</span>
+                              <div>
+                                <strong>Increase {memberName}'s Missed Debt:</strong>
+                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>{memberName} will now owe {formattedAmt} more in missed contributions.</div>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.88rem', color: '#15803D' }}>
+                            <span>✅</span>
+                            <div>
+                              <strong>Clear Missed Debt of {formattedAmt}:</strong>
+                              <div style={{ fontSize: '0.8rem', color: '#64748B' }}>{memberName}'s outstanding missed debt will decrease by {formattedAmt}.</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalState(prev => ({ ...prev, step: 1 }))}
+                          style={{
+                            padding: '0.9rem',
+                            borderRadius: '14px',
+                            border: '1.5px solid #CBD5E1',
+                            background: 'white',
+                            color: '#475569',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ← Back to Step 1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalState(prev => ({ ...prev, step: 3 }))}
+                          style={{
+                            padding: '0.9rem',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: '#B91C1C',
+                            color: 'white',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(185, 28, 28, 0.35)'
+                          }}
+                        >
+                          Step 3: Final Step →
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {deleteModalState.step === 3 && (
+                    <>
+                      <div style={{ background: '#7F1D1D', color: 'white', padding: '1.25rem', borderRadius: '18px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ fontSize: '2rem' }}>⚠️</div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, letterSpacing: '0.5px' }}>
+                          FINAL IRREVERSIBLE CONFIRMATION
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#FECDD3', lineHeight: 1.5 }}>
+                          This is the 3rd and final step. Once deleted, this {txTypeLabel} of <strong>{formattedAmt}</strong> for <strong>{memberName}</strong> will be permanently purged.
+                        </p>
+                      </div>
+
+                      <div style={{ background: '#FEF2F2', padding: '1rem', borderRadius: '16px', border: '1px dashed #EF4444', textAlign: 'center', fontSize: '0.85rem', color: '#991B1B', fontWeight: 700 }}>
+                        🔒 Are you 100% sure you want to permanently delete this transaction?
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalState(prev => ({ ...prev, step: 2 }))}
+                          style={{
+                            padding: '0.95rem',
+                            borderRadius: '14px',
+                            border: '1.5px solid #CBD5E1',
+                            background: 'white',
+                            color: '#475569',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ← Back to Step 2
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const token = localStorage.getItem('token');
+                              await axios.delete(`${API_BASE}/api/savings/transactions/${tx.id}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                              });
+                              setDeleteModalState({ isOpen: false, step: 1, transaction: null });
+                              await fetchAllData();
+                              showSuccess(`Transaction Deleted Successfully! 🎉\n\nThe ${txTypeLabel} of ${formattedAmt} for ${memberName} was permanently removed, and all financial totals and member balances were updated.`);
+                            } catch (err) {
+                              showToast(err.response?.data?.error || 'Error deleting transaction');
+                            }
+                          }}
+                          style={{
+                            padding: '0.95rem',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: '#991B1B',
+                            color: 'white',
+                            fontWeight: 900,
+                            fontSize: '0.95rem',
+                            cursor: 'pointer',
+                            boxShadow: '0 6px 16px rgba(153, 27, 27, 0.45)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem'
+                          }}
+                        >
+                          <span>🗑️</span> Confirm & Delete Now
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+
         {/* Toast Notification */}
         {toastMessage && (
           <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', background: '#0F172A', color: 'white', padding: '0.9rem 1.5rem', borderRadius: '16px', zIndex: 10002, fontWeight: 700, boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -3391,7 +3775,7 @@ const MemberCard = ({ member, onClick, formatCurrency }) => {
     </div>
   );
 };
-const TransactionItem = ({ transaction, full, showBorder, formatCurrency, systemUsers = [], members = [] }) => {
+const TransactionItem = ({ transaction, full, showBorder, formatCurrency, systemUsers = [], members = [], canDelete = false, onDelete }) => {
   const isPayment = transaction.type === 'payment';
   const member = members.find(m => m.id === transaction.member_id);
   const memberName = member ? member.name : 'Unknown Member';
@@ -3408,11 +3792,11 @@ const TransactionItem = ({ transaction, full, showBorder, formatCurrency, system
 
   return (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding: '1.25rem 0', borderTop: showBorder ? '1px solid #F3F4F6' : 'none' }}>
-      <div style={{ display:'flex', gap:'1rem', alignItems:'center' }}>
-        <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: bgColor, color: textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 700 }}>
+      <div style={{ display:'flex', gap:'1rem', alignItems:'center', flex: 1, minWidth: 0 }}>
+        <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: bgColor, color: textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 700, flexShrink: 0 }}>
           {icon}
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827' }}>{title}</div>
           <div style={{ fontSize: '0.85rem', color: '#6B7280', margin: '0.15rem 0' }}>
             {isPayment ? 'payer' : 'member'} <span style={{ fontWeight: 700, color: '#374151' }}>{memberName}</span>
@@ -3431,7 +3815,7 @@ const TransactionItem = ({ transaction, full, showBorder, formatCurrency, system
               📝 {transaction.notes}
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.3rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
             <Badge label={badgeLabel} type={badgeType} size="small" />
             <div style={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 500 }}>
               {new Date(transaction.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} • signed by {clerkName || (transaction.type === 'payment' ? 'Admin' : 'System')}
@@ -3439,8 +3823,43 @@ const TransactionItem = ({ transaction, full, showBorder, formatCurrency, system
           </div>
         </div>
       </div>
-      <div style={{ fontWeight: 700, fontSize: '1.2rem', color: textColor, letterSpacing: '-0.02em' }}>
-        {isPayment ? '+' : '-'}{formatCurrency(transaction.amount)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexShrink: 0, marginLeft: '0.75rem' }}>
+        <div style={{ fontWeight: 700, fontSize: '1.2rem', color: textColor, letterSpacing: '-0.02em', textAlign: 'right' }}>
+          {isPayment ? '+' : '-'}{formatCurrency(transaction.amount)}
+        </div>
+        {canDelete && onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(transaction);
+            }}
+            title="Delete this transaction (3-step confirmation)"
+            style={{
+              background: '#FEF2F2',
+              border: '1px solid #FECDD3',
+              color: '#DC2626',
+              borderRadius: '10px',
+              padding: '0.5rem 0.6rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              boxShadow: '0 1px 3px rgba(220, 38, 38, 0.1)'
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.background = '#FEE2E2';
+              e.currentTarget.style.borderColor = '#FCA5A5';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.background = '#FEF2F2';
+              e.currentTarget.style.borderColor = '#FECDD3';
+            }}
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
     </div>
   );
