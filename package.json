@@ -7,6 +7,9 @@
     "start": "node server/index.js",
     "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
   },
+  "dependencies": {
+    "better-sqlite3": "^13.0.1"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC"
