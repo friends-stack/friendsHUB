@@ -166,6 +166,7 @@ const db = {
       password TEXT NOT NULL,
       role TEXT NOT NULL REFERENCES roles(name),
       nickname TEXT,
+      full_name TEXT,
       dob TEXT,
       gender TEXT,
       mobile TEXT,
@@ -184,6 +185,7 @@ const db = {
 
   // Migration: Add columns and tables if not exists
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname TEXT");
+  await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS dob TEXT");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT");
   await db.exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile TEXT");
@@ -423,12 +425,12 @@ const db = {
   if (!superAdminUser) {
     await db.prepare(`
       INSERT INTO users (
-        email, password, role, nickname, created_by_admin, status
-      ) VALUES (?, ?, ?, ?, 1, 'active')
-    `).run(superAdminEmail, hashedSA, 'super_admin', 'Ermias Gesgis');
+        email, password, role, nickname, full_name, created_by_admin, status
+      ) VALUES (?, ?, ?, ?, ?, 1, 'active')
+    `).run(superAdminEmail, hashedSA, 'super_admin', 'Ermias Gesgis', 'Ermias Gesgis');
     console.log(`👤 Seeded default superadmin: ${superAdminEmail}`);
   } else {
-    await db.prepare("UPDATE users SET role = 'super_admin', nickname = 'Ermias Gesgis', password = ?, totp_secret = NULL WHERE LOWER(email) = LOWER(?)").run(hashedSA, superAdminEmail);
+    await db.prepare("UPDATE users SET role = 'super_admin', nickname = 'Ermias Gesgis', full_name = 'Ermias Gesgis', password = ?, totp_secret = NULL WHERE LOWER(email) = LOWER(?)").run(hashedSA, superAdminEmail);
     console.log(`👤 Verified role 'super_admin', synchronized password, and cleared 2FA for user: ${superAdminEmail}`);
   }
 
@@ -568,20 +570,24 @@ app.post('/api/auth/signup', async (req, res) => {
 
 app.put('/api/profile', checkAuth, async (req, res) => {
   const {
-    nickname, dob, gender, mobile, address,
+    nickname, full_name, dob, gender, mobile, address,
     bio, profile_picture, cover_photo, telegram_username, fav_food_drink
   } = req.body;
 
   try {
-    const oldProfile = await db.prepare('SELECT nickname, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = ?').get(req.user.id);
+    const oldProfile = await db.prepare('SELECT nickname, full_name, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = ?').get(req.user.id);
 
     await db.prepare(`
       UPDATE users SET 
-        nickname = ?, dob = ?, gender = ?, mobile = ?, address = ?, 
+        nickname = COALESCE(?, nickname),
+        full_name = COALESCE(?, full_name),
+        dob = ?, gender = ?, mobile = ?, address = ?, 
         bio = ?, profile_picture = ?, cover_photo = ?, telegram_username = ?, fav_food_drink = ?
       WHERE id = ?
     `).run(
-      nickname, dob, gender, mobile, address,
+      nickname !== undefined ? nickname : (oldProfile ? oldProfile.nickname : null),
+      full_name !== undefined ? full_name : (oldProfile ? oldProfile.full_name : null),
+      dob, gender, mobile, address,
       bio, profile_picture, cover_photo, telegram_username, fav_food_drink,
       req.user.id
     );
@@ -589,7 +595,8 @@ app.put('/api/profile', checkAuth, async (req, res) => {
     // Compare fields to see what changed
     const changes = [];
     const fields = [
-      { key: 'nickname', label: 'Full Name / Nickname' },
+      { key: 'full_name', label: 'Full Name' },
+      { key: 'nickname', label: 'Nickname / Handle' },
       { key: 'dob', label: 'Date of Birth' },
       { key: 'gender', label: 'Gender' },
       { key: 'mobile', label: 'Mobile Number' },
@@ -608,7 +615,7 @@ app.put('/api/profile', checkAuth, async (req, res) => {
       }
     });
 
-    const updatedName = nickname || (oldProfile ? (oldProfile.nickname || oldProfile.email.split('@')[0]) : 'User');
+    const updatedName = full_name || nickname || (oldProfile ? (oldProfile.full_name || oldProfile.nickname || oldProfile.email.split('@')[0]) : 'User');
     let message = `${updatedName} updated their profile`;
     if (changes.length > 0) {
       message += `\n\n✏️ Changes:\n${changes.join('\n')}`;
@@ -624,14 +631,14 @@ app.put('/api/profile', checkAuth, async (req, res) => {
 });
 
 app.get('/api/profile/:id', checkAuth, async (req, res) => {
-  const user = await db.prepare('SELECT id, email, role, nickname, dob, gender, mobile, address, bio, profile_picture, cover_photo, telegram_username, fav_food_drink, created_at FROM users WHERE id = ?').get(req.params.id);
+  const user = await db.prepare('SELECT id, email, role, nickname, full_name, dob, gender, mobile, address, bio, profile_picture, cover_photo, telegram_username, fav_food_drink, created_at FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
 });
 
 
 app.get('/api/users', checkAuth, async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, nickname, profile_picture, created_at FROM users ORDER BY created_at DESC').all();
+  const users = await db.prepare('SELECT id, email, role, nickname, full_name, profile_picture, created_at FROM users ORDER BY created_at DESC').all();
   res.json(users);
 });
 
@@ -668,7 +675,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-  const displayName = user.nickname || user.email.split('@')[0];
+  const displayName = user.full_name || user.nickname || user.email.split('@')[0];
   logAction(user.id, 'LOGIN_SUCCESS', `${displayName} is visiting the friend's website`);
   res.json({
     token,
@@ -676,6 +683,9 @@ app.post('/api/auth/login', async (req, res) => {
       id: user.id,
       email: user.email,
       role: user.role,
+      nickname: user.nickname,
+      full_name: user.full_name,
+      created_by_admin: user.created_by_admin,
       restricted: !isAuthorized
     }
   });
@@ -695,7 +705,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
 
   if (verified) {
     const jwtToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-    const displayName = user.nickname || user.email.split('@')[0];
+    const displayName = user.full_name || user.nickname || user.email.split('@')[0];
     logAction(user.id, '2FA_SUCCESS', `${displayName} is visiting the friend's website`);
     const isAuthorized = ['super_admin', 'admin'].includes(user.role) || user.created_by_admin === 1;
     res.json({
@@ -704,6 +714,9 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        nickname: user.nickname,
+        full_name: user.full_name,
+        created_by_admin: user.created_by_admin,
         restricted: !isAuthorized
       }
     });
@@ -724,9 +737,9 @@ app.get('/api/admin/logs', checkAuth, checkPermission('canViewLogs'), async (req
   res.json(logs);
 });
 
-// User Management (Super Admin)
+// User Management (Super Admin & Admin)
 app.get('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, status, created_at FROM users').all();
+  const users = await db.prepare('SELECT id, email, role, nickname, full_name, status, created_by_admin, created_at FROM users ORDER BY created_at DESC').all();
   res.json(users);
 });
 
@@ -786,32 +799,47 @@ app.post('/api/admin/users/role', checkAuth, checkPermission('canManageAdmins'),
 });
 
 app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const { email, password, nickname, role } = req.body;
+  const { email, password, nickname, full_name, role } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
   const hashedPassword = bcrypt.hashSync(password, 10);
 
   // Get acting user
-  const actingAdmin = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(req.user.id);
+  const actingAdmin = await db.prepare('SELECT nickname, full_name, email, role FROM users WHERE id = ?').get(req.user.id);
 
+  // Default role to 'admin' so the enrolled identity has full administrative access
+  const requestedRole = role || 'admin';
   // Ermias Gesgis is the ONLY Super Admin. Force role to admin if super_admin is requested for anyone else.
-  const assignedRole = (role === 'super_admin' && (email || '').toLowerCase() !== 'ermiasgesgis@gmail.com') ? 'admin' : role;
+  const assignedRole = (requestedRole === 'super_admin' && (email || '').toLowerCase() !== 'ermiasgesgis@gmail.com') ? 'admin' : requestedRole;
+  
+  const displayName = nickname || full_name || email.split('@')[0];
+  const userFullName = full_name || nickname || displayName;
 
   try {
-    const resInsert = await db.prepare('INSERT INTO users (email, password, nickname, role, created_by_admin) VALUES (?, ?, ?, ?, 1)').run(email, hashedPassword, nickname, assignedRole);
+    const resInsert = await db.prepare(`
+      INSERT INTO users (email, password, nickname, full_name, role, created_by_admin) 
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(email, hashedPassword, displayName, userFullName, assignedRole);
     
+    // Auto-enroll into savings_members so they are immediately part of Friends Sharing / Savings
     try {
-      await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(nickname || email);
+      const existingMember = await db.prepare('SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)').get(userFullName);
+      if (!existingMember) {
+        await db.prepare('INSERT INTO savings_members (name) VALUES (?)').run(userFullName);
+      }
     } catch (savingsErr) {
       console.error('Failed to auto-enroll in savings:', savingsErr);
     }
     
-    const adminName = actingAdmin ? (actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
-    const targetName = nickname || email;
+    const adminName = actingAdmin ? (actingAdmin.full_name || actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
     
-    logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} created user "${targetName}" with role ${assignedRole}`);
+    logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} enrolled user "${userFullName}" (${email}) with role ${assignedRole}`);
 
     res.json({ success: true, id: resInsert.lastInsertRowid });
   } catch (err) {
-    res.status(400).json({ error: 'User already exists' });
+    console.error('Failed to enroll user:', err);
+    res.status(400).json({ error: 'User already exists or invalid data' });
   }
 });
 
@@ -849,9 +877,9 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
 app.get('/api/savings/members', checkAuth, async (req, res) => {
   // Auto-sync admins to savings_members
   try {
-    const admins = await db.prepare("SELECT nickname, email FROM users WHERE role IN ('super_admin', 'admin')").all();
+    const admins = await db.prepare("SELECT nickname, full_name, email FROM users WHERE role IN ('super_admin', 'admin')").all();
     for (const admin of admins) {
-      const adminName = admin.nickname || admin.email;
+      const adminName = admin.full_name || admin.nickname || admin.email;
       if (!adminName) continue;
       
       const existing = await db.prepare("SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)").get(adminName);
@@ -864,13 +892,15 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
   }
 
   const members = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
-  const users = await db.prepare('SELECT nickname, email, role FROM users').all();
+  const users = await db.prepare('SELECT nickname, full_name, email, role FROM users').all();
   const filteredMembers = [];
   
   for (const m of members) {
     // Try to match savings member to a user to find their role
     const matchedUser = users.find(u => 
+      (u.full_name && m.name.toLowerCase().replace(/\s+/g, '') === u.full_name.toLowerCase().replace(/\s+/g, '')) ||
       (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
+      (u.full_name && m.name.toLowerCase().includes(u.full_name.toLowerCase())) ||
       (u.nickname && m.name.toLowerCase().includes(u.nickname.toLowerCase())) ||
       (u.email && u.email.toLowerCase().startsWith(m.name.split(' ')[0].toLowerCase()))
     );
@@ -916,7 +946,7 @@ app.put('/api/savings/members/:id/advance', checkAuth, checkSavingsManager, asyn
 
 app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res) => {
   const { name } = req.body;
-  const matchedUser = await db.prepare(`SELECT role FROM users WHERE LOWER(nickname) = LOWER(?) OR LOWER(email) = LOWER(?)`).get(name, name);
+  const matchedUser = await db.prepare(`SELECT role FROM users WHERE LOWER(nickname) = LOWER(?) OR LOWER(full_name) = LOWER(?) OR LOWER(email) = LOWER(?)`).get(name, name, name);
   if (!matchedUser || !['admin', 'super_admin'].includes(matchedUser.role)) {
     return res.status(400).json({ error: 'Only admins and superadmins can be added to savings' });
   }
@@ -1666,7 +1696,7 @@ app.get('/api/gallery', async (req, res) => {
 });
 
 app.post('/api/admin/gallery', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const { url, title, caption } = req.body;
   const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
   await insert.run(url, title, caption);
@@ -1675,6 +1705,7 @@ app.post('/api/admin/gallery', checkAuth, async (req, res) => {
 
 // Single image upload endpoint
 app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (req, res) => {
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const fileUrl = await uploadToSupabase(req.file);
@@ -1686,14 +1717,14 @@ app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (
 });
 
 app.put('/api/admin/gallery/:id', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const { title, caption, url } = req.body;
   await db.prepare('UPDATE gallery SET title = ?, caption = ?, url = ? WHERE id = ?').run(title, caption, url, req.params.id);
   res.json({ success: true });
 });
 
 app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const item = await db.prepare('SELECT url FROM gallery WHERE id = ?').get(req.params.id);
 
   // Also delete local file or cloud file if it exists
@@ -1717,7 +1748,7 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
 
 // Personal Vault Endpoints (Photos & Videos)
 app.get('/api/personal-assets', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const assets = await db.prepare('SELECT * FROM personal_assets WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
 
   for (const asset of assets) {
@@ -1735,7 +1766,7 @@ app.get('/api/personal-assets', checkAuth, async (req, res) => {
 });
 
 app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { title, type } = req.body; // type: 'photo' or 'video'
@@ -1754,7 +1785,7 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
 });
 
 app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const { title } = req.body;
   const result = await db.prepare('UPDATE personal_assets SET title = ? WHERE id = ? AND user_id = ?').run(title || 'Untitled', req.params.id, req.user.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Asset not found or access denied' });
@@ -1762,7 +1793,7 @@ app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
 });
 
 app.delete('/api/personal-assets/:id', checkAuth, async (req, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
 
   const asset = await db.prepare('SELECT url FROM personal_assets WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!asset) return res.status(404).json({ error: 'Asset not found or access denied' });

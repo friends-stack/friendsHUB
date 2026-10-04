@@ -134,7 +134,7 @@ const PrivateDashboard = ({ user, setUser }) => {
     socket.connect();
 
     fetchMessages();
-    if (user.role === 'super_admin' || user.role === 'admin') {
+    if (user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) {
       fetchUsers();
       fetchLogs();
       fetchSettings();
@@ -1238,7 +1238,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                 <TabButton id="messages" icon={MessageSquare} label="Friends Chat" onClick={() => setMobileMenuOpen(false)} />
                 <TabButton id="profile" icon={User} label="My Profile" onClick={() => setMobileMenuOpen(false)} />
 
-                {(user.role === 'super_admin' || user.role === 'admin') && (
+                {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
                   <>
                     <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
                     <TabButton id="users" icon={Users} label="Authority Matrix" onClick={() => setMobileMenuOpen(false)} />
@@ -1317,7 +1317,7 @@ const PrivateDashboard = ({ user, setUser }) => {
           <TabButton id="profile" icon={User} label="My Profile" />
 
           
-          {(user.role === 'super_admin' || user.role === 'admin') && (
+          {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
             <>
               <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
               <TabButton id="users" icon={Users} label="Authority Matrix" />
@@ -2044,9 +2044,29 @@ const PrivateDashboard = ({ user, setUser }) => {
             {activeTab === 'users' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
-                  <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <UserPlus size={20} color="var(--accent)" /> Enroll New Identity
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.25rem', fontWeight: 800 }}>
+                      <UserPlus size={22} color="var(--accent)" /> Enroll New Identity
+                    </h3>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: 700, 
+                      padding: '0.35rem 0.85rem', 
+                      borderRadius: '100px', 
+                      background: 'rgba(22, 163, 74, 0.1)', 
+                      color: '#16a34a',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      ⭐ Granted Full Dashboard & Admin Permissions
+                    </span>
+                  </div>
+
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+                    Enrolled identities receive full administrative permissions across all private areas: <strong>Private Photos & Videos (Vault)</strong>, <strong>Gallery Curator</strong>, <strong>My Profile</strong>, <strong>Friends Chat</strong>, and <strong>Friends Sharing / Savings</strong>. They can sign in directly with their email and password from the public portal via the secure triple-tap search gateway.
+                  </p>
+
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     const formData = new FormData(e.target);
@@ -2057,22 +2077,49 @@ const PrivateDashboard = ({ user, setUser }) => {
                       });
                       e.target.reset();
                       fetchUsers();
-                      showToast('New user enrolled successfully');
+                      showToast('New identity enrolled with full admin permissions!');
                     } catch (err) { showToast(err.response?.data?.error || 'System rejection'); }
-                  }} className="enroll-form">
-                    <input name="email" placeholder="Email Address" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
-                    <input name="nickname" placeholder="Full Name" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
-                    <input name="password" type="password" placeholder="Secure Password" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
-                    <select name="role" className="input-field" style={{ width: '150px', marginBottom: 0 }} defaultValue="authorized">
-                      {user.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
-                      {user.role === 'super_admin' && <option value="admin">Admin</option>}
-                      <option value="authorized">Authorized</option>
-                      <option value="user">Guest</option>
-                    </select>
-                    <button type="submit" className="btn-primary">Enroll User</button>
+                  }} className="enroll-form" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Name / Nickname</label>
+                      <input name="nickname" placeholder="e.g. Ermi or Alex" className="input-field" style={{ marginBottom: 0, width: '100%' }} required />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Full Name</label>
+                      <input name="full_name" placeholder="e.g. Ermias Gesgis" className="input-field" style={{ marginBottom: 0, width: '100%' }} required />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Email Address</label>
+                      <input name="email" type="email" placeholder="name@domain.com" className="input-field" style={{ marginBottom: 0, width: '100%' }} required />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Secured Password</label>
+                      <input name="password" type="password" placeholder="••••••••••••" className="input-field" style={{ marginBottom: 0, width: '100%' }} required />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Authority Role</label>
+                      <select name="role" className="input-field" style={{ marginBottom: 0, width: '100%' }} defaultValue="admin">
+                        <option value="admin">Admin (Full Access)</option>
+                        {user.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
+                        <option value="authorized">Authorized</option>
+                        <option value="user">Guest / User</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <button type="submit" className="btn-primary" style={{ width: '100%', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                        <UserPlus size={16} /> Enroll Identity
+                      </button>
+                    </div>
                   </form>
+
                   {/* Subtle note about Super Admin role security rules */}
-                  <div style={{ padding: '0.75rem 2rem', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', background: 'rgba(15, 23, 42, 0.01)' }}>
+                  <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
                     🛡️ <strong>Security Rule:</strong> Only the active Super Admin can designate others, modify their own role, or manage superuser privileges.
                   </div>
                 </div>
@@ -2092,10 +2139,16 @@ const PrivateDashboard = ({ user, setUser }) => {
                         {users.map((u) => (
                           <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
                             <td style={{ padding: '1.25rem 2rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ fontWeight: 600 }}>{u.nickname || u.email.split('@')[0]}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <div style={{ fontWeight: 600 }}>{u.full_name || u.nickname || u.email.split('@')[0]}</div>
+                                {u.nickname && u.full_name && u.nickname !== u.full_name && (
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', background: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>@{u.nickname}</span>
+                                )}
                                 {u.role === 'super_admin' && (
                                   <span style={{ background: 'linear-gradient(135deg, #0575e6, #00f2fe)', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Owner</span>
+                                )}
+                                {u.role === 'admin' && (
+                                  <span style={{ background: 'rgba(22, 163, 74, 0.1)', color: '#16a34a', fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '4px', textTransform: 'uppercase' }}>Admin</span>
                                 )}
                               </div>
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email}</div>
