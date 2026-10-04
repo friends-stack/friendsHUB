@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, History as HistoryIcon, LayoutDashboard, 
   Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
-  Calendar, Clock, Calculator, ArrowLeft, FileText
+  Calendar, Clock, Calculator, ArrowLeft, FileText,
+  Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
@@ -43,6 +44,21 @@ const SavingsTracker = ({ user }) => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [systemUsers, setSystemUsers] = useState(cachedData?.systemUsers || []);
   const [investments, setInvestments] = useState(cachedData?.investments || []);
+
+  // Default to the logged-in user's member record when available
+  useEffect(() => {
+    if (members.length > 0 && user && !selectedMember) {
+      const myMember = members.find(m => 
+        (user.email && m.email && m.email.toLowerCase() === user.email.toLowerCase()) ||
+        (user.nickname && m.name && m.name.toLowerCase() === user.nickname.toLowerCase()) ||
+        (m.name && m.name.toLowerCase().includes('ermias'))
+      );
+      if (myMember) {
+        setSelectedMember(myMember);
+        setActiveView('member-detail');
+      }
+    }
+  }, [members, user, selectedMember]);
 
   // Superadmin authorization strictly bound to ermiasgesgis@gmail.com
   const SUPER_ADMIN_EMAIL = 'ermiasgesgis@gmail.com';
@@ -838,32 +854,32 @@ const SavingsTracker = ({ user }) => {
   const debtMembers = processedMembers.filter(m => m.currentDebt > 0);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem', background:'#F9FAFB', borderRadius:'24px', minHeight:'80vh', color:'#111827', fontFamily:"'Inter', sans-serif", padding:'1.5rem' }}>
+    <div className="savings-outer-container" style={{ display:'flex', flexDirection:'column', gap:'1.25rem', background:'#F9FAFB', borderRadius:'24px', minHeight:'80vh', color:'#111827', fontFamily:"'Inter', sans-serif", padding:'1.5rem' }}>
       <style>{`
         @media (max-width: 768px) {
+          .savings-outer-container {
+            padding: 0.5rem 0.25rem 2rem 0.25rem !important;
+            background: transparent !important;
+          }
           .savings-nav {
-            justify-content: flex-start !important;
-            overflow-x: auto !important;
-            white-space: nowrap !important;
-            gap: 1rem !important;
-            padding: 0.75rem 1rem !important;
-            scrollbar-width: none !important;
-          }
-          .savings-nav::-webkit-scrollbar {
-            display: none !important;
-          }
-          .savings-nav > button {
-            flex: 0 0 auto !important;
+            justify-content: space-around !important;
+            gap: 0 !important;
+            padding: 0.5rem 0.25rem !important;
+            margin: 0 0 1rem 0 !important;
+            border-radius: 20px !important;
+            background: white !important;
+            border: 1px solid #E2E8F0 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03) !important;
           }
         }
       `}</style>
       
-      <nav className="savings-nav" style={{ position:'sticky', top:0, background:'rgba(255, 255, 255, 0.9)', backdropFilter:'blur(10px)', display:'flex', justifyContent:'space-around', padding:'0.75rem 0', borderBottom:'1px solid #E5E7EB', zIndex:100, margin: '-1.5rem -1.5rem 1.5rem -1.5rem', borderRadius: '24px 24px 0 0' }}>
-        <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" active={activeView} onClick={setActiveView} />
-        <NavItem id="investments" icon={Briefcase} label="Working" active={activeView} onClick={setActiveView} />
-        <NavItem id="members" icon={Users} label="Members" active={activeView} onClick={setActiveView} />
-        <NavItem id="history" icon={HistoryIcon} label="History" active={activeView} onClick={setActiveView} />
-        {isMemberManager && <NavItem id="settings" icon={RefreshCw} label="Settings" active={activeView} onClick={setActiveView} />}
+      <nav className="savings-nav" style={{ position:'sticky', top:0, background:'white', display:'flex', justifyContent:'space-around', alignItems: 'center', padding:'0.6rem 0.5rem', border:'1px solid #E2E8F0', zIndex:100, margin: '-1.5rem -1.5rem 1.5rem -1.5rem', borderRadius: '24px 24px 0 0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+        <NavItem id="dashboard" icon={LayoutGrid} label="Dashboard" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />
+        <NavItem id="investments" icon={Briefcase} label="Working" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />
+        <NavItem id="members" icon={Users} label="Members" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />
+        <NavItem id="history" icon={Clock} label="History" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />
+        {isMemberManager && <NavItem id="settings" icon={SettingsIcon} label="Settings" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />}
       </nav>
       <main style={{ flex:1 }}>
         <AnimatePresence mode="wait">
@@ -982,40 +998,217 @@ const SavingsTracker = ({ user }) => {
           )}
 
           {activeView === 'member-detail' && selectedMember && (() => {
-            const m = processedMembers.find(pm => pm.id === selectedMember.id);
-            const isOnTrack = m.currentDebt === 0;
+            const m = processedMembers.find(pm => pm.id === selectedMember.id) || selectedMember;
+            const isOnTrack = (m.currentDebt || 0) === 0;
+            const memberHistory = history.filter(h => h.member_id === m.id);
 
             return (
-              <motion.div key="detail" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
-                <button onClick={() => setActiveView('members')} style={{ alignSelf:'flex-start', padding:'0.6rem 1.25rem', borderRadius:'12px', background:'white', border:'1px solid #E5E7EB', fontWeight:600, cursor:'pointer' }}>← Back to members</button>
-                <div style={{ display:'flex', gap:'1.25rem', alignItems:'center' }}><Avatar name={m.name} size="72px" /><div><div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}><h2 style={{ margin:0, fontSize:'1.75rem', fontWeight: 700, fontFamily:'inherit' }}>{m.name}</h2><Badge label={isOnTrack ? 'On track' : 'In debt'} type={isOnTrack ? 'warning' : 'danger'} /></div><div style={{ color:'#6B7280', marginTop:'0.25rem' }}>Joined Since {new Date(m.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div></div></div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'1rem' }}>
+              <motion.div key="detail" initial={{ opacity:0, y: 8 }} animate={{ opacity:1, y: 0 }} style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+                
+                {/* Member Header Card with Soft Pastel Wave Gradient */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #e0f2fe 0%, #ecfdf5 100%)',
+                  borderRadius: '24px',
+                  padding: '1.25rem 1.25rem',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(226, 232, 240, 0.8)',
+                  boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.04)'
+                }}>
+                  <button 
+                    onClick={() => setActiveView('members')} 
+                    style={{ 
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding:'0.45rem 1rem', 
+                      borderRadius:'50px', 
+                      background:'white', 
+                      border:'1px solid #E2E8F0', 
+                      fontWeight:700, 
+                      fontSize: '0.8rem',
+                      color: '#1E293B',
+                      cursor:'pointer',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      marginBottom: '1rem'
+                    }}
+                  >
+                    ← Back to members
+                  </button>
+
+                  <div style={{ display:'flex', gap:'1rem', alignItems:'center', position: 'relative', zIndex: 1 }}>
+                    {/* Big circular blue avatar with initial */}
+                    <div style={{ 
+                      width: '64px', 
+                      height: '64px', 
+                      borderRadius: '50%', 
+                      background: '#2563EB', 
+                      color: 'white', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      fontWeight: 800, 
+                      fontSize: '1.75rem',
+                      boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                      flexShrink: 0
+                    }}>
+                      {m.name?.[0]?.toUpperCase()}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <h2 style={{ margin:0, fontSize:'1.4rem', fontWeight: 800, color: '#064E3B', lineHeight: 1.2, fontFamily:"'Outfit', 'Inter', sans-serif" }}>
+                        {m.name}
+                      </h2>
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:'0.4rem', background:'#FEF9C3', color:'#854D0E', padding:'0.15rem 0.65rem', borderRadius:'50px', fontSize:'0.75rem', fontWeight:700, width: 'fit-content' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#CA8A04' }} />
+                        {isOnTrack ? 'On track' : 'In debt'}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color:'#64748B', fontSize:'0.78rem', fontWeight: 500, marginTop: '0.1rem' }}>
+                        <Calendar size={13} color="#94A3B8" />
+                        Joined Since {new Date(m.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3 StatCards with Soft Circular Icons matching screenshot */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'0.65rem' }}>
                   <StatCard 
                     label="TOTAL PAID" 
                     value={formatCurrency(m.total_paid)} 
                     color="#16A34A" 
+                    icon={Wallet}
+                    iconBg="#DCFCE7"
                     subValue="Personal Contribution"
                   />
                   <StatCard 
                     label="TOTAL EXPECTED" 
                     value={isOnTrack ? "Fully Paid" : formatCurrency(m.currentDebt)}
-                    color={isOnTrack ? "#16A34A" : "#DC2626"}
+                    color={isOnTrack ? "#2563EB" : "#DC2626"}
+                    icon={BarChart3}
+                    iconBg="#DBEAFE"
                     subValue={isOnTrack ? "Up to date ✓" : `Current Debt (ETB ${weeklyRate}/wk)`}
                   />
                   <StatCard 
-                    label={m.isOverridden ? "STORED ADVANCE SAVINGS ✏️ (Overridden)" : (isSuperAdmin ? "STORED ADVANCE SAVINGS ✏️" : "STORED ADVANCE SAVINGS")} 
+                    label={m.isOverridden ? "STORED ADVANCE SAVINGS ✏️" : (isSuperAdmin ? "STORED ADVANCE SAVINGS ✏️" : "STORED ADVANCE SAVINGS")} 
                     value={formatCurrency(m.advanceBalance || 0)} 
-                    color="#0284C7" 
+                    color="#2563EB" 
+                    icon={Coins}
+                    iconBg="#F3E8FF"
                     subValue={
                       (m.advanceBalance || 0) > 0 
-                        ? `Covers ${m.advanceWeeks || Math.floor((m.advanceBalance || 0) / weeklyRate)} next Sat(s) 🗓️${isSuperAdmin ? ' (Click to edit)' : ''}` 
-                        : (isSuperAdmin ? "0 advance Saturdays (Click to edit)" : "0 advance Saturdays")
+                        ? `Covers ${m.advanceWeeks || Math.floor((m.advanceBalance || 0) / weeklyRate)} next Sat(s)${isSuperAdmin ? ' (Click to edit)' : ''}` 
+                        : (isSuperAdmin ? "0 advance Saturdays\n(Click to edit)" : "0 advance Saturdays")
                     } 
                     onClick={isSuperAdmin ? () => handleEditAdvanceBalance(m) : undefined}
                   />
                 </div>
-                {isPaymentManager && <div style={{ display:'flex', gap:'1rem' }}><ActionButton label="+ Add payment (Cash In)" color="#16A34A" onClick={() => handleOpenCashEntry('Cash In', m.id)} /><ActionButton label="Mark missed (Cash Out)" color="#DC2626" onClick={() => handleOpenCashEntry('Cash Out', m.id)} /></div>}
-                <Section title="Contribution History">{history.filter(h => h.member_id === m.id).map((h, i) => <TransactionItem key={h.id} transaction={h} full showBorder={i !== 0} formatCurrency={formatCurrency} systemUsers={systemUsers} members={members} />)}</Section>
+
+                {/* Action Buttons: Add payment (Cash In) & Mark missed (Cash Out) matching screenshot */}
+                {isPaymentManager && (
+                  <div style={{ display:'flex', gap:'0.65rem' }}>
+                    <div 
+                      onClick={() => handleOpenCashEntry('Cash In', m.id)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.85rem 1rem',
+                        background: '#ECFDF5',
+                        border: '1px solid #D1FAE5',
+                        borderRadius: '16px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(16, 185, 129, 0.05)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A', fontWeight: 800, fontSize: '1.1rem' }}>+</div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#065F46' }}>Add payment</div>
+                          <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 600 }}>(Cash In)</div>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="#059669" />
+                    </div>
+
+                    <div 
+                      onClick={() => handleOpenCashEntry('Cash Out', m.id)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.85rem 1rem',
+                        background: '#FEF2F2',
+                        border: '1px solid #FEE2E2',
+                        borderRadius: '16px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(239, 68, 68, 0.05)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626', fontWeight: 800, fontSize: '1.1rem' }}>−</div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#991B1B' }}>Mark missed</div>
+                          <div style={{ fontSize: '0.7rem', color: '#DC2626', fontWeight: 600 }}>(Cash Out)</div>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} color="#DC2626" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Contribution History Section matching screenshot */}
+                <div style={{ background:'white', padding:'1.5rem', borderRadius:'24px', border:'1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom:'1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Clock size={18} color="#1E293B" />
+                      <h3 style={{ margin:0, fontSize:'0.85rem', color:'#1E293B', fontWeight:800, textTransform:'uppercase', letterSpacing: '0.5px' }}>
+                        CONTRIBUTION HISTORY
+                      </h3>
+                    </div>
+                    {memberHistory.length > 0 && (
+                      <button 
+                        onClick={() => setActiveView('history')} 
+                        style={{ background:'none', border:'none', color:'#16A34A', fontWeight:700, fontSize: '0.85rem', cursor:'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      >
+                        View All <ChevronRight size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {memberHistory.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+                      <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: '#EFF6FF', color: '#3B82F6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                        <FileText size={28} />
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#1E293B', marginBottom: '0.35rem' }}>
+                        No contribution records yet
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748B', maxWidth: '280px', margin: '0 auto', lineHeight: 1.5 }}>
+                        Your payment and history will appear here once available.
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {memberHistory.map((h, i) => (
+                        <TransactionItem 
+                          key={h.id} 
+                          transaction={h} 
+                          full 
+                          showBorder={i !== 0} 
+                          formatCurrency={formatCurrency} 
+                          systemUsers={systemUsers} 
+                          members={members} 
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
               </motion.div>
             );
           })()}
@@ -3064,55 +3257,62 @@ const SavingsTracker = ({ user }) => {
 };
 
 // Sub-components
-const StatCard = ({ label, value, subValue, color, badge, bgGradient, borderColor, onClick }) => {
+const StatCard = ({ label, value, subValue, color, badge, bgGradient, borderColor, icon: Icon, iconBg, onClick }) => {
   const isLong = value?.toString().length > 13;
   return (
     <div 
       onClick={onClick} 
       style={{ 
         background: bgGradient || 'white', 
-        padding:'1.5rem', 
-        borderRadius:'24px', 
-        border:`1px solid ${borderColor || '#E5E7EB'}`, 
+        padding:'1.25rem 1rem', 
+        borderRadius:'20px', 
+        border:`1px solid ${borderColor || '#F1F5F9'}`, 
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        minHeight: '135px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        minHeight: '130px',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.03)',
         position: 'relative',
         overflow: 'hidden'
       }}
       onMouseOver={e => {
         if (onClick) {
-          e.currentTarget.style.transform = 'translateY(-4px)';
-          e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.08)';
+          e.currentTarget.style.transform = 'translateY(-3px)';
+          e.currentTarget.style.boxShadow = '0 10px 20px rgba(0, 0, 0, 0.06)';
         }
       }}
       onMouseOut={e => {
         if (onClick) {
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
+          e.currentTarget.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.03)';
         }
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'0.6rem' }}>
-        <div style={{ fontSize:'0.75rem', color: '#475569', fontWeight: 800, textTransform:'uppercase', letterSpacing: '0.05em' }}>
-          {label}
-        </div>
-        {badge && (
-          <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '100px', background: `${color}18`, color: color }}>
-            {badge}
-          </span>
+      <div>
+        {Icon && (
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: iconBg || `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: color, marginBottom: '0.6rem' }}>
+            <Icon size={18} />
+          </div>
         )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom:'0.4rem' }}>
+          <div style={{ fontSize:'0.7rem', color: '#64748B', fontWeight: 800, textTransform:'uppercase', letterSpacing: '0.04em' }}>
+            {label}
+          </div>
+          {badge && (
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '100px', background: `${color}18`, color: color }}>
+              {badge}
+            </span>
+          )}
+        </div>
       </div>
       <div>
-        <div style={{ fontSize: isLong ? '1.4rem' : '1.85rem', fontWeight: 800, color, lineHeight: 1.1, wordBreak: 'break-all', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+        <div style={{ fontSize: isLong ? '1.25rem' : '1.45rem', fontWeight: 800, color, lineHeight: 1.15, wordBreak: 'break-word', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
           {value}
         </div>
         {subValue && (
-          <div style={{ fontSize:'0.8rem', color:'#64748B', marginTop: '0.45rem', fontWeight: 600 }}>
+          <div style={{ fontSize:'0.72rem', color:'#64748B', marginTop: '0.35rem', fontWeight: 600, whiteSpace: 'pre-line' }}>
             {subValue}
           </div>
         )}
@@ -3120,7 +3320,18 @@ const StatCard = ({ label, value, subValue, color, badge, bgGradient, borderColo
     </div>
   );
 };
-const Section = ({ title, onAction, actionLabel, children }) => (<div style={{ background:'white', padding:'1.5rem', borderRadius:'24px', border:'1px solid #E5E7EB' }}><div style={{ display:'flex', justifyContent:'space-between', marginBottom:'1.5rem' }}><h3 style={{ margin:0, fontSize:'0.85rem', color:'#6B7280', fontWeight:700, fontFamily:'inherit', textTransform:'uppercase' }}>{title}</h3>{onAction && <button onClick={onAction} style={{ background:'none', border:'none', color:'#16A34A', fontWeight:700, cursor:'pointer' }}>{actionLabel}</button>}</div>{children}</div>);
+const Section = ({ title, onAction, actionLabel, icon: Icon, children }) => (
+  <div style={{ background:'white', padding:'1.5rem', borderRadius:'24px', border:'1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom:'1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {Icon && <Icon size={18} color="#1E293B" />}
+        <h3 style={{ margin:0, fontSize:'0.85rem', color:'#1E293B', fontWeight:800, fontFamily:'inherit', textTransform:'uppercase', letterSpacing: '0.5px' }}>{title}</h3>
+      </div>
+      {onAction && <button onClick={onAction} style={{ background:'none', border:'none', color:'#16A34A', fontWeight:700, fontSize: '0.85rem', cursor:'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>{actionLabel}</button>}
+    </div>
+    {children}
+  </div>
+);
 const MemberListItem = ({ member, index, onClick, formatCurrency }) => (<div onClick={onClick} style={{ display:'flex', justifyContent:'space-between', padding:'1rem 0', borderTop: index === 0 ? 'none' : '1px solid #F3F4F6', cursor:'pointer' }}><div style={{ display:'flex', gap:'1rem', alignItems:'center' }}><Avatar name={member.name} index={index} /><div><div style={{ fontWeight:700 }}>{member.name}</div><div style={{ fontSize:'0.85rem', color:'#6B7280' }}>paid {formatCurrency(member.total_paid)}</div></div></div><div style={{ fontWeight: 700, color: member.currentDebt === 0 ? '#F59E0B' : '#DC2626' }}>{member.currentDebt === 0 ? '+' : ''}{formatCurrency(member.genuineBalance)}</div></div>);
 const MemberCard = ({ member, onClick, formatCurrency }) => {
   const isAdvance = (member.advanceBalance || Math.max(0, member.genuineBalance || 0)) > 0;
@@ -3237,7 +3448,34 @@ const TransactionItem = ({ transaction, full, showBorder, formatCurrency, system
 const Avatar = ({ name, size="44px", fontSize="1rem", index=0 }) => (<div style={{ width:size, height:size, borderRadius:'50%', background:['#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#06B6D4'][index % 5], color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize }}>{name?.[0]}</div>);
 const Badge = ({ label, type, size }) => (<div style={{ padding: size==='small'?'0.1rem 0.5rem':'0.4rem 1rem', borderRadius:'100px', fontSize:'0.75rem', fontWeight:700, background:type==='success'?'#F0FDF4':type==='danger'?'#FEF2F2':type==='info'?'#EFF6FF':'#FFFBEB', color:type==='success'?'#16A34A':type==='danger'?'#DC2626':type==='info'?'#3B82F6':'#F59E0B' }}>{label}</div>);
 const FilterPill = ({ label, active, onClick }) => (<button onClick={onClick} style={{ padding:'0.6rem 1.25rem', borderRadius:'12px', background: active ? 'white' : '#F9FAFB', color: active ? '#16A34A' : '#6B7280', border:`1px solid ${active ? '#16A34A' : '#E5E7EB'}`, cursor:'pointer' }}>{label}</button>);
-const NavItem = ({ id, icon: Icon, label, active, onClick }) => (<button onClick={() => onClick(id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', background:'none', border:'none', color: active === id ? '#16A34A' : '#6B7280', cursor: 'pointer', transition: 'color 0.2s' }}><Icon size={24} /><span style={{ fontSize:'0.7rem', marginTop: '0.2rem', fontWeight: active === id ? 700 : 500 }}>{label}</span></button>);
+const NavItem = ({ id, icon: Icon, label, active, onClick }) => {
+  const isActive = active === id;
+  return (
+    <button 
+      onClick={() => onClick(id)} 
+      style={{ 
+        display:'flex', 
+        flexDirection:'column', 
+        alignItems:'center', 
+        background:'none', 
+        border:'none', 
+        color: isActive ? '#16A34A' : '#64748B', 
+        cursor: 'pointer', 
+        transition: 'color 0.2s',
+        padding: '0.4rem 0.6rem',
+        position: 'relative'
+      }}
+    >
+      <Icon size={22} color={isActive ? '#16A34A' : '#64748B'} />
+      <span style={{ fontSize:'0.72rem', marginTop: '0.25rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#16A34A' : '#64748B' }}>
+        {label}
+      </span>
+      {isActive && (
+        <div style={{ position: 'absolute', bottom: '-7px', left: '10%', right: '10%', height: '3px', background: '#16A34A', borderRadius: '3px 3px 0 0' }} />
+      )}
+    </button>
+  );
+};
 const ActionButton = ({ label, color, onClick }) => (<button onClick={onClick} style={{ flex:1, padding:'1rem', borderRadius:'12px', background:`${color}10`, color, border:`1px solid ${color}20`, fontWeight:700 }}>{label}</button>);
 const Modal = ({ title, children, onClose }) => (
   <div style={{ position:'fixed', inset:0, background:'rgba(17, 24, 39, 0.7)', backdropFilter: 'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: '1rem', overflowY: 'auto' }}>

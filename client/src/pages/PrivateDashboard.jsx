@@ -8,7 +8,8 @@ import {
   Send, Shield, ShieldCheck, LogOut, ChevronRight,
   Heart, Camera, User, Globe, Forward, MessageCircle, ThumbsUp, Download, ArrowLeft, Trash2,
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
-  MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu
+  MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
+  Home, LayoutGrid, Bell, ChevronDown
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
@@ -37,7 +38,8 @@ const PrivateDashboard = ({ user, setUser }) => {
     localStorage.clear();
     window.location.href = '/';
   };
-  const [activeTab, setActiveTab] = useState('messages');
+  const [activeTab, setActiveTab] = useState('logs');
+  const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -839,18 +841,20 @@ const PrivateDashboard = ({ user, setUser }) => {
     <div className="dashboard-container" style={{ display: 'flex', height: '100vh', background: 'var(--background)', position: 'relative', overflow: 'hidden' }}>
       <style>{`
         .dashboard-container { flex-direction: row; }
+        .mobile-app-header { display: none !important; }
         @media (max-width: 768px) {
           .dashboard-container { flex-direction: column !important; }
           .sidebar-nav { display: none !important; }
-          .main-content { padding: 0.5rem !important; height: calc(100vh - 70px) !important; width: 100% !important; }
+          .main-content { padding: 0 !important; height: calc(100vh - 64px) !important; width: 100% !important; }
+          .mobile-app-header { display: flex !important; }
+          .dashboard-header { display: none !important; }
           .mobile-bottom-nav { display: flex !important; }
           .grid { grid-template-columns: 1fr !important; }
-          .dashboard-header { padding: 0.75rem 1rem !important; gap: 0.5rem !important; flex-wrap: nowrap !important; justify-content: flex-start !important; }
           .header-logout-btn { display: none !important; }
-          .mobile-menu-toggle { display: flex !important; }
+          .mobile-menu-toggle { display: none !important; }
           .tab-buttons-container { overflow-x: auto; white-space: nowrap; padding-bottom: 0.5rem; }
           .glass-card { padding: 1rem !important; }
-          .dashboard-section { padding: 1rem !important; }
+          .dashboard-section { padding: 0.75rem 0.75rem 80px 0.75rem !important; }
           .chat-input-form { margin-bottom: 70px !important; }
           .chat-messages-container { padding: 1rem 0.5rem !important; }
           .chat-message-bubble-wrapper { 
@@ -865,8 +869,9 @@ const PrivateDashboard = ({ user, setUser }) => {
         .mobile-bottom-nav { 
           display: none; 
           position: fixed; bottom: 0; left: 0; right: 0; 
-          height: 70px; background: white; border-top: 1px solid var(--border);
-          z-index: 1000; justify-content: space-around; align-items: center; padding: 0 1rem;
+          height: 64px; background: white; border-top: 1px solid #e2e8f0;
+          z-index: 1000; justify-content: space-around; align-items: center; padding: 0 0.5rem;
+          box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
         }
 
         /* Responsive Vault Elements */
@@ -1360,6 +1365,121 @@ const PrivateDashboard = ({ user, setUser }) => {
         </div>
       ) : (
       <main ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* Dedicated Mobile Header Bar — Matches Mobile App Design */}
+        <header className="mobile-app-header" style={{
+          display: 'none',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0.85rem 1.25rem',
+          background: 'white',
+          borderBottom: '1px solid #e2e8f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1000,
+          width: '100%',
+          boxSizing: 'border-box'
+        }}>
+          {/* Logo & Brand Name */}
+          <div 
+            onClick={() => { setActiveTab('logs'); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+          >
+            <img 
+              src="/logo.png" 
+              alt="Friends Logo" 
+              style={{ width: '36px', height: '36px', objectFit: 'contain' }} 
+            />
+            <span style={{ 
+              fontWeight: 900, 
+              fontSize: '1.25rem', 
+              letterSpacing: '2px', 
+              color: '#16a34a',
+              fontFamily: "'Outfit', 'Inter', sans-serif"
+            }}>
+              F.R.I.E.N.D.S
+            </span>
+          </div>
+
+          {/* Right Action Icons: Bell & Avatar dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', position: 'relative' }}>
+            <div 
+              onClick={() => setActiveTab('messages')}
+              style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Bell size={22} color="#475569" />
+              <span style={{ 
+                position: 'absolute', 
+                top: '-2px', 
+                right: '-2px', 
+                width: '8px', 
+                height: '8px', 
+                background: '#ef4444', 
+                borderRadius: '50%',
+                border: '1.5px solid white'
+              }} />
+            </div>
+
+            <div 
+              onClick={() => setShowMobileUserMenu(prev => !prev)}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}
+            >
+              <div style={{ 
+                width: '34px', 
+                height: '34px', 
+                borderRadius: '50%', 
+                background: '#2563eb', 
+                color: 'white', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                fontWeight: 800, 
+                fontSize: '0.95rem',
+                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
+              }}>
+                {(user?.nickname || user?.name || user?.email || 'E').charAt(0).toUpperCase()}
+              </div>
+              <ChevronDown size={18} color="#64748b" />
+            </div>
+
+            {showMobileUserMenu && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '45px',
+                  right: 0,
+                  background: 'white',
+                  borderRadius: '16px',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                  border: '1px solid #e2e8f0',
+                  padding: '0.75rem',
+                  zIndex: 2000,
+                  minWidth: '180px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}
+              >
+                <div style={{ padding: '0.4rem 0.5rem', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>{user?.nickname || user?.email}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{user?.role?.replace(/_/g, ' ')}</div>
+                </div>
+                <button 
+                  onClick={() => { setActiveTab('profile'); setShowMobileUserMenu(false); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem', border: 'none', background: 'none', color: '#1e293b', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', borderRadius: '8px' }}
+                >
+                  <User size={16} /> My Profile
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem', border: 'none', background: '#fef2f2', color: '#ef4444', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', borderRadius: '8px' }}
+                >
+                  <LogOut size={16} /> Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+
         <header className="dashboard-header" style={{ 
           padding: '1.5rem 3rem', 
           background: 'var(--surface)', 
@@ -2765,25 +2885,119 @@ const PrivateDashboard = ({ user, setUser }) => {
 
 
       <div className="mobile-bottom-nav">
-        <button onClick={() => setActiveTab('messages')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'messages' ? 'var(--primary)' : 'var(--text-muted)' }}>
-          <MessageSquare size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Friends Chat</span>
+        {/* 1. Dashboard */}
+        <button 
+          onClick={() => setActiveTab('logs')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'logs' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 12px'
+          }}
+        >
+          {activeTab === 'logs' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <Home size={22} color={activeTab === 'logs' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'logs' ? 700 : 500 }}>Dashboard</span>
         </button>
-        <button onClick={() => setActiveTab('gallery')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'gallery' ? 'var(--primary)' : 'var(--text-muted)' }}>
-          <ImageIcon size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Curator</span>
+
+        {/* 2. Friends Chat */}
+        <button 
+          onClick={() => setActiveTab('messages')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'messages' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 12px'
+          }}
+        >
+          {activeTab === 'messages' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <MessageCircle size={22} color={activeTab === 'messages' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'messages' ? 700 : 500 }}>Friends Chat</span>
         </button>
-        <button onClick={() => setActiveTab('users')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'users' ? 'var(--primary)' : 'var(--text-muted)' }}>
-          <Users size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Matrix</span>
+
+        {/* 3. Matrix */}
+        <button 
+          onClick={() => setActiveTab('users')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'users' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 12px'
+          }}
+        >
+          {activeTab === 'users' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <LayoutGrid size={22} color={activeTab === 'users' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'users' ? 700 : 500 }}>Matrix</span>
         </button>
-        <button onClick={() => setActiveTab('vault')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'vault' ? 'var(--primary)' : 'var(--text-muted)' }}>
-          <Lock size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Vault</span>
+
+        {/* 4. Vault */}
+        <button 
+          onClick={() => setActiveTab('vault')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'vault' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 12px'
+          }}
+        >
+          {activeTab === 'vault' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <Lock size={22} color={activeTab === 'vault' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'vault' ? 700 : 500 }}>Vault</span>
         </button>
-        <button onClick={() => setActiveTab('profile')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: activeTab === 'profile' ? 'var(--primary)' : 'var(--text-muted)' }}>
-          <User size={20} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Me</span>
+
+        {/* 5. Me */}
+        <button 
+          onClick={() => setActiveTab('profile')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'profile' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 12px'
+          }}
+        >
+          {activeTab === 'profile' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <User size={22} color={activeTab === 'profile' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'profile' ? 700 : 500 }}>Me</span>
         </button>
       </div>
     </div>
