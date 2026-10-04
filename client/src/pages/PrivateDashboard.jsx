@@ -9,7 +9,7 @@ import {
   Heart, Camera, User, Globe, Forward, MessageCircle, ThumbsUp, Download, ArrowLeft, Trash2,
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
   MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
-  Home, LayoutGrid, Bell, ChevronDown
+  Home, LayoutGrid, Bell, ChevronDown, ExternalLink
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
@@ -2102,6 +2102,11 @@ const PrivateDashboard = ({ user, setUser }) => {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Telegram @Username (Optional)</label>
+                      <input name="telegram_username" placeholder="e.g. @username" className="input-field" style={{ marginBottom: 0, width: '100%' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Authority Role</label>
                       <select name="role" className="input-field" style={{ marginBottom: 0, width: '100%' }} defaultValue="admin">
                         <option value="admin">Admin (Full Access)</option>
@@ -2131,6 +2136,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                         <tr style={{ background: 'rgba(15, 23, 42, 0.02)', borderBottom: '1px solid var(--border)' }}>
                           <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>IDENTITY</th>
                           <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>ROLE</th>
+                          <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>TELEGRAM TRACKING</th>
                           <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>STATUS</th>
                           <th style={{ padding: '1.25rem 2rem', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
                         </tr>
@@ -2180,6 +2186,38 @@ const PrivateDashboard = ({ user, setUser }) => {
                                 <option value="authorized">Authorized</option>
                                 <option value="user">User</option>
                               </select>
+                            </td>
+                            <td style={{ padding: '1.25rem 2rem' }}>
+                              {u.telegram_username ? (
+                                <a 
+                                  href={`https://t.me/${u.telegram_username.replace(/^@/, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    padding: '0.3rem 0.65rem',
+                                    background: 'rgba(14, 165, 233, 0.08)',
+                                    color: '#0284c7',
+                                    borderRadius: '6px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    textDecoration: 'none',
+                                    border: '1px solid rgba(14, 165, 233, 0.25)',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  title={`Track @${u.telegram_username.replace(/^@/, '')} on Telegram`}
+                                >
+                                  <span>✈️</span>
+                                  <span>{u.telegram_username.startsWith('@') ? u.telegram_username : `@${u.telegram_username}`}</span>
+                                  <ExternalLink size={12} />
+                                </a>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontStyle: 'italic' }}>
+                                  Not linked
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '1.25rem 2rem' }}>
                                <span style={{ 

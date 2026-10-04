@@ -27,9 +27,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const buttons = [
       ['💬 Post to Chat', '📢 Announcement'],
       ['🖼️ Post to Gallery', '👥 View Messages'],
-      ['💰 Check Savings', '👤 My Identity']
+      ['💰 Check Savings', '🏷️ Track Username'],
+      ['👤 My Identity']
     ];
     if (isSuperAdmin) {
+      buttons[2] = ['💰 Check Savings', '🏷️ Track Username'];
+      buttons[3] = ['👤 My Identity', '📋 Track All Usernames'];
       buttons.push(['⚙️ Access Requests', '📋 Pending Approvals']);
     }
     return Markup.keyboard(buttons).resize();
@@ -38,7 +41,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   const getMemberKeyboard = () => {
     return Markup.keyboard([
       ['👥 View Messages', '💰 Check Savings'],
-      ['👤 My Identity', 'ℹ️ Help']
+      ['🏷️ Track Username', '👤 My Identity'],
+      ['ℹ️ Help']
     ]).resize();
   };
 
@@ -48,27 +52,51 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     ]).resize();
   };
 
-  // Resolve user profile, role, and permissions
+  // Resolve user profile, role, and permissions, keeping username live & synced
   const getTelegramProfile = async (ctx) => {
     const tgId = ctx.from?.id?.toString();
     if (!tgId) return null;
 
     const isSuperAdminEnv = (process.env.ADMIN_CHAT_ID && tgId === process.env.ADMIN_CHAT_ID.toString());
+    const rawUsername = ctx.from?.username ? ctx.from.username.replace(/^@/, '') : '';
+    const cleanUsername = rawUsername ? `@${rawUsername}` : '';
+    const firstName = ctx.from?.first_name || '';
+    const lastName = ctx.from?.last_name || '';
 
     // 1. Check or seed bot_access record
     let access = await db.prepare('SELECT * FROM bot_access WHERE telegram_id = ?').get(tgId);
     if (isSuperAdminEnv) {
       if (!access) {
-        await db.prepare('INSERT INTO bot_access (telegram_id, first_name, username, role) VALUES (?, ?, ?, ?)').run(
+        await db.prepare('INSERT INTO bot_access (telegram_id, first_name, last_name, username, role) VALUES (?, ?, ?, ?, ?)').run(
           tgId,
-          ctx.from.first_name || 'Super Admin',
-          ctx.from.username || 'SuperAdmin',
+          firstName || 'Super Admin',
+          lastName || '',
+          rawUsername || 'SuperAdmin',
           'super_admin'
         );
         access = await db.prepare('SELECT * FROM bot_access WHERE telegram_id = ?').get(tgId);
       } else if (access.role !== 'super_admin') {
         await db.prepare("UPDATE bot_access SET role = 'super_admin' WHERE telegram_id = ?").run(tgId);
         access.role = 'super_admin';
+      }
+    }
+
+    // Always keep latest username, first_name, and last_name synchronized in bot_access
+    if (access) {
+      if (
+        (rawUsername && rawUsername !== access.username) ||
+        (firstName && firstName !== access.first_name) ||
+        (lastName && lastName !== access.last_name)
+      ) {
+        await db.prepare('UPDATE bot_access SET username = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?').run(
+          rawUsername || access.username,
+          firstName || access.first_name,
+          lastName || access.last_name,
+          tgId
+        );
+        access.username = rawUsername || access.username;
+        access.first_name = firstName || access.first_name;
+        access.last_name = lastName || access.last_name;
       }
     }
 
@@ -84,11 +112,27 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
 
     // Fallback link by username if recorded on website
-    if (!user && ctx.from?.username) {
-      const usernameWithAt = '@' + ctx.from.username.replace(/^@/, '');
-      user = await db.prepare('SELECT * FROM users WHERE telegram_username = ? OR telegram_username = ?').get(usernameWithAt, ctx.from.username);
+    if (!user && rawUsername) {
+      user = await db.prepare('SELECT * FROM users WHERE LOWER(telegram_username) = LOWER(?) OR LOWER(telegram_username) = LOWER(?)').get(cleanUsername, rawUsername);
       if (user) {
         await db.prepare('UPDATE users SET telegram_id = ? WHERE id = ?').run(tgId, user.id);
+      }
+    }
+
+    // If user is linked, ensure users.telegram_username matches their latest live username
+    if (user && cleanUsername && user.telegram_username !== cleanUsername) {
+      await db.prepare('UPDATE users SET telegram_username = ? WHERE id = ?').run(cleanUsername, user.id);
+      user.telegram_username = cleanUsername;
+    }
+
+    // Auto-promote bot_access if matching user is an admin or enrolled member on the platform
+    if (user && access && access.role === 'pending') {
+      if (['super_admin', 'admin'].includes(user.role)) {
+        await db.prepare("UPDATE bot_access SET role = 'admin' WHERE telegram_id = ?").run(tgId);
+        access.role = 'admin';
+      } else if (user.created_by_admin === 1 || user.role === 'authorized') {
+        await db.prepare("UPDATE bot_access SET role = 'user' WHERE telegram_id = ?").run(tgId);
+        access.role = 'user';
       }
     }
 
@@ -113,6 +157,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       access,
       user,
       role,
+      username: cleanUsername,
+      rawUsername,
+      firstName,
+      lastName,
       isSuperAdmin: role === 'super_admin',
       isAdmin: ['super_admin', 'admin'].includes(role),
       canPost: ['super_admin', 'admin'].includes(role),
@@ -187,7 +235,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   // Register commands for Telegram UI menu
   bot.telegram.setMyCommands([
-    { command: 'start', description: 'Start the bot and open menu' },
+    { command: 'start', description: 'Start bot & detect username' },
+    { command: 'track', description: 'Track your Telegram username live' },
+    { command: 'trackusers', description: 'Super Admin: Track all member usernames' },
     { command: 'post', description: 'Post text to website live chat' },
     { command: 'announce', description: 'Broadcast announcement to site' },
     { command: 'messages', description: 'View latest messages from site' },
@@ -197,21 +247,39 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     { command: 'help', description: 'Show all bot commands and buttons' }
   ]).catch(console.error);
 
-  // START HANDLER: Handles new user access requests and Super Admin notifications
+  // START HANDLER: Detects Telegram username on start and sets up access
   bot.start(async (ctx) => {
     const tgId = ctx.from.id.toString();
+    const username = ctx.from.username ? `@${ctx.from.username.replace(/^@/, '')}` : null;
     const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || ctx.from.username || 'Friend';
     const profile = await getTelegramProfile(ctx);
+
+    const usernameDetectedText = username
+      ? `🏷️ <b>Detected Username:</b> <code>${escapeHtml(username)}</code>\n`
+      : `⚠️ <b>Detected Username:</b> <i>No @username set in your Telegram profile</i>\n`;
+
+    const trackInlineButtons = [
+      [
+        Markup.button.callback('🔍 Track My Username', 'track_my_username'),
+        ...(username ? [Markup.button.url('🔗 Open Profile', `https://t.me/${ctx.from.username.replace(/^@/, '')}`)] : [])
+      ]
+    ];
+    if (profile.isAdmin) {
+      trackInlineButtons.push([Markup.button.callback('📋 Track All Member Usernames', 'track_all_usernames')]);
+    }
 
     if (profile.isSuperAdmin) {
       return ctx.reply(
         `👑 <b>Welcome, Super Admin ${escapeHtml(name)}!</b>\n\n` +
+        usernameDetectedText +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
         `🛡️ <b>Role:</b> SUPER ADMIN\n` +
-        `✅ You have full platform authority. You can post directly to the website live chat, broadcast announcements, and approve/reject new user access requests.\n\n` +
+        `✅ You have full platform authority. You can post directly to the website live chat, broadcast announcements, track user identities, and approve/reject new user access requests.\n\n` +
         `👇 <b>Use the persistent buttons below to take action:</b>`,
         {
           parse_mode: 'HTML',
-          ...getAdminKeyboard(true)
+          ...getAdminKeyboard(true),
+          ...Markup.inlineKeyboard(trackInlineButtons)
         }
       );
     }
@@ -219,12 +287,15 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     if (profile.isAdmin) {
       return ctx.reply(
         `🛡️ <b>Welcome, Admin ${escapeHtml(name)}!</b>\n\n` +
-        `Role: <b>ADMIN</b>\n` +
+        usernameDetectedText +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
+        `🛡️ <b>Role:</b> ADMIN\n` +
         `✅ Permissions: Full Posting Privileges Granted (Chat, Announcements, Gallery).\n\n` +
         `👇 <b>Use the persistent buttons below to post or view messages:</b>`,
         {
           parse_mode: 'HTML',
-          ...getAdminKeyboard(false)
+          ...getAdminKeyboard(false),
+          ...Markup.inlineKeyboard(trackInlineButtons)
         }
       );
     }
@@ -232,12 +303,15 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     if (profile.canView && profile.role === 'user') {
       return ctx.reply(
         `👋 <b>Welcome back, ${escapeHtml(name)}!</b>\n\n` +
+        usernameDetectedText +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
         `👤 <b>Role:</b> APPROVED MEMBER (View-Only)\n` +
-        `✅ Permissions: You can view messages, savings data, and platform status.\n\n` +
+        `✅ Permissions: You can view messages, savings data, and track your identity.\n\n` +
         `ℹ️ Note: Only Admins and Super Admin can post messages to the website live chat.`,
         {
           parse_mode: 'HTML',
-          ...getMemberKeyboard()
+          ...getMemberKeyboard(),
+          ...Markup.inlineKeyboard(trackInlineButtons)
         }
       );
     }
@@ -246,22 +320,30 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       return ctx.reply(
         `⏳ <b>ACCESS REQUEST PENDING</b>\n\n` +
         `Hello ${escapeHtml(name)},\n` +
+        usernameDetectedText +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
         `Your request is currently waiting for review by the Super Admin.\n\n` +
         `🔒 <b>You cannot view messages or post content until your request is approved.</b>\n\n` +
-        `You will receive an instant notification right here once the Super Admin grants you access.`
+        `You will receive an instant notification right here once the Super Admin grants you access.`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🔍 Track My Username', 'track_my_username')]
+          ])
+        }
       );
     }
 
     if (profile.isRejected) {
       return ctx.reply(
         `⛔ <b>Access Restricted</b>\n\n` +
+        usernameDetectedText +
         `Your request to access the bot was declined by the Super Admin.\n` +
         `If you believe this is an error, please contact the administrator.`
       );
     }
 
     // Brand new Telegram user starting the bot:
-    // 1. Create a pending request in bot_access
     await db.prepare(`
       INSERT INTO bot_access (telegram_id, first_name, last_name, username, role)
       VALUES (?, ?, ?, ?, 'pending')
@@ -272,42 +354,55 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       ctx.from.username || ''
     );
 
-    // 2. Inform the user they cannot view messages until approved
     await ctx.reply(
       `👋 <b>Welcome to the F.R.I.E.N.D.S Platform Bot!</b>\n\n` +
+      usernameDetectedText +
+      `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
       `🔒 <i>This platform and bot are strictly private and role-based.</i>\n\n` +
       `📨 <b>Your access request has been sent to the Super Admin.</b>\n\n` +
       `🚫 You cannot see any messages or use bot features until the Super Admin gives you permission.\n\n` +
       `Please wait for confirmation.`,
-      { parse_mode: 'HTML' }
+      { 
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔍 Track My Username', 'track_my_username')]
+        ])
+      }
     );
 
-    // 3. Dispatch an approval request to the Super Admin with inline action buttons
+    // Dispatch an approval request to the Super Admin with inline action buttons
     if (process.env.ADMIN_CHAT_ID) {
-      const usernameDisplay = ctx.from.username ? `@${ctx.from.username}` : 'No username';
+      const usernameDisplay = username ? username : 'No username set';
       const adminNotice =
         `🔔 <b>NEW BOT ACCESS REQUEST</b>\n\n` +
         `👤 <b>Name:</b> ${escapeHtml(name)}\n` +
-        `🏷️ <b>Username:</b> ${escapeHtml(usernameDisplay)}\n` +
+        `🏷️ <b>Detected Username:</b> ${escapeHtml(usernameDisplay)}\n` +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
         `🕒 <b>Time:</b> ${new Date().toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true })}\n\n` +
-        `This user has started the bot and is requesting permission to view messages and interact.\n` +
+        `This user has started the bot and their username was detected automatically.\n` +
         `Select an action:`;
+
+      const approvalButtons = [
+        [
+          Markup.button.callback('🛡️ Approve Admin (Can Post)', `grant_admin_${tgId}`),
+          Markup.button.callback('👤 Approve Member (View Only)', `grant_member_${tgId}`)
+        ],
+        [
+          Markup.button.callback('❌ Reject Access', `grant_reject_${tgId}`)
+        ]
+      ];
+      if (ctx.from.username) {
+        approvalButtons.push([
+          Markup.button.url(`🔍 Track @${ctx.from.username.replace(/^@/, '')}`, `https://t.me/${ctx.from.username.replace(/^@/, '')}`)
+        ]);
+      }
 
       try {
         await bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, adminNotice, {
           parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([
-            [
-              Markup.button.callback('🛡️ Approve Admin (Can Post)', `grant_admin_${tgId}`),
-              Markup.button.callback('👤 Approve Member (View Only)', `grant_member_${tgId}`)
-            ],
-            [
-              Markup.button.callback('❌ Reject Access', `grant_reject_${tgId}`)
-            ]
-          ])
+          ...Markup.inlineKeyboard(approvalButtons)
         });
-        logAction(null, 'TG_ACCESS_REQUEST_SENT', `Access request for ${name} (${tgId}) sent to Super Admin`);
+        logAction(null, 'TG_ACCESS_REQUEST_SENT', `Access request for ${name} (${usernameDisplay}) sent to Super Admin`);
       } catch (err) {
         console.error('Failed to dispatch access request to Super Admin:', err.message);
       }
@@ -569,6 +664,147 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       `• <b>Linked Web Account:</b> ${profile.user ? escapeHtml(profile.user.email) : 'None (linked via Telegram)'}`
     , { parse_mode: 'HTML' });
   });
+
+  // Helper to respond to both text messages and callback queries
+  const respondWithCard = async (ctx, htmlText, extraMarkup) => {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.editMessageText(htmlText, { parse_mode: 'HTML', ...extraMarkup });
+      } catch (err) {
+        await ctx.reply(htmlText, { parse_mode: 'HTML', ...extraMarkup });
+      }
+      try {
+        await ctx.answerCbQuery('Username verified');
+      } catch (e) {}
+    } else {
+      await ctx.reply(htmlText, { parse_mode: 'HTML', ...extraMarkup });
+    }
+  };
+
+  // TRACK USERNAME HANDLER: Live tracking of user's own Telegram username
+  const handleTrackUsername = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    const tgId = ctx.from.id.toString();
+    const rawUsername = ctx.from.username ? ctx.from.username.replace(/^@/, '') : '';
+    const cleanUsername = rawUsername ? `@${rawUsername}` : '';
+    const fullName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || rawUsername || 'User';
+
+    const actionButtons = [];
+
+    if (rawUsername) {
+      actionButtons.push([
+        Markup.button.url('🔗 Open Profile (t.me)', `https://t.me/${rawUsername}`),
+        Markup.button.callback('🔄 Re-scan Username', 'track_my_username')
+      ]);
+    } else {
+      actionButtons.push([
+        Markup.button.callback('🔄 Re-scan Username', 'track_my_username')
+      ]);
+    }
+
+    if (profile.isAdmin) {
+      actionButtons.push([
+        Markup.button.callback('📋 Track All Usernames', 'track_all_usernames')
+      ]);
+    }
+
+    const keyboardExtra = Markup.inlineKeyboard(actionButtons);
+
+    let messageText = '';
+    if (rawUsername) {
+      messageText =
+        `🏷️ <b>TELEGRAM USERNAME TRACKER</b>\n\n` +
+        `👤 <b>Name:</b> ${escapeHtml(fullName)}\n` +
+        `🔗 <b>Detected Username:</b> <code>${escapeHtml(cleanUsername)}</code>\n` +
+        `🌐 <b>Direct Link:</b> <a href="https://t.me/${escapeHtml(rawUsername)}">https://t.me/${escapeHtml(rawUsername)}</a>\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
+        `🛡️ <b>Bot Role:</b> ${profile.role.toUpperCase()}\n` +
+        `📡 <b>Sync Status:</b> ✅ <i>Live Synchronized with Database</i>\n` +
+        `🔒 <b>Posting Rights:</b> ${profile.canPost ? '✅ GRANTED' : '⛔ VIEW-ONLY'}\n\n` +
+        (profile.user
+          ? `💻 <b>Linked Web Identity:</b>\n` +
+            `• Email: <code>${escapeHtml(profile.user.email)}</code>\n` +
+            `• Nickname: ${escapeHtml(profile.user.nickname || 'N/A')}\n` +
+            `• Authority: ${escapeHtml(profile.user.role.toUpperCase())}\n\n`
+          : `ℹ️ <i>Not linked to a separate web login. Authenticated via Telegram identity.</i>\n\n`) +
+        `Use the buttons below to open your profile or re-scan your username at any time.`;
+    } else {
+      messageText =
+        `⚠️ <b>NO USERNAME DETECTED</b>\n\n` +
+        `👤 <b>Name:</b> ${escapeHtml(fullName)}\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
+        `🏷️ <b>Telegram @Username:</b> <i>Not Set</i>\n\n` +
+        `Your Telegram account does not currently have a public username configured in Telegram settings.\n\n` +
+        `📝 <b>To set your username:</b>\n` +
+        `1. Open Telegram Settings\n` +
+        `2. Tap <b>Edit Profile</b> (or <b>Username</b>)\n` +
+        `3. Choose your desired @username\n` +
+        `4. Tap <b>Re-scan Username</b> below once updated!`;
+    }
+
+    await respondWithCard(ctx, messageText, keyboardExtra);
+  };
+
+  // TRACK ALL USERNAMES (Super Admin & Admin tracker)
+  const handleTrackAllUsernames = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isAdmin) {
+      if (ctx.callbackQuery) {
+        return ctx.answerCbQuery('⛔ Only Admins can view all tracked usernames.', { show_alert: true });
+      }
+      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin can view all tracked usernames.');
+    }
+
+    try {
+      const botUsers = await db.prepare(`
+        SELECT b.telegram_id, b.username, b.first_name, b.last_name, b.role, b.created_at, b.updated_at,
+               u.email, u.nickname, u.role as web_role, u.telegram_username
+        FROM bot_access b
+        LEFT JOIN users u ON b.user_id = u.id OR (b.username != '' AND LOWER(REPLACE(u.telegram_username, '@', '')) = LOWER(b.username))
+        ORDER BY b.updated_at DESC, b.created_at DESC
+        LIMIT 25
+      `).all();
+
+      let text = `📋 <b>TRACKED TELEGRAM USERNAMES (${botUsers.length})</b>\n\n`;
+
+      if (botUsers.length === 0) {
+        text += `<i>No Telegram users tracked yet.</i>`;
+      } else {
+        botUsers.forEach((u, i) => {
+          const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'User';
+          const tgUser = u.username ? `@${u.username}` : '<i>No @username</i>';
+          const link = u.username ? ` <a href="https://t.me/${u.username}">[Track]</a>` : '';
+          const roleBadge = u.role === 'super_admin' ? '👑 SUPER' : (u.role === 'admin' ? '🛡️ ADMIN' : '👤 ' + u.role.toUpperCase());
+          const webSync = u.email ? ` | 💻 ${escapeHtml(u.email)}` : '';
+          
+          text += `<b>${i + 1}. ${escapeHtml(name)}</b> (${roleBadge})\n` +
+                  `   🏷️ ${tgUser}${link}\n` +
+                  `   🆔 <code>${u.telegram_id}</code>${webSync}\n\n`;
+        });
+      }
+
+      const extraButtons = [
+        [
+          Markup.button.callback('🔄 Refresh Tracker', 'track_all_usernames'),
+          Markup.button.callback('🔍 Track My Username', 'track_my_username')
+        ]
+      ];
+
+      await respondWithCard(ctx, text, Markup.inlineKeyboard(extraButtons));
+    } catch (err) {
+      console.error('Error tracking usernames:', err);
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery('Error retrieving tracked usernames');
+      }
+      ctx.reply('⚠️ Error retrieving tracked usernames: ' + err.message);
+    }
+  };
+
+  // Register track listeners
+  bot.hears(['🏷️ Track Username', '🔍 Track Username', '/track', '/username'], handleTrackUsername);
+  bot.action('track_my_username', handleTrackUsername);
+  bot.hears(['📋 Track All Usernames', '/trackusers', '/trackall'], handleTrackAllUsernames);
+  bot.action('track_all_usernames', handleTrackAllUsernames);
 
   // BUTTON 7: Super Admin Review Pending Requests
   bot.hears(['⚙️ Access Requests', '📋 Pending Approvals', '/requests'], async (ctx) => {

@@ -739,7 +739,7 @@ app.get('/api/admin/logs', checkAuth, checkPermission('canViewLogs'), async (req
 
 // User Management (Super Admin & Admin)
 app.get('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, nickname, full_name, status, created_by_admin, created_at FROM users ORDER BY created_at DESC').all();
+  const users = await db.prepare('SELECT id, email, role, nickname, full_name, telegram_username, telegram_id, status, created_by_admin, created_at FROM users ORDER BY created_at DESC').all();
   res.json(users);
 });
 
@@ -799,7 +799,7 @@ app.post('/api/admin/users/role', checkAuth, checkPermission('canManageAdmins'),
 });
 
 app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const { email, password, nickname, full_name, role } = req.body;
+  const { email, password, nickname, full_name, telegram_username, role } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
@@ -815,12 +815,13 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   
   const displayName = nickname || full_name || email.split('@')[0];
   const userFullName = full_name || nickname || displayName;
+  const cleanTg = telegram_username ? ('@' + telegram_username.trim().replace(/^@/, '')) : null;
 
   try {
     const resInsert = await db.prepare(`
-      INSERT INTO users (email, password, nickname, full_name, role, created_by_admin) 
-      VALUES (?, ?, ?, ?, ?, 1)
-    `).run(email, hashedPassword, displayName, userFullName, assignedRole);
+      INSERT INTO users (email, password, nickname, full_name, telegram_username, role, created_by_admin) 
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+    `).run(email, hashedPassword, displayName, userFullName, cleanTg, assignedRole);
     
     // Auto-enroll into savings_members so they are immediately part of Friends Sharing / Savings
     try {
@@ -834,7 +835,7 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
     
     const adminName = actingAdmin ? (actingAdmin.full_name || actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
     
-    logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} enrolled user "${userFullName}" (${email}) with role ${assignedRole}`);
+    logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} enrolled user "${userFullName}" (${email}) with role ${assignedRole}${cleanTg ? ` [TG: ${cleanTg}]` : ''}`);
 
     res.json({ success: true, id: resInsert.lastInsertRowid });
   } catch (err) {
