@@ -13,23 +13,41 @@ const fs = require('fs');
 const multer = require('multer');
 const cron = require('node-cron');
 
+const { Pool } = require('pg');
 const Database = require('better-sqlite3');
 
-let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
-let sqliteDb;
+let pool = null;
+let sqliteDb = null;
+let isPostgres = false;
 
-try {
-  const dbDir = path.dirname(dbPath);
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  sqliteDb = new Database(dbPath);
-} catch (err) {
-  console.warn(`⚠️ Could not use ${dbPath}, falling back to local database directory:`, err.message);
-  dbPath = path.join(__dirname, 'db', 'database.sqlite');
-  const fallbackDir = path.dirname(dbPath);
-  if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
-  sqliteDb = new Database(dbPath);
+if (process.env.DATABASE_URL) {
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    isPostgres = true;
+    console.log('🔌 PostgreSQL mode enabled with DATABASE_URL.');
+  } catch (err) {
+    console.warn('⚠️ Could not initialize PostgreSQL pool, falling back to SQLite:', err.message);
+  }
 }
-console.log('✅ SQLite Database connected successfully at:', dbPath);
+
+if (!isPostgres) {
+  let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
+  try {
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+    sqliteDb = new Database(dbPath);
+  } catch (err) {
+    console.warn(`⚠️ Could not use ${dbPath}, falling back to local database directory:`, err.message);
+    dbPath = path.join(__dirname, 'db', 'database.sqlite');
+    const fallbackDir = path.dirname(dbPath);
+    if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
+    sqliteDb = new Database(dbPath);
+  }
+  console.log('✅ SQLite Database connected successfully at:', dbPath);
+}
 
 // Ensure upload directory exists
 let UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
@@ -114,8 +132,40 @@ const io = new Server(server, {
   }
 });
 
+class PgStatement {
+  constructor(sql) {
+    let paramCounter = 1;
+    this.rawSql = sql;
+    this.sql = sql.replace(/\?/g, () => `$${paramCounter++}`);
+    const upper = this.sql.trim().toUpperCase();
+    if (upper.startsWith('INSERT') && !upper.includes('RETURNING')) {
+      if (!upper.includes('INTO ROLES') && !upper.includes('INTO SYSTEM_SETTINGS')) {
+        this.sql += ' RETURNING id';
+      }
+    }
+  }
+  async get(...args) {
+    const res = await pool.query(this.sql, args.flat());
+    return res.rows[0];
+  }
+  async all(...args) {
+    const res = await pool.query(this.sql, args.flat());
+    return res.rows;
+  }
+  async run(...args) {
+    const res = await pool.query(this.sql, args.flat());
+    return {
+      changes: res.rowCount,
+      lastInsertRowid: res.rows?.[0]?.id !== undefined ? res.rows[0].id : null
+    };
+  }
+}
+
 const db = {
   prepare: (sql) => {
+    if (isPostgres) {
+      return new PgStatement(sql);
+    }
     // Normalize Postgres parameter placeholders ($1, $2) to SQLite placeholders (?)
     let normalizedSql = sql.replace(/\$\d+/g, '?');
     // Strip Postgres RETURNING clauses if present
@@ -131,6 +181,15 @@ const db = {
     };
   },
   exec: async (sql) => {
+    if (isPostgres) {
+      try {
+        return await pool.query(sql);
+      } catch (e) {
+        if (e.message.includes('already exists') || e.message.includes('duplicate')) return;
+        console.error(`⚠️ Postgres Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
+      }
+      return;
+    }
     try {
       let cleanSql = sql
         .replace(/BIGSERIAL PRIMARY KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
@@ -146,11 +205,49 @@ const db = {
       console.error(`⚠️ DB Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
     }
   },
-  transaction: (fn) => sqliteDb.transaction(fn)
+  transaction: (fn) => {
+    if (isPostgres) {
+      return async (...args) => {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const res = await fn(...args);
+          await client.query('COMMIT');
+          return res;
+        } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+        } finally {
+          client.release();
+        }
+      };
+    }
+    return sqliteDb.transaction(fn);
+  }
 };
 
 // Run all startup init tasks inside an async IIFE (CommonJS does not support top-level await)
 (async () => {
+  if (pool) {
+    try {
+      console.log('🔌 Testing PostgreSQL (Supabase) connection...');
+      await pool.query('SELECT 1');
+      isPostgres = true;
+      console.log('✅ Connected to PostgreSQL (Supabase) successfully!');
+    } catch (pgErr) {
+      console.warn('⚠️ PostgreSQL connection failed:', pgErr.message);
+      console.log('🔄 Falling back to local SQLite database...');
+      isPostgres = false;
+      if (!sqliteDb) {
+        let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
+        const dbDir = path.dirname(dbPath);
+        if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+        sqliteDb = new Database(dbPath);
+        console.log('✅ SQLite fallback active at:', dbPath);
+      }
+    }
+  }
+
   // 1. Create roles and users tables first to prevent migration chicken-and-egg errors
   await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
