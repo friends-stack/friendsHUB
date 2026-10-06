@@ -17,18 +17,34 @@ axios.defaults.baseURL = window.location.hostname === 'localhost' || window.loca
 
 
 const App = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.get('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(({ data }) => {
+        if (data?.user) {
+          setUser(data.user);
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+      }).catch(err => {
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+      });
     }
-    setLoading(false);
   }, []);
-
-  if (loading) return <div className="loading">Initializing System...</div>;
 
   return (
     <Router>

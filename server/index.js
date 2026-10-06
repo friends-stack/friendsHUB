@@ -229,14 +229,22 @@ const db = {
 // Run all startup init tasks inside an async IIFE (CommonJS does not support top-level await)
 (async () => {
   if (pool) {
-    try {
-      console.log('🔌 Testing PostgreSQL (Supabase) connection...');
-      await pool.query('SELECT 1');
-      isPostgres = true;
-      console.log('✅ Connected to PostgreSQL (Supabase) successfully!');
-    } catch (pgErr) {
-      console.warn('⚠️ PostgreSQL connection failed:', pgErr.message);
-      console.log('🔄 Falling back to local SQLite database...');
+    let connected = false;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        console.log(`🔌 Testing PostgreSQL (Supabase) connection (attempt ${attempt}/5)...`);
+        await pool.query('SELECT 1');
+        isPostgres = true;
+        connected = true;
+        console.log('✅ Connected to PostgreSQL (Supabase) successfully!');
+        break;
+      } catch (pgErr) {
+        console.warn(`⚠️ PostgreSQL connection attempt ${attempt} failed:`, pgErr.message);
+        if (attempt < 5) await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    if (!connected) {
+      console.warn('⚠️ Could not connect to PostgreSQL after 5 attempts, falling back to SQLite');
       isPostgres = false;
       if (!sqliteDb) {
         let dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'db', 'database.sqlite');
@@ -497,15 +505,22 @@ const db = {
   `);
   // Seed default roles
   const superAdminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: true, canToggleFeatures: true });
-  const adminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: false, canToggleFeatures: false });
+  const adminPerms = JSON.stringify({ canViewLogs: true, canManageAdmins: true, canManageSavings: false, canToggleFeatures: true });
   const userPerms = JSON.stringify({ canViewLogs: false, canManageAdmins: false, canManageSavings: false, canToggleFeatures: false });
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('super_admin', '${superAdminPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('admin', '${adminPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('authorized', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
   await db.exec(`INSERT INTO roles (name, permissions) VALUES ('user', '${userPerms}') ON CONFLICT (name) DO NOTHING`);
 
-  // Migration: Ensure existing roles have canToggleFeatures
-  await db.exec(`UPDATE roles SET permissions = permissions || '{"canToggleFeatures": true}'::jsonb WHERE name = 'super_admin' AND NOT permissions ? 'canToggleFeatures'`);
+  // Migration: Ensure existing admin and super_admin roles have canToggleFeatures
+  if (isPostgres) {
+    await db.exec(`UPDATE roles SET permissions = permissions || '{"canToggleFeatures": true}'::jsonb WHERE name IN ('super_admin', 'admin')`);
+  } else {
+    try {
+      await db.exec(`UPDATE roles SET permissions = '${adminPerms}' WHERE name = 'admin'`);
+      await db.exec(`UPDATE roles SET permissions = '${superAdminPerms}' WHERE name = 'super_admin'`);
+    } catch (e) {}
+  }
 
   // Insert default config if empty
   const configCount = await db.prepare('SELECT COUNT(*) as count FROM savings_config').get();
@@ -558,7 +573,11 @@ const checkAuth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const user = await db.prepare('SELECT id, email, role, nickname, full_name, status, created_by_admin, profile_picture, cover_photo, mobile, address, gender, dob, bio, telegram_username, fav_food_drink FROM users WHERE id = ?').get(decoded.id);
+    if (!user || user.status === 'blocked' || user.status === 'deleted') {
+      return res.status(401).json({ error: 'Identity not found or account terminated' });
+    }
+    req.user = user;
     next();
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
@@ -566,14 +585,31 @@ const checkAuth = async (req, res, next) => {
 };
 
 const checkPermission = (permission) => async (req, res, next) => {
-  const user = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
-  const role = await db.prepare('SELECT permissions FROM roles WHERE name = ?').get(user.role);
-  const perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+  if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  if (perms[permission]) {
+  // Super admin always has all permissions
+  if (req.user.role === 'super_admin') {
+    return next();
+  }
+
+  // Admin role has canToggleFeatures, canViewLogs, canManageAdmins
+  if (req.user.role === 'admin' && (permission === 'canToggleFeatures' || permission === 'canViewLogs' || permission === 'canManageAdmins')) {
+    return next();
+  }
+
+  const role = await db.prepare('SELECT permissions FROM roles WHERE name = ?').get(req.user.role);
+  let perms = {};
+  if (role) {
+    perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+  }
+
+  if (perms && perms[permission]) {
     next();
   } else {
-    logAction(req.user.id, 'SECURITY_ALERT', `Unauthorized attempt to access: ${permission}`);
+    // If it's canToggleFeatures, never send security alert
+    if (permission !== 'canToggleFeatures') {
+      logAction(req.user.id, 'SECURITY_ALERT', `Unauthorized attempt to access: ${permission}`);
+    }
     res.status(404).json({ error: 'Not Found' }); // Stealth mode
   }
 };
@@ -602,8 +638,7 @@ const checkSavingsManager = async (req, res, next) => {
   }
 };
 
-
-// Generic Image Upload for all authenticated users
+// Generic Image Upload for authenticated users
 app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
@@ -615,13 +650,17 @@ app.post('/api/upload', checkAuth, upload.single('image'), async (req, res) => {
   }
 });
 
-
 // Logging Function
 const logAction = (userId, action, details) => {
   db.prepare('INSERT INTO logs (user_id, action, details) VALUES (?, ?, ?)').run(userId, action, details).catch(console.error);
 
   // Exclude private personal uploads from being sent to the Telegram bot
   if (action === 'PERSONAL_ASSET_UPLOAD') {
+    return;
+  }
+
+  // Never send canToggleFeatures alerts to Telegram
+  if (details && String(details).includes('canToggleFeatures')) {
     return;
   }
 
@@ -632,6 +671,53 @@ const logAction = (userId, action, details) => {
       : `${alertPrefix} ${details}`;
     bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, message).catch(console.error);
   }
+};
+
+// Comprehensive User Deletion Helper
+const deleteUserCompletely = async (id, actingUser) => {
+  const targetUser = await db.prepare('SELECT id, nickname, full_name, email, role FROM users WHERE id = ?').get(id);
+  if (!targetUser) return { error: 'User not found', status: 404 };
+  if (targetUser.role === 'super_admin') return { error: 'Cannot delete a Super Admin identity', status: 403 };
+
+  // Only Super Admin can delete admins
+  if (targetUser.role === 'admin' && actingUser.role !== 'super_admin') {
+    return { error: 'Only Super Admin can remove an Admin', status: 403 };
+  }
+
+  const targetName = targetUser.full_name || targetUser.nickname || targetUser.email || `User #${id}`;
+  const adminName = actingUser.full_name || actingUser.nickname || actingUser.email || `Admin #${actingUser.id}`;
+
+  // 1. Remove from savings_members and their transactions
+  const matchNames = [targetUser.nickname, targetUser.full_name, targetUser.email].filter(Boolean);
+  for (const name of matchNames) {
+    const mems = await db.prepare('SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)').all(name);
+    for (const m of mems) {
+      await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(m.id);
+      await db.prepare('DELETE FROM savings_members WHERE id = ?').run(m.id);
+    }
+  }
+
+  // 2. Cascade delete from all user-related tables
+  await db.prepare('DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?').run(id, id);
+  await db.prepare('DELETE FROM personal_assets WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM comments WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM reactions WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM posts WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM memories WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM bot_access WHERE user_id = ?').run(id);
+  await db.prepare('DELETE FROM logs WHERE user_id = ?').run(id);
+  await db.prepare("UPDATE system_settings SET value = '' WHERE key = 'clerk_id' AND value = ?").run(String(id));
+
+  // 3. Delete from users table
+  await db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+  logAction(actingUser.id, 'ADMIN_DELETED_USER', `🚫 "${targetName}" has been permanently removed by ${adminName}`);
+
+  // 4. Real-time broadcast to all connected dashboards
+  io.emit('user_deleted', { id: parseInt(id) });
+  io.emit('savings_update');
+
+  return { success: true };
 };
 
 // Routes
@@ -736,18 +822,24 @@ app.get('/api/profile/:id', checkAuth, async (req, res) => {
 });
 
 
+app.get('/api/auth/me', checkAuth, async (req, res) => {
+  const isAuthorized = ['super_admin', 'admin'].includes(req.user.role) || req.user.created_by_admin === 1;
+  res.json({
+    user: {
+      ...req.user,
+      restricted: !isAuthorized
+    }
+  });
+});
+
 app.get('/api/users', checkAuth, async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, nickname, full_name, profile_picture, created_at FROM users ORDER BY created_at DESC').all();
+  const users = await db.prepare("SELECT id, email, role, nickname, full_name, profile_picture, created_at FROM users WHERE status != 'deleted' ORDER BY created_at DESC").all();
   res.json(users);
 });
 
 app.delete('/api/users/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  const targetUser = await db.prepare('SELECT email, role FROM users WHERE id = ?').get(req.params.id);
-  if (!targetUser) return res.status(404).json({ error: 'User not found' });
-  if (targetUser.role === 'super_admin') return res.status(403).json({ error: 'Cannot delete a Super Admin' });
-
-  await db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-  logAction(req.user.id, 'USER_DELETED', `Super Admin deleted user: ${targetUser.email}`);
+  const result = await deleteUserCompletely(req.params.id, req.user);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
   res.json({ success: true });
 });
 
@@ -945,31 +1037,10 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
 
 app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
   const { id } = req.params;
-  // Prevent self-deletion
   if (parseInt(id) === req.user.id) return res.status(400).json({ error: 'Cannot delete self' });
 
-  // Prevent deletion of any Super Admin
-  const targetUser = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(id);
-  if (targetUser && targetUser.role === 'super_admin') {
-    return res.status(403).json({ error: 'Cannot delete a Super Admin identity' });
-  }
-
-  const actingAdmin = await db.prepare('SELECT nickname, email, role FROM users WHERE id = ?').get(req.user.id);
-
-  // Admins cannot delete Admin or Super Admin identities
-  if (actingAdmin && actingAdmin.role === 'admin' && targetUser && ['admin', 'super_admin'].includes(targetUser.role)) {
-    return res.status(403).json({ error: 'Admins cannot delete/terminate another Admin or Super Admin' });
-  }
-
-  const targetName  = targetUser  ? (targetUser.nickname  || targetUser.email)  : `User #${id}`;
-  const adminName   = actingAdmin ? (actingAdmin.nickname || actingAdmin.email)  : `Admin #${req.user.id}`;
-  const adminRole   = actingAdmin ? actingAdmin.role.replace('_', ' ') : req.user.role;
-
-  await db.prepare('DELETE FROM messages WHERE sender_id = ?').run(id);
-  await db.prepare('DELETE FROM logs WHERE user_id = ?').run(id);
-  await db.prepare('DELETE FROM users WHERE id = ?').run(id);
-
-  logAction(req.user.id, 'ADMIN_DELETED_USER', `🚫 "${targetName}" has been removed by ${adminName} (${adminRole})`);
+  const result = await deleteUserCompletely(id, req.user);
+  if (result.error) return res.status(result.status || 400).json({ error: result.error });
   res.json({ success: true });
 });
 
@@ -977,7 +1048,7 @@ app.delete('/api/admin/users/:id', checkAuth, checkPermission('canManageAdmins')
 app.get('/api/savings/members', checkAuth, async (req, res) => {
   // Auto-sync admins to savings_members
   try {
-    const admins = await db.prepare("SELECT nickname, full_name, email FROM users WHERE role IN ('super_admin', 'admin')").all();
+    const admins = await db.prepare("SELECT nickname, full_name, email FROM users WHERE role IN ('super_admin', 'admin') AND status != 'deleted'").all();
     for (const admin of admins) {
       const adminName = admin.full_name || admin.nickname || admin.email;
       if (!adminName) continue;
@@ -1812,8 +1883,11 @@ io.on('connection', (socket) => {
 const setupTelegramBot = require('./telegramBot');
 setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR });
 
-// Gallery Endpoints
-app.get('/api/gallery', async (req, res) => {
+// Gallery Endpoints (Admin and Super Admin only)
+app.get('/api/gallery', checkAuth, async (req, res) => {
+  if (!['admin', 'super_admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Access denied: Only admins and superadmins can view images' });
+  }
   const items = await db.prepare('SELECT * FROM gallery ORDER BY created_at DESC').all();
   for (const item of items) {
     item.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'gallery'").all(item.id);
@@ -1829,7 +1903,7 @@ app.get('/api/gallery', async (req, res) => {
 });
 
 app.post('/api/admin/gallery', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const { url, title, caption } = req.body;
   const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
   await insert.run(url, title, caption);
@@ -1838,7 +1912,7 @@ app.post('/api/admin/gallery', checkAuth, async (req, res) => {
 
 // Single image upload endpoint
 app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const fileUrl = await uploadToSupabase(req.file);
@@ -1850,14 +1924,14 @@ app.post('/api/admin/gallery/upload', checkAuth, upload.single('image'), async (
 });
 
 app.put('/api/admin/gallery/:id', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const { title, caption, url } = req.body;
   await db.prepare('UPDATE gallery SET title = ?, caption = ?, url = ? WHERE id = ?').run(title, caption, url, req.params.id);
   res.json({ success: true });
 });
 
 app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const item = await db.prepare('SELECT url FROM gallery WHERE id = ?').get(req.params.id);
 
   // Also delete local file or cloud file if it exists
@@ -1879,9 +1953,9 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-// Personal Vault Endpoints (Photos & Videos)
+// Personal Vault Endpoints (Photos & Videos - Admin and Super Admin only)
 app.get('/api/personal-assets', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const assets = await db.prepare('SELECT * FROM personal_assets WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
 
   for (const asset of assets) {
@@ -1899,7 +1973,7 @@ app.get('/api/personal-assets', checkAuth, async (req, res) => {
 });
 
 app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { title, type } = req.body; // type: 'photo' or 'video'
@@ -1918,7 +1992,7 @@ app.post('/api/personal-assets', checkAuth, upload.single('media'), async (req, 
 });
 
 app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const { title } = req.body;
   const result = await db.prepare('UPDATE personal_assets SET title = ? WHERE id = ? AND user_id = ?').run(title || 'Untitled', req.params.id, req.user.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Asset not found or access denied' });
@@ -1926,7 +2000,7 @@ app.put('/api/personal-assets/:id', checkAuth, async (req, res) => {
 });
 
 app.delete('/api/personal-assets/:id', checkAuth, async (req, res) => {
-  if (!['admin', 'super_admin', 'authorized'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
 
   const asset = await db.prepare('SELECT url FROM personal_assets WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!asset) return res.status(404).json({ error: 'Asset not found or access denied' });

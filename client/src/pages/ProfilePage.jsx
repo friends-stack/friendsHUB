@@ -12,10 +12,14 @@ import { AnimatePresence } from 'framer-motion';
 
 const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
   const { id: paramId } = useParams();
-  const id = paramId || userId;
+  const id = paramId || userId || currentUser?.id;
   const navigate = useNavigate();
   const location = useLocation();
-  const [profile, setProfile] = useState(null);
+
+  const isSelf = !paramId || (currentUser?.id && Number(paramId) === Number(currentUser.id));
+  const initialProfile = isSelf && currentUser ? currentUser : null;
+
+  const [profile, setProfile] = useState(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -24,11 +28,11 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
     }
   }, [location.state]);
 
-  const [editData, setEditData] = useState({});
+  const [editData, setEditData] = useState(initialProfile || {});
   const [newMemory, setNewMemory] = useState({ title: '', content: '' });
   const [profileFile, setProfileFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialProfile);
   const [uploading, setUploading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [lightBox, setLightBox] = useState({ isOpen: false, url: '' });
@@ -48,17 +52,28 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
 
   const fetchProfile = async () => {
     try {
-      const { data } = await axios.get(`/api/profile/${id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setProfile(data);
-      setEditData(data);
-      setLoading(false);
-      if (onProfileUpdate && Number(currentUser?.id) === Number(data.id)) {
-        onProfileUpdate(data);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
       }
+      const { data } = await axios.get(`/api/profile/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (data) {
+        setProfile(data);
+        setEditData(data);
+        if (onProfileUpdate && Number(currentUser?.id) === Number(data.id)) {
+          onProfileUpdate(data);
+        }
+      }
+      setLoading(false);
     } catch (err) {
       console.error(err);
+      if (isSelf && currentUser) {
+        setProfile(currentUser);
+        setEditData(currentUser);
+      }
       setLoading(false);
     }
   };
@@ -176,11 +191,11 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
 
 
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading Profile...</div>;
-  if (!profile) return <div style={{ textAlign: 'center', marginTop: '3rem' }}>Profile not found</div>;
+  const activeProfile = profile || (isSelf ? currentUser : null);
+  if (!activeProfile) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#64748b' }}>Profile not found</div>;
 
-  const isOwnProfile = Number(currentUser.id) === Number(profile.id);
-  const isRestrictedUser = currentUser.role === 'user';
+  const isOwnProfile = Number(currentUser?.id) === Number(activeProfile.id);
+  const isRestrictedUser = currentUser?.role === 'user';
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>

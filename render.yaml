@@ -9,13 +9,13 @@ services:
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
-        value: https://zbmfruntrdeyyxjnvhiy.supabase.co
+        value: https://edewgfzcthbjpgwzoqwh.supabase.co
       - key: SUPABASE_SERVICE_ROLE_KEY
         value: sb_secret_IFDdd9ZGcKl3yVLQPvkKeg_Za9_HWaZ
       - key: JWT_SECRET
-        generateValue: true
+        value: friends_info_secret_key_2026
       - key: DATABASE_URL
-        value: postgres://postgres.zbmfruntrdeyyxjnvhiy:FriendsInfo%401361e@aws-1-eu-north-1.pooler.supabase.com:6543/postgres
+        value: postgresql://postgres.edewgfzcthbjpgwzoqwh:Ermias%401361e@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
       - key: TG_TOKEN
         sync: false
       - key: ADMIN_CHAT_ID

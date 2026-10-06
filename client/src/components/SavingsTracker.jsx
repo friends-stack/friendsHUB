@@ -35,7 +35,13 @@ const SavingsTracker = ({ user }) => {
   }, []);
 
   const cachedData = getCachedSavings();
-  const [activeView, setActiveView] = useState('dashboard'); 
+  const [activeView, setActiveViewState] = useState(() => {
+    return localStorage.getItem('savings_active_view') || 'dashboard';
+  });
+  const setActiveView = (view) => {
+    setActiveViewState(view);
+    localStorage.setItem('savings_active_view', view);
+  };
   const [members, setMembers] = useState(cachedData?.members || []);
   const [history, setHistory] = useState(cachedData?.history || []);
   const [config, setConfig] = useState(cachedData?.config || { weekly_amount: 0 });
@@ -45,7 +51,7 @@ const SavingsTracker = ({ user }) => {
   const [systemUsers, setSystemUsers] = useState(cachedData?.systemUsers || []);
   const [investments, setInvestments] = useState(cachedData?.investments || []);
 
-  // Default to the logged-in user's member record when available
+  // Set the logged-in user's default member record without forcing view switch away from dashboard
   useEffect(() => {
     if (members.length > 0 && user && !selectedMember) {
       const myMember = members.find(m => 
@@ -55,7 +61,6 @@ const SavingsTracker = ({ user }) => {
       );
       if (myMember) {
         setSelectedMember(myMember);
-        setActiveView('member-detail');
       }
     }
   }, [members, user, selectedMember]);
@@ -372,9 +377,6 @@ const SavingsTracker = ({ user }) => {
 
   const fetchAllData = async (isSilent = false) => {
     try {
-      if (!isSilent && !localStorage.getItem('cached_savings_data')) {
-        setLoading(true);
-      }
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       const promises = [

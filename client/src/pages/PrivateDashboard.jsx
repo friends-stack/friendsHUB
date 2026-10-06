@@ -38,7 +38,13 @@ const PrivateDashboard = ({ user, setUser }) => {
     localStorage.clear();
     window.location.href = '/';
   };
-  const [activeTab, setActiveTab] = useState('logs');
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem('private_active_tab') || 'logs';
+  });
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    localStorage.setItem('private_active_tab', tab);
+  };
   const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -138,8 +144,10 @@ const PrivateDashboard = ({ user, setUser }) => {
       fetchUsers();
       fetchLogs();
       fetchSettings();
-      fetchGallery();
-      fetchPersonalAssets();
+      if (user.role === 'super_admin' || user.role === 'admin') {
+        fetchGallery();
+        fetchPersonalAssets();
+      }
     }
     
     socket.emit('join_room', 'private');
@@ -153,6 +161,10 @@ const PrivateDashboard = ({ user, setUser }) => {
 
     socket.on('message_deleted', (messageId) => {
       setMessages(prev => prev.filter(m => Number(m.id) !== Number(messageId)));
+    });
+
+    socket.on('user_deleted', ({ id }) => {
+      setUsers(prev => prev.filter(u => Number(u.id) !== Number(id)));
     });
 
     socket.on('new_comment', ({ gallery_id, personal_asset_id, comment }) => {
@@ -191,14 +203,22 @@ const PrivateDashboard = ({ user, setUser }) => {
       }
     });
 
-
     return () => {
       socket.off('receive_message');
+      socket.off('message_edited');
+      socket.off('message_deleted');
+      socket.off('user_deleted');
       socket.off('new_comment');
       socket.off('reactions_update');
       socket.disconnect();
     };
   }, [user]);
+
+  useEffect(() => {
+    if ((activeTab === 'gallery' || activeTab === 'vault') && !(user?.role === 'super_admin' || user?.role === 'admin')) {
+      setActiveTab('messages');
+    }
+  }, [activeTab, user?.role]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -1242,8 +1262,12 @@ const PrivateDashboard = ({ user, setUser }) => {
                   <>
                     <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
                     <TabButton id="users" icon={Users} label="Authority Matrix" onClick={() => setMobileMenuOpen(false)} />
-                    <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" onClick={() => setMobileMenuOpen(false)} />
-                    <TabButton id="vault" icon={Lock} label="Private Photos & Videos" onClick={() => setMobileMenuOpen(false)} />
+                    {(user.role === 'super_admin' || user.role === 'admin') && (
+                      <>
+                        <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" onClick={() => setMobileMenuOpen(false)} />
+                        <TabButton id="vault" icon={Lock} label="Private Photos & Videos" onClick={() => setMobileMenuOpen(false)} />
+                      </>
+                    )}
                     <TabButton id="logs" icon={ScrollText} label="Friend's Saving" onClick={() => setMobileMenuOpen(false)} />
                     <TabButton id="admin" icon={Settings} label="Core Engine" onClick={() => setMobileMenuOpen(false)} />
                   </>
@@ -1321,8 +1345,12 @@ const PrivateDashboard = ({ user, setUser }) => {
             <>
               <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
               <TabButton id="users" icon={Users} label="Authority Matrix" />
-              <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" />
-              <TabButton id="vault" icon={Lock} label="Private Photos & Videos" />
+              {(user.role === 'super_admin' || user.role === 'admin') && (
+                <>
+                  <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" />
+                  <TabButton id="vault" icon={Lock} label="Private Photos & Videos" />
+                </>
+              )}
               <TabButton id="logs" icon={ScrollText} label="Friend's Saving" />
               <TabButton id="admin" icon={Settings} label="Core Engine" />
             </>
