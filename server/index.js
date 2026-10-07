@@ -93,6 +93,18 @@ const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
+const saveFileToStorageBackup = async (fileName, buffer, mimeType) => {
+  try {
+    if (!db) return;
+    const base64Data = buffer.toString('base64');
+    await db.prepare(`
+      INSERT INTO file_storage (path, data, mime_type) 
+      VALUES (?, ?, ?) 
+      ON CONFLICT(path) DO UPDATE SET data = excluded.data, mime_type = excluded.mime_type
+    `).run(fileName, base64Data, mimeType || 'image/jpeg');
+  } catch (e) {}
+};
+
 const uploadToSupabase = async (file) => {
   let ext = path.extname(file.originalname);
   if (!ext) {
@@ -104,6 +116,9 @@ const uploadToSupabase = async (file) => {
   const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '');
   const fileName = Date.now() + '-' + baseName + ext;
   
+  // Persist backup in database table so Render container restarts never lose files
+  saveFileToStorageBackup(fileName, file.buffer, file.mimetype);
+
   if (supabase) {
     try {
       const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
@@ -123,6 +138,36 @@ const uploadToSupabase = async (file) => {
 };
 
 const app = express();
+
+// Custom handler for /uploads to recover files from database if disk was cleared by Render container restart
+app.get('/uploads/:filename', async (req, res, next) => {
+  const fileName = req.params.filename;
+  const localFile = path.join(UPLOADS_DIR, fileName);
+  if (fs.existsSync(localFile)) {
+    return res.sendFile(localFile);
+  }
+  try {
+    if (db) {
+      const record = await db.prepare('SELECT data, mime_type FROM file_storage WHERE path = ? OR path = ?').get(
+        fileName,
+        `/uploads/${fileName}`
+      );
+      if (record && record.data) {
+        const buffer = Buffer.from(record.data, 'base64');
+        try {
+          fs.writeFileSync(localFile, buffer);
+        } catch (e) {}
+        if (record.mime_type) res.setHeader('Content-Type', record.mime_type);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.send(buffer);
+      }
+    }
+  } catch (err) {
+    console.error('Error recovering file from database storage:', err.message);
+  }
+  next();
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR));
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -497,6 +542,14 @@ const db = {
   try {
     await db.exec(`ALTER TABLE users ADD COLUMN telegram_id TEXT`);
   } catch (e) {}
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS file_storage (
+      path TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      mime_type TEXT,
+      created_at TIMESTAMP DEFAULT now()
+    )
+  `);
   await db.exec(`
     CREATE TABLE IF NOT EXISTS roles (
       name TEXT PRIMARY KEY,
@@ -1537,6 +1590,237 @@ app.get('/api/users', checkAuth, async (req, res) => {
 app.get('/api/users/status', checkAuth, async (req, res) => {
   const onlineIds = Array.from(usersOnline.keys());
   res.json({ onlineIds });
+});
+
+// Image Proxy Endpoint (Ensures images are always visible on mobile and desktop without CORS/hotlink/mixed-content blocks)
+app.get('/api/proxy-image', async (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl) return res.status(400).send('Image URL required');
+  try {
+    let target = imageUrl.trim();
+    if (target.startsWith('/uploads/')) {
+      const fileName = target.replace('/uploads/', '');
+      const localFile = path.join(UPLOADS_DIR, fileName);
+      if (fs.existsSync(localFile)) return res.sendFile(localFile);
+      const record = await db.prepare('SELECT data, mime_type FROM file_storage WHERE path = ? OR path = ?').get(
+        fileName,
+        target
+      );
+      if (record && record.data) {
+        const buffer = Buffer.from(record.data, 'base64');
+        if (record.mime_type) res.setHeader('Content-Type', record.mime_type);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.send(buffer);
+      }
+      return res.status(404).send('Not found');
+    }
+
+    if (target.startsWith('http://localhost:5000/uploads/')) {
+      target = target.replace('http://localhost:5000', '');
+      const fileName = target.replace('/uploads/', '');
+      const localFile = path.join(UPLOADS_DIR, fileName);
+      if (fs.existsSync(localFile)) return res.sendFile(localFile);
+    }
+
+    const response = await fetch(target, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+      }
+    });
+    if (!response.ok) return res.status(response.status).send('Failed to fetch image');
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const arrayBuffer = await response.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error('Image proxy error:', err.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
+// Real-time Notifications Engine (All 7 required notification types)
+app.get('/api/notifications', checkAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const notifications = [];
+
+    // 1. New unread messages & by whom
+    try {
+      const recentMessages = await db.prepare(`
+        SELECT m.id, m.content, m.media_type, m.created_at, m.sender_id,
+               u.nickname, u.full_name, u.email
+        FROM messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.sender_id != ?
+        ORDER BY m.created_at DESC LIMIT 8
+      `).all(currentUserId);
+
+      for (const msg of recentMessages) {
+        const sender = msg.nickname || msg.full_name || msg.email.split('@')[0];
+        const preview = msg.media_type === 'image' ? '📷 Shared an image in chat' : (msg.content?.substring(0, 50) || 'Sent a message');
+        notifications.push({
+          id: `msg_${msg.id}`,
+          type: 'unread_message',
+          category: 'message',
+          title: `💬 New Message from ${sender}`,
+          description: `"${preview}"`,
+          sender,
+          target_tab: 'messages',
+          created_at: msg.created_at
+        });
+      }
+    } catch (e) {}
+
+    // 2. Someone shares an image (Gallery or Chat photo)
+    try {
+      const recentGallery = await db.prepare(`
+        SELECT id, title, caption, created_at, url
+        FROM gallery
+        ORDER BY created_at DESC LIMIT 5
+      `).all();
+
+      for (const g of recentGallery) {
+        notifications.push({
+          id: `gal_${g.id}`,
+          type: 'shared_image',
+          category: 'image',
+          title: `🖼️ Image Shared: ${g.title || 'Community Memory'}`,
+          description: g.caption ? `"${g.caption}"` : 'A new memory was published to Gallery Curator.',
+          target_tab: 'gallery',
+          image_url: g.url,
+          created_at: g.created_at
+        });
+      }
+    } catch (e) {}
+
+    // 3. New member registered
+    try {
+      const recentMembers = await db.prepare(`
+        SELECT id, full_name, nickname, email, role, created_at
+        FROM users
+        WHERE (status != 'deleted' OR status IS NULL)
+        ORDER BY created_at DESC LIMIT 5
+      `).all();
+
+      for (const mem of recentMembers) {
+        const name = mem.full_name || mem.nickname || mem.email.split('@')[0];
+        notifications.push({
+          id: `mem_${mem.id}`,
+          type: 'new_member',
+          category: 'member',
+          title: `👤 New Member: ${name}`,
+          description: `Registered with ${mem.role === 'super_admin' ? 'Super Admin' : (mem.role === 'admin' ? 'Admin' : 'Member')} access.`,
+          target_tab: (req.user.role === 'super_admin' ? 'users' : 'messages'),
+          created_at: mem.created_at
+        });
+      }
+    } catch (e) {}
+
+    // 4. Someone has changed his profile
+    try {
+      const recentProfileUpdates = await db.prepare(`
+        SELECT l.id, l.details, l.timestamp, l.user_id,
+               u.nickname, u.full_name, u.email
+        FROM logs l
+        LEFT JOIN users u ON l.user_id = u.id
+        WHERE l.action = 'PROFILE_UPDATE'
+        ORDER BY l.timestamp DESC LIMIT 5
+      `).all();
+
+      for (const p of recentProfileUpdates) {
+        const name = p.nickname || p.full_name || (p.email ? p.email.split('@')[0] : 'Member');
+        notifications.push({
+          id: `prof_${p.id}`,
+          type: 'profile_updated',
+          category: 'profile',
+          title: `✏️ Profile Updated: ${name}`,
+          description: p.details || `${name} updated personal profile information.`,
+          target_tab: 'messages',
+          created_at: p.timestamp
+        });
+      }
+    } catch (e) {}
+
+    // 5. Someone has missed to pay the saving
+    try {
+      const members = await db.prepare('SELECT id, name FROM savings_members').all();
+      for (const m of members) {
+        const paid = (await db.prepare("SELECT SUM(amount) as t FROM savings_transactions WHERE member_id = ? AND type = 'payment'").get(m.id))?.t || 0;
+        const expected = (await db.prepare("SELECT SUM(amount) as t FROM savings_transactions WHERE member_id = ? AND type IN ('missed', 'expected')").get(m.id))?.t || 0;
+        const debt = Math.max(0, parseFloat(expected || 0) - parseFloat(paid || 0));
+        if (debt > 0) {
+          notifications.push({
+            id: `missed_${m.id}`,
+            type: 'missed_saving',
+            category: 'saving_missed',
+            title: `⚠️ Missed Saving: ${m.name}`,
+            description: `${m.name} has missed saving payments (Outstanding: ETB ${debt.toLocaleString()}).`,
+            target_tab: 'logs',
+            created_at: new Date().toISOString()
+          });
+        }
+      }
+    } catch (e) {}
+
+    // 6. The clerk signed someone that pays his saving
+    try {
+      const recentPayments = await db.prepare(`
+        SELECT t.id, t.amount, t.confirmed_by, t.created_at, m.name as member_name
+        FROM savings_transactions t
+        LEFT JOIN savings_members m ON t.member_id = m.id
+        WHERE t.type = 'payment'
+        ORDER BY t.created_at DESC LIMIT 5
+      `).all();
+
+      for (const pay of recentPayments) {
+        const clerk = pay.confirmed_by || 'Clerk';
+        notifications.push({
+          id: `pay_${pay.id}`,
+          type: 'payment_verified',
+          category: 'saving_payment',
+          title: `💰 Payment Verified: ${pay.member_name || 'Member'}`,
+          description: `The clerk (${clerk}) signed ETB ${Number(pay.amount).toLocaleString()} saving payment for ${pay.member_name || 'Member'}.`,
+          target_tab: 'logs',
+          created_at: pay.created_at
+        });
+      }
+    } catch (e) {}
+
+    // 7. New business investments
+    try {
+      const recentInvestments = await db.prepare(`
+        SELECT id, project_name, allocated_amount, projected_profit, status, created_at
+        FROM savings_investments
+        ORDER BY created_at DESC LIMIT 5
+      `).all();
+
+      for (const inv of recentInvestments) {
+        notifications.push({
+          id: `inv_${inv.id}`,
+          type: 'new_investment',
+          category: 'investment',
+          title: `📈 New Business Investment: ${inv.project_name}`,
+          description: `ETB ${Number(inv.allocated_amount).toLocaleString()} deployed into "${inv.project_name}" (${inv.status.toUpperCase()}).`,
+          target_tab: 'logs',
+          created_at: inv.created_at
+        });
+      }
+    } catch (e) {}
+
+    // Sort by created_at DESC
+    notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({
+      success: true,
+      count: notifications.length,
+      notifications
+    });
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications: ' + err.message });
+  }
 });
 
 

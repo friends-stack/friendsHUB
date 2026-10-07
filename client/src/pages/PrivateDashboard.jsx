@@ -9,18 +9,46 @@ import {
   Heart, Camera, User, Globe, Forward, MessageCircle, ThumbsUp, Download, ArrowLeft, Trash2,
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
   MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
-  Home, LayoutGrid, Bell, ChevronDown, ExternalLink
+  Home, LayoutGrid, Bell, ChevronDown, ExternalLink,
+  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
 import SavingsTracker from '../components/SavingsTracker';
 
-
-
-
-
 const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : window.location.origin;
 const socket = io(socketUrl, { autoConnect: false });
+
+const resolveImageUrl = (url) => {
+  if (!url) return '';
+  let clean = String(url).trim();
+  if (clean.includes('localhost:5000/uploads/')) {
+    clean = clean.substring(clean.indexOf('/uploads/'));
+  }
+  if (clean.startsWith('http://localhost:5000')) {
+    clean = clean.replace('http://localhost:5000', window.location.origin);
+  }
+  return clean;
+};
+
+const handleImageError = (e, originalUrl) => {
+  const img = e.currentTarget;
+  if (!img) return;
+  if (!img.dataset.proxied && originalUrl && !originalUrl.startsWith('data:')) {
+    img.dataset.proxied = 'true';
+    let cleanUrl = originalUrl;
+    if (cleanUrl.includes('localhost:5000/uploads/')) {
+      cleanUrl = cleanUrl.substring(cleanUrl.indexOf('/uploads/'));
+    }
+    img.src = `/api/proxy-image?url=${encodeURIComponent(cleanUrl)}`;
+    return;
+  }
+  img.style.display = 'none';
+  const fallback = img.nextElementSibling;
+  if (fallback && (fallback.classList.contains('image-fallback-container') || fallback.dataset.fallback === 'true')) {
+    fallback.style.display = 'flex';
+  }
+};
 
 const getOriginalFileName = (url) => {
   if (!url) return '';
@@ -47,6 +75,16 @@ const PrivateDashboard = ({ user, setUser }) => {
   };
   const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notifFilter, setNotifFilter] = useState('all');
+  const [readNotifIds, setReadNotifIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('read_notif_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [pendingMedia, setPendingMedia] = useState({ url: '', type: 'text' });
@@ -140,6 +178,7 @@ const PrivateDashboard = ({ user, setUser }) => {
     socket.connect();
 
     fetchMessages();
+    fetchNotifications();
     if (user.role === 'super_admin') {
       fetchUsers();
     }
@@ -155,6 +194,11 @@ const PrivateDashboard = ({ user, setUser }) => {
     socket.emit('join_room', 'private');
     socket.on('receive_message', (msg) => {
       setMessages(prev => [...prev, msg]);
+      fetchNotifications();
+    });
+
+    socket.on('new_notification', (notif) => {
+      setNotifications(prev => [notif, ...prev.filter(n => n.id !== notif.id)]);
     });
 
     socket.on('message_edited', ({ messageId, content }) => {
@@ -256,6 +300,39 @@ const PrivateDashboard = ({ user, setUser }) => {
       });
       setMessages(data);
     } catch (err) { console.error(err); }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const { data } = await axios.get('/api/notifications', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (data && data.notifications) {
+        setNotifications(data.notifications);
+      }
+    } catch (err) {
+      console.warn('Could not fetch notifications:', err.message);
+    }
+  };
+
+  const unreadNotificationsCount = notifications.filter(n => !readNotifIds.includes(n.id)).length;
+  const filteredNotifications = notifications.filter(item => {
+    if (notifFilter === 'all') return true;
+    return item.category === notifFilter;
+  });
+
+  const markAllNotificationsRead = () => {
+    const allIds = notifications.map(n => n.id);
+    setReadNotifIds(allIds);
+    localStorage.setItem('read_notif_ids', JSON.stringify(allIds));
+  };
+
+  const markNotificationRead = (id) => {
+    if (!readNotifIds.includes(id)) {
+      const updated = [...readNotifIds, id];
+      setReadNotifIds(updated);
+      localStorage.setItem('read_notif_ids', JSON.stringify(updated));
+    }
   };
 
   const fetchUsers = async () => {
@@ -1031,6 +1108,327 @@ const PrivateDashboard = ({ user, setUser }) => {
         </div>
       )}
 
+      {/* Notifications Drawer / Modal */}
+      <AnimatePresence>
+        {showNotificationsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 3500,
+              background: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'stretch'
+            }}
+            onClick={() => setShowNotificationsModal(false)}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '460px',
+                background: '#ffffff',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '-10px 0 35px rgba(0,0,0,0.2)',
+                position: 'relative'
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                padding: '1.25rem 1.5rem',
+                borderBottom: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#ffffff'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#16a34a'
+                  }}>
+                    <BellRing size={22} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>
+                      Notifications
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+                      {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} unread alert${unreadNotificationsCount > 1 ? 's' : ''}` : 'All caught up'}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {unreadNotificationsCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllNotificationsRead}
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        color: '#475569',
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                      title="Mark all as read"
+                    >
+                      <Check size={14} color="#16a34a" />
+                      Mark read
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationsModal(false)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b'
+                    }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Pills */}
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                gap: '0.4rem',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                background: '#fafafa'
+              }}>
+                {[
+                  { key: 'all', label: `All (${notifications.length})` },
+                  { key: 'message', label: '💬 Messages' },
+                  { key: 'image', label: '🖼️ Images' },
+                  { key: 'member', label: '👥 Members' },
+                  { key: 'profile', label: '👤 Profile' },
+                  { key: 'saving_missed', label: '⚠️ Missed' },
+                  { key: 'saving_payment', label: '💰 Payments' },
+                  { key: 'investment', label: '📈 Investments' }
+                ].map(tab => {
+                  const active = notifFilter === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setNotifFilter(tab.key)}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '20px',
+                        border: active ? '1px solid #16a34a' : '1px solid #e2e8f0',
+                        background: active ? '#16a34a' : '#ffffff',
+                        color: active ? '#ffffff' : '#475569',
+                        fontSize: '0.75rem',
+                        fontWeight: active ? 700 : 500,
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Notifications List */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                {filteredNotifications.length === 0 ? (
+                  <div style={{
+                    margin: 'auto',
+                    textAlign: 'center',
+                    padding: '2rem 1rem',
+                    color: '#94a3b8'
+                  }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      background: '#f8fafc',
+                      border: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 1rem',
+                      color: '#94a3b8'
+                    }}>
+                      <BellRing size={28} />
+                    </div>
+                    <div style={{ fontWeight: 700, color: '#334155', marginBottom: '0.25rem' }}>
+                      No notifications
+                    </div>
+                    <div style={{ fontSize: '0.8rem' }}>
+                      {notifFilter === 'all' 
+                        ? "You're all caught up with recent activities!"
+                        : `No notifications found under selected filter.`}
+                    </div>
+                  </div>
+                ) : (
+                  filteredNotifications.map(item => {
+                    const isUnread = !readNotifIds.includes(item.id);
+                    const getIconAndBg = () => {
+                      switch (item.category) {
+                        case 'message':
+                          return { icon: <MessageCircle size={18} color="#2563eb" />, bg: '#eff6ff' };
+                        case 'image':
+                          return { icon: <ImageIcon size={18} color="#16a34a" />, bg: '#f0fdf4' };
+                        case 'member':
+                          return { icon: <Users size={18} color="#8b5cf6" />, bg: '#f5f3ff' };
+                        case 'profile':
+                          return { icon: <User size={18} color="#0284c7" />, bg: '#f0f9ff' };
+                        case 'saving_missed':
+                          return { icon: <AlertTriangle size={18} color="#ef4444" />, bg: '#fef2f2' };
+                        case 'saving_payment':
+                          return { icon: <CheckCircle size={18} color="#16a34a" />, bg: '#f0fdf4' };
+                        case 'investment':
+                          return { icon: <TrendingUp size={18} color="#d97706" />, bg: '#fffbeb' };
+                        default:
+                          return { icon: <Bell size={18} color="#64748b" />, bg: '#f1f5f9' };
+                      }
+                    };
+                    const { icon, bg } = getIconAndBg();
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          markNotificationRead(item.id);
+                          if (item.target_tab) {
+                            setActiveTab(item.target_tab);
+                            setShowNotificationsModal(false);
+                          }
+                        }}
+                        style={{
+                          background: isUnread ? '#f8fafc' : '#ffffff',
+                          border: isUnread ? '1px solid #cbd5e1' : '1px solid #f1f5f9',
+                          borderRadius: '16px',
+                          padding: '1rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          position: 'relative',
+                          display: 'flex',
+                          gap: '0.85rem',
+                          boxShadow: isUnread ? '0 2px 8px rgba(0,0,0,0.04)' : 'none'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#16a34a'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = isUnread ? '#cbd5e1' : '#f1f5f9'; }}
+                      >
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '12px',
+                          background: bg,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {icon}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                            <div style={{
+                              fontWeight: isUnread ? 800 : 600,
+                              fontSize: '0.9rem',
+                              color: isUnread ? '#0f172a' : '#334155',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {item.title}
+                            </div>
+                            {isUnread && (
+                              <span style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                background: '#16a34a',
+                                flexShrink: 0
+                              }} />
+                            )}
+                          </div>
+
+                          <div style={{
+                            fontSize: '0.82rem',
+                            color: '#64748b',
+                            lineHeight: 1.4,
+                            marginBottom: '0.5rem',
+                            wordBreak: 'break-word'
+                          }}>
+                            {item.description}
+                          </div>
+
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: '0.72rem',
+                            color: '#94a3b8'
+                          }}>
+                            <span>
+                              {item.created_at ? new Date(item.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
+                            </span>
+                            {item.target_tab && (
+                              <span style={{ color: '#16a34a', fontWeight: 600 }}>
+                                View {item.target_tab.toUpperCase()} →
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Universal Lightbox */}
       <AnimatePresence>
         {lightBox.isOpen && (
@@ -1069,14 +1467,10 @@ const PrivateDashboard = ({ user, setUser }) => {
                 <video src={lightBox.url} controls autoPlay style={{ maxWidth: '95%', maxHeight: '95%', borderRadius: '8px' }} onClick={e => e.stopPropagation()} />
               ) : (
                 <img 
-                  src={lightBox.url} 
+                  src={resolveImageUrl(lightBox.url)} 
                   alt="Full View" 
-                  onError={(e) => {
-                    if (lightBox.url && lightBox.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
-                      e.currentTarget.dataset.retried = 'true';
-                      e.currentTarget.src = `http://localhost:5000${lightBox.url}`;
-                    }
-                  }}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => handleImageError(e, lightBox.url)}
                   style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px' }} 
                 />
               )}
@@ -1466,22 +1860,48 @@ const PrivateDashboard = ({ user, setUser }) => {
 
           {/* Right Action Icons: Bell & Avatar dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', position: 'relative' }}>
-            <div 
-              onClick={() => setActiveTab('messages')}
-              style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            <button 
+              type="button"
+              onClick={() => {
+                setShowNotificationsModal(true);
+                fetchNotifications();
+              }}
+              style={{ 
+                position: 'relative', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                background: 'none',
+                border: 'none',
+                padding: '4px'
+              }}
+              title="Notifications"
             >
               <Bell size={22} color="#475569" />
-              <span style={{ 
-                position: 'absolute', 
-                top: '-2px', 
-                right: '-2px', 
-                width: '8px', 
-                height: '8px', 
-                background: '#ef4444', 
-                borderRadius: '50%',
-                border: '1.5px solid white'
-              }} />
-            </div>
+              {unreadNotificationsCount > 0 && (
+                <span style={{ 
+                  position: 'absolute', 
+                  top: '-4px', 
+                  right: '-4px', 
+                  minWidth: '18px', 
+                  height: '18px', 
+                  background: '#ef4444', 
+                  color: 'white', 
+                  borderRadius: '999px', 
+                  border: '2px solid white', 
+                  fontSize: '0.65rem', 
+                  fontWeight: 800, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  padding: '0 3px', 
+                  boxShadow: '0 2px 5px rgba(239,68,68,0.4)' 
+                }}>
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
 
             <div 
               onClick={() => setShowMobileUserMenu(prev => !prev)}
@@ -1606,7 +2026,55 @@ const PrivateDashboard = ({ user, setUser }) => {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowNotificationsModal(true);
+                fetchNotifications();
+              }}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                width: '40px',
+                height: '40px',
+                cursor: 'pointer',
+                color: '#475569',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#16a34a'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#475569'; }}
+              title="Notifications"
+            >
+              <Bell size={20} />
+              {unreadNotificationsCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  minWidth: '18px',
+                  height: '18px',
+                  background: '#ef4444',
+                  color: 'white',
+                  borderRadius: '999px',
+                  border: '2px solid white',
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 3px',
+                  boxShadow: '0 2px 5px rgba(239,68,68,0.4)'
+                }}>
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
 
             <button 
               className="header-logout-btn"
@@ -2474,29 +2942,87 @@ const PrivateDashboard = ({ user, setUser }) => {
                         >
                           <MoreHorizontal size={20} />
                         </div>
-                        <img 
-                          src={item.url} 
-                          alt={item.title} 
-                          onError={(e) => {
-                            if (item.url && item.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
-                              e.currentTarget.dataset.retried = 'true';
-                              e.currentTarget.src = `http://localhost:5000${item.url}`;
-                            }
-                          }}
-                          style={{ 
-                            width: '100%', 
-                            height: '350px',
-                            objectFit: 'contain', 
-                            background: '#f1f5f9',
-                            display: 'block',
-                            cursor: 'zoom-in'
-                          }} 
-                        />
-                        {/* Gradient Overlay like screenshot */}
                         <div style={{ 
-                          position: 'absolute', inset: 0, 
-                          background: 'linear-gradient(to bottom, transparent 60%, rgba(34, 197, 94, 0.1) 100%)' 
-                        }} />
+                          position: 'relative', 
+                          width: '100%', 
+                          minHeight: '280px', 
+                          maxHeight: '350px', 
+                          background: '#f8fafc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden'
+                        }}>
+                          <img 
+                            src={resolveImageUrl(item.url)} 
+                            alt={item.title || 'Community Memory'} 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => handleImageError(e, item.url)}
+                            style={{ 
+                              width: '100%', 
+                              height: '350px',
+                              objectFit: 'contain', 
+                              background: '#f8fafc',
+                              display: 'block',
+                              cursor: 'zoom-in'
+                            }} 
+                          />
+                          <div 
+                            className="image-fallback-container"
+                            data-fallback="true"
+                            style={{
+                              display: 'none',
+                              position: 'absolute',
+                              inset: 0,
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: 'linear-gradient(135deg, #15803d 0%, #16a34a 60%, #059669 100%)',
+                              color: 'white',
+                              padding: '2rem',
+                              textAlign: 'center',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <div style={{
+                              width: '64px',
+                              height: '64px',
+                              borderRadius: '50%',
+                              background: 'rgba(255,255,255,0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginBottom: '0.85rem',
+                              boxShadow: '0 8px 20px rgba(0,0,0,0.15)'
+                            }}>
+                              <ImageIcon size={32} color="white" />
+                            </div>
+                            <div style={{ fontWeight: 800, fontSize: '1.15rem', marginBottom: '0.3rem', letterSpacing: '0.5px' }}>
+                              {item.title || 'Community Memory'}
+                            </div>
+                            <div style={{ fontSize: '0.82rem', opacity: 0.9, maxWidth: '280px', lineHeight: 1.4 }}>
+                              {item.caption || 'F.R.I.E.N.D.S Gallery Curator'}
+                            </div>
+                            <span style={{ 
+                              marginTop: '1rem', 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '0.4rem', 
+                              padding: '0.35rem 0.85rem', 
+                              borderRadius: '999px', 
+                              background: 'rgba(255,255,255,0.22)', 
+                              fontSize: '0.75rem', 
+                              fontWeight: 700 
+                            }}>
+                              🖼️ Shared Memory
+                            </span>
+                          </div>
+                          {/* Gradient Overlay */}
+                          <div style={{ 
+                            position: 'absolute', inset: 0, pointerEvents: 'none',
+                            background: 'linear-gradient(to bottom, transparent 65%, rgba(34, 197, 94, 0.08) 100%)' 
+                          }} />
+                        </div>
                       </div>
 
                       <div style={{ padding: '1.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -2777,13 +3303,9 @@ const PrivateDashboard = ({ user, setUser }) => {
                           </div>
                           {asset.type === 'photo' ? (
                             <img 
-                              src={asset.url} 
-                              onError={(e) => {
-                                if (asset.url && asset.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
-                                  e.currentTarget.dataset.retried = 'true';
-                                  e.currentTarget.src = `http://localhost:5000${asset.url}`;
-                                }
-                              }}
+                              src={resolveImageUrl(asset.url)} 
+                              referrerPolicy="no-referrer"
+                              onError={(e) => handleImageError(e, asset.url)}
                               onClick={() => setLightBox({ isOpen: true, url: asset.url, type: 'image', item: { ...asset, type: 'personal' } })}
                               style={{ width: '100%', aspectRatio: '1/1', objectFit: 'contain', background: '#f1f5f9', cursor: 'zoom-in' }} 
                               alt={asset.title} 
