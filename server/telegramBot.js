@@ -25,15 +25,14 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // Keyboard generators
   const getAdminKeyboard = (isSuperAdmin = false) => {
     const buttons = [
-      ['💬 Post to Chat', '📢 Announcement'],
-      ['🖼️ Post to Gallery', '👥 View Messages'],
-      ['💰 Check Savings', '🏷️ Track Username'],
-      ['👤 My Identity']
+      ['📝 Post', '👥 View Messages'],
+      ['💰 Check Savings', '🏷️ Usernames']
     ];
     if (isSuperAdmin) {
-      buttons[2] = ['💰 Check Savings', '🏷️ Track Username'];
-      buttons[3] = ['👤 My Identity', '📋 Track All Usernames'];
-      buttons.push(['⚙️ Access Requests', '🛡️ Manage Admins']);
+      buttons.push(['⚙️ Requests', '🛡️ Manage Admins']);
+      buttons.push(['👤 My Identity']);
+    } else {
+      buttons.push(['👤 My Identity', 'ℹ️ Help']);
     }
     return Markup.keyboard(buttons).resize();
   };
@@ -41,7 +40,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   const getMemberKeyboard = () => {
     return Markup.keyboard([
       ['👥 View Messages', '💰 Check Savings'],
-      ['🏷️ Track Username', '👤 My Identity'],
+      ['🏷️ Usernames', '👤 My Identity'],
       ['ℹ️ Help']
     ]).resize();
   };
@@ -529,28 +528,67 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
   });
 
-  // BUTTON 1: '💬 Post to Chat'
-  bot.hears('💬 Post to Chat', async (ctx) => {
+  // MAIN MENU: 📝 POST (Chat, Gallery, Announcement inside)
+  const handlePostMenu = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canPost) {
-      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin are permitted to post messages to the website live chat.');
+      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin are permitted to publish posts.');
     }
+
+    const text =
+      `📝 <b>POST & PUBLISH MENU</b>\n\n` +
+      `Choose where you would like to publish content to the platform:`;
+
+    const buttons = [
+      [
+        Markup.button.callback('💬 Post to Live Chat', 'menu_post_chat'),
+        Markup.button.callback('🖼️ Post to Gallery', 'menu_post_gallery')
+      ],
+      [
+        Markup.button.callback('📢 Broadcast Announcement', 'menu_post_announce')
+      ],
+      [
+        Markup.button.callback('❌ Cancel', 'menu_post_cancel')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  bot.hears(['📝 Post', 'Post', '/postmenu'], handlePostMenu);
+
+  // Sub-actions for Post Menu
+  bot.action('menu_post_chat', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canPost) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
     userStates.set(ctx.from.id.toString(), { action: 'awaiting_chat_post' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
     ctx.reply(
-      '💬 <b>Post to Friends Chat</b>\n\n' +
+      '💬 <b>Post to Live Chat</b>\n\n' +
       'Please send the message you want to post to the website live chat.\n\n' +
       '<i>(Tap ❌ Cancel below if you change your mind)</i>',
       { parse_mode: 'HTML', ...getCancelKeyboard() }
     );
   });
 
-  // BUTTON 2: '📢 Announcement'
-  bot.hears('📢 Announcement', async (ctx) => {
+  bot.action('menu_post_gallery', async (ctx) => {
     const profile = await getTelegramProfile(ctx);
-    if (!profile.canPost) {
-      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin are permitted to broadcast announcements.');
-    }
+    if (!profile.canPost) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
+    userStates.set(ctx.from.id.toString(), { action: 'awaiting_gallery_photo' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+    ctx.reply(
+      '🖼️ <b>Post to Website Gallery</b>\n\n' +
+      'Please send a photo with a caption or title. It will be published directly to the Community Gallery!\n\n' +
+      '<i>(Tap ❌ Cancel below if you change your mind)</i>',
+      { parse_mode: 'HTML', ...getCancelKeyboard() }
+    );
+  });
+
+  bot.action('menu_post_announce', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canPost) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
     userStates.set(ctx.from.id.toString(), { action: 'awaiting_announcement' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
     ctx.reply(
       '📢 <b>Broadcast Announcement</b>\n\n' +
       'Please send the announcement text to display across the website.\n\n' +
@@ -559,19 +597,34 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     );
   });
 
-  // BUTTON 3: '🖼️ Post to Gallery'
+  bot.action('menu_post_cancel', async (ctx) => {
+    userStates.delete(ctx.from.id.toString());
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery('Cancelled');
+      await ctx.editMessageText('❌ Post cancelled.');
+    }
+  });
+
+  // Direct backwards-compatibility buttons
+  bot.hears('💬 Post to Chat', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canPost) return ctx.reply('⛔ Only Admins can post to live chat.');
+    userStates.set(ctx.from.id.toString(), { action: 'awaiting_chat_post' });
+    ctx.reply('💬 <b>Post to Live Chat</b>\n\nPlease send your message:', { parse_mode: 'HTML', ...getCancelKeyboard() });
+  });
+
+  bot.hears('📢 Announcement', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canPost) return ctx.reply('⛔ Only Admins can broadcast announcements.');
+    userStates.set(ctx.from.id.toString(), { action: 'awaiting_announcement' });
+    ctx.reply('📢 <b>Broadcast Announcement</b>\n\nPlease send announcement text:', { parse_mode: 'HTML', ...getCancelKeyboard() });
+  });
+
   bot.hears('🖼️ Post to Gallery', async (ctx) => {
     const profile = await getTelegramProfile(ctx);
-    if (!profile.canPost) {
-      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin are permitted to post photos to the website gallery.');
-    }
+    if (!profile.canPost) return ctx.reply('⛔ Only Admins can post photos.');
     userStates.set(ctx.from.id.toString(), { action: 'awaiting_gallery_photo' });
-    ctx.reply(
-      '🖼️ <b>Post to Website Gallery</b>\n\n' +
-      'Please send a photo with a caption or title to publish it to the Community Gallery.\n\n' +
-      '<i>(Tap ❌ Cancel below if you change your mind)</i>',
-      { parse_mode: 'HTML', ...getCancelKeyboard() }
-    );
+    ctx.reply('🖼️ <b>Post to Gallery</b>\n\nPlease send a photo with caption:', { parse_mode: 'HTML', ...getCancelKeyboard() });
   });
 
   // CANCEL BUTTON: '❌ Cancel'
@@ -584,7 +637,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     ctx.reply('❌ Action cancelled.', keyboard);
   });
 
-  // BUTTON 4: '👥 View Messages'
+  // ==========================================
+  // MAIN MENU: 👥 VIEW MESSAGES (WITH MSG, TIME, DATE & TELEGRAM USERNAMES)
+  // ==========================================
   bot.hears(['👥 View Messages', '/messages', '5'], async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
@@ -592,9 +647,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
 
     const lastMessages = (await db.prepare(`
-      SELECT m.content, m.media_url, m.media_type, u.nickname, u.email, m.created_at
+      SELECT m.content, m.media_url, m.media_type, m.created_at,
+             u.nickname, u.full_name, u.email, u.telegram_username,
+             b.username as bot_username
       FROM messages m 
       LEFT JOIN users u ON m.sender_id = u.id 
+      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
       ORDER BY m.created_at DESC LIMIT 10
     `).all()).reverse();
 
@@ -603,35 +661,79 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
 
     const historyText = lastMessages.map(m => {
-      const time = new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-      const sender = m.nickname || m.email || 'Admin';
-      const indicator = m.media_url ? '[🖼️ Media] ' : '';
-      return `💬 <b>${escapeHtml(sender)}</b> (${time}):\n${indicator}${escapeHtml(m.content || '(Media only)')}`;
-    }).join('\n\n');
+      const dateObj = new Date(m.created_at);
+      const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
+      const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+
+      const senderName = m.nickname || m.full_name || m.email || 'Member';
+      const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
+      const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
+      const tgLink = rawTg ? ` <a href="https://t.me/${escapeHtml(rawTg)}">[Profile]</a>` : '';
+      const mediaIndicator = m.media_url ? '📷 <i>[Media Attached]</i>\n' : '';
+
+      return (
+        `💬 <b>${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay}${tgLink})\n` +
+        `📅 <b>Date:</b> ${msgDate} | ⏰ <b>Time:</b> ${msgTime}\n` +
+        `📝 <b>Message:</b> ${mediaIndicator}${escapeHtml(m.content || '(Media only)')}`
+      );
+    }).join('\n\n──────────────\n\n');
 
     const extra = profile.isAdmin ? Markup.inlineKeyboard([[Markup.button.callback('📜 Show 50 Messages', 'show_messages')]]) : undefined;
 
     ctx.reply(`💬 <b>LIVE CHAT RECENT MESSAGES</b>\n\n${historyText}`, { parse_mode: 'HTML', ...extra });
   });
 
-  // BUTTON 5: '💰 Check Savings'
-  bot.hears(['💰 Check Savings', '/savings'], async (ctx) => {
+  // ==========================================
+  // MAIN MENU: 💰 CHECK SAVINGS (SYNCED WITH MEMBERS DASHBOARD)
+  // ==========================================
+  bot.hears(['💰 Check Savings', '💰 Savings', '/savings'], async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
       return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view savings data.');
     }
 
     try {
-      const members = await db.prepare('SELECT * FROM savings_members WHERE status = ?').all('active');
-      const investments = await db.prepare('SELECT * FROM savings_investments').all();
-      const config = await db.prepare('SELECT * FROM savings_config ORDER BY id DESC LIMIT 1').get() || { weekly_amount: 300 };
+      // 1. Auto-sync active admins to savings_members (exact same logic as GET /api/savings/members)
+      try {
+        const admins = await db.prepare("SELECT nickname, full_name, email FROM users WHERE role IN ('super_admin', 'admin') AND (status != 'deleted' OR status IS NULL)").all();
+        for (const admin of admins) {
+          const adminName = admin.full_name || admin.nickname || admin.email;
+          if (!adminName) continue;
+          const existing = await db.prepare("SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)").get(adminName);
+          if (!existing) {
+            await db.prepare("INSERT INTO savings_members (name) VALUES (?)").run(adminName);
+          }
+        }
+      } catch (syncErr) {}
+
+      // 2. Fetch members and match with active users
+      const allSavingsMembers = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
+      const allUsers = await db.prepare('SELECT nickname, full_name, email, role FROM users').all();
+      const activeMembers = [];
+
+      for (const m of allSavingsMembers) {
+        const matchedUser = allUsers.find(u => 
+          (u.full_name && m.name.toLowerCase().replace(/\s+/g, '') === u.full_name.toLowerCase().replace(/\s+/g, '')) ||
+          (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
+          (u.full_name && m.name.toLowerCase().includes(u.full_name.toLowerCase())) ||
+          (u.nickname && m.name.toLowerCase().includes(u.nickname.toLowerCase())) ||
+          (u.email && u.email.toLowerCase().startsWith(m.name.split(' ')[0].toLowerCase()))
+        );
+        if (matchedUser && ['admin', 'super_admin'].includes(matchedUser.role)) {
+          m.role = matchedUser.role;
+          activeMembers.push(m);
+        }
+      }
 
       let totalSaving = 0;
-      for (const m of members) {
+      for (const m of activeMembers) {
         const trans = await db.prepare('SELECT amount, type FROM savings_transactions WHERE member_id = ?').all(m.id);
         const paid = trans.filter(t => t.type === 'payment').reduce((s, t) => s + Number(t.amount || 0), 0);
         totalSaving += paid;
       }
+
+      const investments = await db.prepare('SELECT * FROM savings_investments').all();
+      const config = await db.prepare('SELECT * FROM savings_config ORDER BY id DESC LIMIT 1').get() || { weekly_amount: 300 };
 
       const moneyAtWork = investments
         .filter(i => i.status === 'active')
@@ -648,19 +750,20 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
       const remainingMoney = Math.max(0, (totalSaving + completedProfits) - moneyAtWork);
 
-      ctx.reply(
+      const savingsMessage =
         `💰 <b>SAVINGS & WORKING CAPITAL OVERVIEW</b>\n\n` +
         `🟡 <b>Remaining Money:</b> ETB ${remainingMoney.toLocaleString()} (Cash & Bank)\n` +
         `🔵 <b>Money at Work:</b> ETB ${moneyAtWork.toLocaleString()} (Active Investments)\n` +
         `🟢 <b>Total Saving:</b> ETB ${totalSaving.toLocaleString()} (Cumulative Pool)\n` +
         `📈 <b>Realized Profit:</b> ETB ${completedProfits.toLocaleString()}\n` +
-        `👥 <b>Active Members:</b> ${members.length}\n` +
+        `👥 <b>Active Members:</b> ${activeMembers.length}\n` +
         `📅 <b>Weekly Rate:</b> ETB ${config.weekly_amount}/wk\n\n` +
-        `<i>Verified live against database.</i>`,
-        { parse_mode: 'HTML' }
-      );
-    } catch (e) {
-      ctx.reply('⚠️ Error computing savings overview: ' + e.message);
+        `<i>Verified live against database.</i>`;
+
+      await ctx.reply(savingsMessage, { parse_mode: 'HTML' });
+    } catch (err) {
+      console.error('Error computing savings overview:', err);
+      ctx.reply('⚠️ Error computing savings overview: ' + err.message);
     }
   });
 
@@ -697,8 +800,264 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
   };
 
-  // TRACK USERNAME HANDLER: Live tracking of user's own Telegram username
-  const handleTrackUsername = async (ctx) => {
+  // ==========================================
+  // DIRECTORY & USERNAMES ENGINE
+  // ==========================================
+
+  // Universal helper to retrieve all platform users and map their Telegram identity, ID, and Email
+  const getDirectoryUsers = async () => {
+    // 1. Fetch from bot_access
+    const botUsers = await db.prepare(`
+      SELECT b.telegram_id, b.username, b.first_name, b.last_name, b.role as bot_role, b.user_id,
+             u.id as web_id, u.email, u.nickname, u.full_name, u.role as web_role, u.telegram_username, u.status
+      FROM bot_access b
+      LEFT JOIN users u ON (b.user_id = u.id OR (b.username != '' AND LOWER(REPLACE(u.telegram_username, '@', '')) = LOWER(b.username)))
+      WHERE (u.status != 'deleted' OR u.status IS NULL)
+    `).all();
+
+    // 2. Fetch from users table to catch any website users not yet in bot_access
+    const webUsers = await db.prepare(`
+      SELECT id as web_id, email, nickname, full_name, role as web_role, telegram_id, telegram_username, status
+      FROM users
+      WHERE (status != 'deleted' OR status IS NULL)
+    `).all();
+
+    const directory = new Map();
+
+    for (const b of botUsers) {
+      const key = b.telegram_id || (b.web_id ? `web_${b.web_id}` : (b.username || Math.random().toString()));
+      const rawName = [b.first_name, b.last_name].filter(Boolean).join(' ') || b.nickname || b.full_name || b.username || 'User';
+      const rawTg = b.username ? b.username.replace(/^@/, '') : (b.telegram_username ? b.telegram_username.replace(/^@/, '') : '');
+      const tgUsername = rawTg ? `@${rawTg}` : 'None';
+      
+      let effectiveRole = 'member';
+      if (b.bot_role === 'super_admin' || b.web_role === 'super_admin' || (process.env.ADMIN_CHAT_ID && b.telegram_id === process.env.ADMIN_CHAT_ID.toString())) {
+        effectiveRole = 'super_admin';
+      } else if (b.bot_role === 'admin' || b.web_role === 'admin') {
+        effectiveRole = 'admin';
+      } else if (b.bot_role === 'pending') {
+        effectiveRole = 'pending';
+      } else if (b.bot_role === 'rejected') {
+        effectiveRole = 'rejected';
+      }
+
+      directory.set(key, {
+        telegram_name: rawName,
+        username: tgUsername,
+        raw_username: rawTg,
+        telegram_id: b.telegram_id || 'Not linked',
+        email: b.email || 'None',
+        role: effectiveRole
+      });
+    }
+
+    for (const u of webUsers) {
+      if (u.telegram_id && directory.has(u.telegram_id)) {
+        const item = directory.get(u.telegram_id);
+        if (u.email && item.email === 'None') item.email = u.email;
+        if ((u.full_name || u.nickname) && (!item.telegram_name || item.telegram_name === 'User')) {
+          item.telegram_name = u.full_name || u.nickname;
+        }
+        continue;
+      }
+
+      const rawTg = u.telegram_username ? u.telegram_username.replace(/^@/, '') : '';
+      const matchingKey = Array.from(directory.keys()).find(k => {
+        const item = directory.get(k);
+        return item.raw_username && rawTg && item.raw_username.toLowerCase() === rawTg.toLowerCase();
+      });
+
+      if (matchingKey) {
+        const item = directory.get(matchingKey);
+        if (u.email && item.email === 'None') item.email = u.email;
+        continue;
+      }
+
+      const effectiveRole = (u.web_role === 'super_admin') ? 'super_admin'
+        : (u.web_role === 'admin') ? 'admin'
+        : 'member';
+
+      directory.set(`web_${u.web_id}`, {
+        telegram_name: u.full_name || u.nickname || 'Member',
+        username: rawTg ? `@${rawTg}` : 'None',
+        raw_username: rawTg,
+        telegram_id: u.telegram_id || 'Not linked',
+        email: u.email || 'None',
+        role: effectiveRole
+      });
+    }
+
+    return Array.from(directory.values());
+  };
+
+  // MAIN MENU: 🏷️ USERNAMES (Unified Hub)
+  const handleUsernamesMenu = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canView) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('🔒 Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin.');
+    }
+
+    const all = await getDirectoryUsers();
+    const adminsCount = all.filter(u => ['super_admin', 'admin'].includes(u.role)).length;
+    const membersCount = all.filter(u => !['super_admin', 'admin', 'pending', 'rejected'].includes(u.role)).length;
+
+    const text =
+      `🏷️ <b>USERNAMES & PLATFORM DIRECTORY</b>\n\n` +
+      `Browse community members and administrators registered on the platform:\n\n` +
+      `👥 <b>Members (${membersCount}):</b> Saving & active community members\n` +
+      `🛡️ <b>Admins (${adminsCount}):</b> Platform administrators & super admin\n` +
+      `📋 <b>All Users (${all.length}):</b> Full combined directory\n` +
+      `👤 <b>My Identity:</b> Your detected username and permissions\n\n` +
+      `<i>Select an option below to view details:</i>`;
+
+    const buttons = [
+      [
+        Markup.button.callback(`👥 Members List (${membersCount})`, 'unames_members'),
+        Markup.button.callback(`🛡️ Admins List (${adminsCount})`, 'unames_admins')
+      ],
+      [
+        Markup.button.callback(`📋 View All (${all.length})`, 'unames_all'),
+        Markup.button.callback('🔍 My Username', 'unames_my_profile')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: List Members
+  const handleListMembersDirectory = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canView) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('🔒 Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied.');
+    }
+
+    const all = await getDirectoryUsers();
+    const members = all.filter(u => !['super_admin', 'admin', 'pending', 'rejected'].includes(u.role));
+
+    let text = `👥 <b>MEMBERS DIRECTORY (${members.length})</b>\n\n`;
+
+    if (members.length === 0) {
+      text += `<i>No regular members registered yet.</i>`;
+    } else {
+      members.forEach((m, idx) => {
+        const tgLink = (m.raw_username && m.username !== 'None') ? ` <a href="https://t.me/${escapeHtml(m.raw_username)}">[Profile]</a>` : '';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(m.telegram_name)}\n` +
+          `   <b>Username:</b> ${escapeHtml(m.username)}${tgLink}\n` +
+          `   <b>ID:</b> <code>${escapeHtml(m.telegram_id)}</code>\n` +
+          `   <b>Email:</b> <code>${escapeHtml(m.email)}</code>\n\n`;
+      });
+    }
+
+    const buttons = [
+      [
+        Markup.button.callback('🛡️ View Admins', 'unames_admins'),
+        Markup.button.callback('📋 View All', 'unames_all')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Usernames Menu', 'unames_menu')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: List Admins
+  const handleListAdminsDirectory = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canView) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('🔒 Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied.');
+    }
+
+    const all = await getDirectoryUsers();
+    const admins = all.filter(u => ['super_admin', 'admin'].includes(u.role));
+
+    let text = `🛡️ <b>ADMINISTRATORS DIRECTORY (${admins.length})</b>\n\n`;
+
+    if (admins.length === 0) {
+      text += `<i>No administrators registered.</i>`;
+    } else {
+      admins.forEach((a, idx) => {
+        const roleBadge = a.role === 'super_admin' ? '👑 SUPER ADMIN' : '🛡️ ADMIN';
+        const tgLink = (a.raw_username && a.username !== 'None') ? ` <a href="https://t.me/${escapeHtml(a.raw_username)}">[Profile]</a>` : '';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(a.telegram_name)} (<i>${roleBadge}</i>)\n` +
+          `   <b>Username:</b> ${escapeHtml(a.username)}${tgLink}\n` +
+          `   <b>ID:</b> <code>${escapeHtml(a.telegram_id)}</code>\n` +
+          `   <b>Email:</b> <code>${escapeHtml(a.email)}</code>\n\n`;
+      });
+    }
+
+    const buttons = [
+      [
+        Markup.button.callback('👥 View Members', 'unames_members'),
+        Markup.button.callback('📋 View All', 'unames_all')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Usernames Menu', 'unames_menu')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: List All Users (Grouped)
+  const handleListAllUsersDirectory = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canView) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('🔒 Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied.');
+    }
+
+    const all = await getDirectoryUsers();
+    const admins = all.filter(u => ['super_admin', 'admin'].includes(u.role));
+    const members = all.filter(u => !['super_admin', 'admin', 'pending', 'rejected'].includes(u.role));
+
+    let text = `📋 <b>ALL PLATFORM USERS (${all.length})</b>\n\n`;
+
+    if (admins.length > 0) {
+      text += `🛡️ <b>ADMINS:</b>\n`;
+      admins.forEach((a, idx) => {
+        const roleBadge = a.role === 'super_admin' ? '👑 SUPER ADMIN' : '🛡️ ADMIN';
+        const tgLink = (a.raw_username && a.username !== 'None') ? ` <a href="https://t.me/${escapeHtml(a.raw_username)}">[Profile]</a>` : '';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(a.telegram_name)} (<i>${roleBadge}</i>)\n` +
+          `   <b>Username:</b> ${escapeHtml(a.username)}${tgLink}\n` +
+          `   <b>ID:</b> <code>${escapeHtml(a.telegram_id)}</code>\n` +
+          `   <b>Email:</b> <code>${escapeHtml(a.email)}</code>\n\n`;
+      });
+    }
+
+    if (members.length > 0) {
+      text += `👥 <b>MEMBERS:</b>\n`;
+      members.forEach((m, idx) => {
+        const tgLink = (m.raw_username && m.username !== 'None') ? ` <a href="https://t.me/${escapeHtml(m.raw_username)}">[Profile]</a>` : '';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(m.telegram_name)}\n` +
+          `   <b>Username:</b> ${escapeHtml(m.username)}${tgLink}\n` +
+          `   <b>ID:</b> <code>${escapeHtml(m.telegram_id)}</code>\n` +
+          `   <b>Email:</b> <code>${escapeHtml(m.email)}</code>\n\n`;
+      });
+    }
+
+    const buttons = [
+      [
+        Markup.button.callback('👥 Members Only', 'unames_members'),
+        Markup.button.callback('🛡️ Admins Only', 'unames_admins')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Usernames Menu', 'unames_menu')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: My Username details
+  const handleMyUsernameProfile = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     const tgId = ctx.from.id.toString();
     const rawUsername = ctx.from.username ? ctx.from.username.replace(/^@/, '') : '';
@@ -706,44 +1065,31 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const fullName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || rawUsername || 'User';
 
     const actionButtons = [];
-
     if (rawUsername) {
       actionButtons.push([
         Markup.button.url('🔗 Open Profile (t.me)', `https://t.me/${rawUsername}`),
-        Markup.button.callback('🔄 Re-scan Username', 'track_my_username')
+        Markup.button.callback('🔄 Re-scan Username', 'unames_my_profile')
       ]);
     } else {
       actionButtons.push([
-        Markup.button.callback('🔄 Re-scan Username', 'track_my_username')
+        Markup.button.callback('🔄 Re-scan Username', 'unames_my_profile')
       ]);
     }
-
-    if (profile.isAdmin) {
-      actionButtons.push([
-        Markup.button.callback('📋 Track All Usernames', 'track_all_usernames')
-      ]);
-    }
-
-    const keyboardExtra = Markup.inlineKeyboard(actionButtons);
+    actionButtons.push([
+      Markup.button.callback('⬅️ Back to Usernames Menu', 'unames_menu')
+    ]);
 
     let messageText = '';
     if (rawUsername) {
       messageText =
-        `🏷️ <b>TELEGRAM USERNAME TRACKER</b>\n\n` +
-        `👤 <b>Name:</b> ${escapeHtml(fullName)}\n` +
-        `🔗 <b>Detected Username:</b> <code>${escapeHtml(cleanUsername)}</code>\n` +
-        `🌐 <b>Direct Link:</b> <a href="https://t.me/${escapeHtml(rawUsername)}">https://t.me/${escapeHtml(rawUsername)}</a>\n` +
-        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
-        `🛡️ <b>Bot Role:</b> ${profile.role.toUpperCase()}\n` +
-        `📡 <b>Sync Status:</b> ✅ <i>Live Synchronized with Database</i>\n` +
+        `🏷️ <b>MY TELEGRAM USERNAME</b>\n\n` +
+        `👤 <b>Telegram Name:</b> ${escapeHtml(fullName)}\n` +
+        `🏷️ <b>Username:</b> <code>${escapeHtml(cleanUsername)}</code>\n` +
+        `🆔 <b>ID:</b> <code>${tgId}</code>\n` +
+        `📧 <b>Email:</b> <code>${escapeHtml(profile.user ? profile.user.email : 'Not linked to web account')}</code>\n` +
+        `🛡️ <b>Role:</b> ${profile.role.toUpperCase()}\n` +
         `🔒 <b>Posting Rights:</b> ${profile.canPost ? '✅ GRANTED' : '⛔ VIEW-ONLY'}\n\n` +
-        (profile.user
-          ? `💻 <b>Linked Web Identity:</b>\n` +
-            `• Email: <code>${escapeHtml(profile.user.email)}</code>\n` +
-            `• Nickname: ${escapeHtml(profile.user.nickname || 'N/A')}\n` +
-            `• Authority: ${escapeHtml(profile.user.role.toUpperCase())}\n\n`
-          : `ℹ️ <i>Not linked to a separate web login. Authenticated via Telegram identity.</i>\n\n`) +
-        `Use the buttons below to open your profile or re-scan your username at any time.`;
+        `📡 <i>Live synchronized with database.</i>`;
     } else {
       messageText =
         `⚠️ <b>NO USERNAME DETECTED</b>\n\n` +
@@ -758,83 +1104,85 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `4. Tap <b>Re-scan Username</b> below once updated!`;
     }
 
-    await respondWithCard(ctx, messageText, keyboardExtra);
+    await respondWithCard(ctx, messageText, Markup.inlineKeyboard(actionButtons));
   };
 
-  // TRACK ALL USERNAMES (Super Admin & Admin tracker)
-  const handleTrackAllUsernames = async (ctx) => {
-    const profile = await getTelegramProfile(ctx);
-    if (!profile.isAdmin) {
-      if (ctx.callbackQuery) {
-        return ctx.answerCbQuery('⛔ Only Admins can view all tracked usernames.', { show_alert: true });
-      }
-      return ctx.reply('⛔ Access Denied: Only Admins and Super Admin can view all tracked usernames.');
-    }
+  // Register Usernames Menu listeners & actions
+  bot.hears(['🏷️ Usernames', 'Usernames', '/usernames', 'Username', '🏷️ Track Username', '📋 Track All Usernames', '/track', '/username'], handleUsernamesMenu);
+  bot.action('unames_menu', handleUsernamesMenu);
+  bot.action('unames_members', handleListMembersDirectory);
+  bot.action('unames_admins', handleListAdminsDirectory);
+  bot.action('unames_all', handleListAllUsersDirectory);
+  bot.action('unames_my_profile', handleMyUsernameProfile);
+  bot.action('track_my_username', handleMyUsernameProfile);
+  bot.action('track_all_usernames', handleListAllUsersDirectory);
 
-    try {
-      const botUsers = await db.prepare(`
-        SELECT b.telegram_id, b.username, b.first_name, b.last_name, b.role, b.created_at, b.updated_at,
-               u.email, u.nickname, u.role as web_role, u.telegram_username
-        FROM bot_access b
-        LEFT JOIN users u ON b.user_id = u.id OR (b.username != '' AND LOWER(REPLACE(u.telegram_username, '@', '')) = LOWER(b.username))
-        ORDER BY b.updated_at DESC, b.created_at DESC
-        LIMIT 25
-      `).all();
+  // ==========================================
+  // REQUESTS & ACCESS HUB ENGINE
+  // ==========================================
 
-      let text = `📋 <b>TRACKED TELEGRAM USERNAMES (${botUsers.length})</b>\n\n`;
-
-      if (botUsers.length === 0) {
-        text += `<i>No Telegram users tracked yet.</i>`;
-      } else {
-        botUsers.forEach((u, i) => {
-          const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'User';
-          const tgUser = u.username ? `@${u.username}` : '<i>No @username</i>';
-          const link = u.username ? ` <a href="https://t.me/${u.username}">[Track]</a>` : '';
-          const roleBadge = u.role === 'super_admin' ? '👑 SUPER' : (u.role === 'admin' ? '🛡️ ADMIN' : '👤 ' + u.role.toUpperCase());
-          const webSync = u.email ? ` | 💻 ${escapeHtml(u.email)}` : '';
-          
-          text += `<b>${i + 1}. ${escapeHtml(name)}</b> (${roleBadge})\n` +
-                  `   🏷️ ${tgUser}${link}\n` +
-                  `   🆔 <code>${u.telegram_id}</code>${webSync}\n\n`;
-        });
-      }
-
-      const extraButtons = [
-        [
-          Markup.button.callback('🔄 Refresh Tracker', 'track_all_usernames'),
-          Markup.button.callback('🔍 Track My Username', 'track_my_username')
-        ]
-      ];
-
-      await respondWithCard(ctx, text, Markup.inlineKeyboard(extraButtons));
-    } catch (err) {
-      console.error('Error tracking usernames:', err);
-      if (ctx.callbackQuery) {
-        await ctx.answerCbQuery('Error retrieving tracked usernames');
-      }
-      ctx.reply('⚠️ Error retrieving tracked usernames: ' + err.message);
-    }
-  };
-
-  // Register track listeners
-  bot.hears(['🏷️ Track Username', '🔍 Track Username', '/track', '/username'], handleTrackUsername);
-  bot.action('track_my_username', handleTrackUsername);
-  bot.hears(['📋 Track All Usernames', '/trackusers', '/trackall'], handleTrackAllUsernames);
-  bot.action('track_all_usernames', handleTrackAllUsernames);
-
-  // BUTTON 7: Super Admin Review Pending Requests
-  bot.hears(['⚙️ Access Requests', '📋 Pending Approvals', '/requests'], async (ctx) => {
+  // MAIN MENU: ⚙️ REQUESTS (Unified Hub for Pending & Accessed Users)
+  const handleRequestsMenu = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.isSuperAdmin) {
-      return ctx.reply('⛔ Only the Super Admin can review access requests.');
+      if (ctx.callbackQuery) {
+        return ctx.answerCbQuery('⛔ Only Super Admin can access requests management.', { show_alert: true });
+      }
+      return ctx.reply('⛔ Access Denied: Only the Super Admin can review access requests.');
+    }
+
+    const pendingCount = (await db.prepare("SELECT COUNT(*) as count FROM bot_access WHERE role = 'pending'").get())?.count || 0;
+    const accessedCount = (await db.prepare("SELECT COUNT(*) as count FROM bot_access WHERE role IN ('admin', 'user', 'super_admin')").get())?.count || 0;
+    const rejectedCount = (await db.prepare("SELECT COUNT(*) as count FROM bot_access WHERE role = 'rejected'").get())?.count || 0;
+
+    const text =
+      `⚙️ <b>REQUESTS & ACCESS MANAGEMENT</b>\n\n` +
+      `Review user authorizations, pending applicants, and permission states:\n\n` +
+      `⏳ <b>Pending Requests (${pendingCount}):</b> Applicants awaiting approval\n` +
+      `✅ <b>Accessed / Approved (${accessedCount}):</b> Active users with bot access\n` +
+      `🚫 <b>Rejected / Revoked (${rejectedCount}):</b> Users whose access was denied\n\n` +
+      `<i>Select an option below to manage:</i>`;
+
+    const buttons = [
+      [
+        Markup.button.callback(`⏳ Pending Requests (${pendingCount})`, 'req_menu_pending'),
+        Markup.button.callback(`✅ Accessed / Approved (${accessedCount})`, 'req_menu_accessed')
+      ],
+      [
+        Markup.button.callback(`🚫 Rejected (${rejectedCount})`, 'req_menu_rejected'),
+        Markup.button.callback('🔄 Refresh', 'req_menu_refresh')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: Pending Requests
+  const handleRequestsPending = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+      return ctx.reply('⛔ Super Admin only.');
     }
 
     const pending = await db.prepare("SELECT * FROM bot_access WHERE role = 'pending' ORDER BY created_at DESC").all();
+
     if (pending.length === 0) {
-      return ctx.reply('✅ There are currently NO pending access requests.', getAdminKeyboard(true));
+      const text =
+        `✅ <b>PENDING ACCESS REQUESTS</b>\n\n` +
+        `There are currently <b>NO</b> pending access requests awaiting review.`;
+
+      const buttons = [
+        [Markup.button.callback('✅ View Accessed Users', 'req_menu_accessed')],
+        [Markup.button.callback('⬅️ Back to Requests Menu', 'req_menu_home')]
+      ];
+
+      return respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
     }
 
-    ctx.reply(`📋 <b>Pending Access Requests (${pending.length})</b>:\nReview each applicant below:`, { parse_mode: 'HTML' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+
+    await ctx.reply(`📋 <b>Pending Access Requests (${pending.length})</b>:\nReview each applicant below:`, { parse_mode: 'HTML' });
 
     for (const item of pending) {
       const name = [item.first_name, item.last_name].filter(Boolean).join(' ') || item.username || 'User';
@@ -859,7 +1207,96 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         }
       );
     }
-  });
+
+    await ctx.reply('⚙️ Navigation:', Markup.inlineKeyboard([[Markup.button.callback('⬅️ Back to Requests Menu', 'req_menu_home')]]));
+  };
+
+  // Sub-Action: Accessed / Approved Users
+  const handleRequestsAccessed = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+      return ctx.reply('⛔ Super Admin only.');
+    }
+
+    const all = await getDirectoryUsers();
+    const accessed = all.filter(u => ['super_admin', 'admin', 'member'].includes(u.role));
+
+    let text = `✅ <b>ACCESSED / APPROVED USERS (${accessed.length})</b>\n\n`;
+
+    if (accessed.length === 0) {
+      text += `<i>No users currently authorized.</i>`;
+    } else {
+      accessed.forEach((u, idx) => {
+        const roleBadge = u.role === 'super_admin' ? '👑 SUPER ADMIN' : (u.role === 'admin' ? '🛡️ ADMIN' : '👤 MEMBER');
+        const tgLink = (u.raw_username && u.username !== 'None') ? ` <a href="https://t.me/${escapeHtml(u.raw_username)}">[Profile]</a>` : '';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(u.telegram_name)}\n` +
+          `   <b>Username:</b> ${escapeHtml(u.username)}${tgLink}\n` +
+          `   <b>ID:</b> <code>${escapeHtml(u.telegram_id)}</code>\n` +
+          `   <b>Role:</b> ${roleBadge}\n` +
+          `   <b>Email:</b> <code>${escapeHtml(u.email)}</code>\n\n`;
+      });
+    }
+
+    const buttons = [
+      [
+        Markup.button.callback('⏳ Pending Requests', 'req_menu_pending'),
+        Markup.button.callback('🔄 Refresh', 'req_menu_accessed')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Requests Menu', 'req_menu_home')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Sub-Action: Rejected Users
+  const handleRequestsRejected = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      if (ctx.callbackQuery) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+      return ctx.reply('⛔ Super Admin only.');
+    }
+
+    const rejected = await db.prepare("SELECT * FROM bot_access WHERE role = 'rejected' ORDER BY updated_at DESC").all();
+
+    let text = `🚫 <b>REJECTED / ACCESS REVOKED (${rejected.length})</b>\n\n`;
+
+    if (rejected.length === 0) {
+      text += `<i>No users in rejected status.</i>`;
+    } else {
+      rejected.forEach((u, idx) => {
+        const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'User';
+        const uName = u.username ? `@${u.username}` : 'None';
+        text +=
+          `<b>${idx + 1}. Telegram Name:</b> ${escapeHtml(name)}\n` +
+          `   <b>Username:</b> ${escapeHtml(uName)}\n` +
+          `   <b>ID:</b> <code>${u.telegram_id}</code>\n\n`;
+      });
+    }
+
+    const buttons = [
+      [
+        Markup.button.callback('⏳ Pending Requests', 'req_menu_pending'),
+        Markup.button.callback('✅ Accessed Users', 'req_menu_accessed')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Requests Menu', 'req_menu_home')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Register Requests Menu listeners & actions
+  bot.hears(['⚙️ Requests', 'Requests', '/requests', '⚙️ Access Requests', '📋 Pending Approvals'], handleRequestsMenu);
+  bot.action('req_menu_home', handleRequestsMenu);
+  bot.action('req_menu_refresh', handleRequestsMenu);
+  bot.action('req_menu_pending', handleRequestsPending);
+  bot.action('req_menu_accessed', handleRequestsAccessed);
+  bot.action('req_menu_rejected', handleRequestsRejected);
 
   // Direct Command: /post <text>
   bot.command('post', async (ctx) => {
@@ -1829,20 +2266,46 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
 
     const messages = (await db.prepare(`
-      SELECT m.content, u.email, u.nickname, m.created_at 
+      SELECT m.content, m.media_url, m.created_at,
+             u.nickname, u.full_name, u.email, u.telegram_username,
+             b.username as bot_username
       FROM messages m 
       LEFT JOIN users u ON m.sender_id = u.id 
+      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
       ORDER BY m.created_at DESC LIMIT 50
     `).all()).reverse();
 
-    const msgList = messages.map(m => {
-      const time = new Date(m.created_at).toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-      const sender = m.nickname || m.email || 'Admin';
-      return `💬 ${sender} (${time}): ${m.content || '(Media)'}`;
-    }).join('\n');
+    if (messages.length === 0) {
+      if (ctx.callbackQuery) await ctx.answerCbQuery();
+      return ctx.reply('💬 No messages found in chat history.');
+    }
 
-    ctx.reply(`📜 <b>CHAT HISTORY (LAST 50)</b>\n\n${escapeHtml(msgList) || 'No messages found.'}`, { parse_mode: 'HTML' });
-    ctx.answerCbQuery();
+    if (ctx.callbackQuery) await ctx.answerCbQuery('Loaded messages');
+
+    const formattedList = messages.map((m, idx) => {
+      const dateObj = new Date(m.created_at);
+      const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
+      const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+
+      const senderName = m.nickname || m.full_name || m.email || 'Member';
+      const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
+      const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
+      const mediaIndicator = m.media_url ? '📷 <i>[Media Attached]</i> ' : '';
+
+      return (
+        `<b>${idx + 1}. ${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay})\n` +
+        `📅 ${msgDate} | ⏰ ${msgTime}\n` +
+        `💬 ${mediaIndicator}${escapeHtml(m.content || '(Media only)')}`
+      );
+    });
+
+    for (let i = 0; i < formattedList.length; i += 10) {
+      const chunk = formattedList.slice(i, i + 10).join('\n\n──────────────\n\n');
+      await ctx.reply(
+        `📜 <b>CHAT HISTORY (${i + 1} - ${Math.min(i + 10, formattedList.length)})</b>\n\n${chunk}`,
+        { parse_mode: 'HTML' }
+      );
+    }
   });
 
   // Decoy Command Handlers
