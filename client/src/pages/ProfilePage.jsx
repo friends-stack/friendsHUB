@@ -10,14 +10,16 @@ import {
 import { AnimatePresence } from 'framer-motion';
 
 
-const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf, onOpenDirectory }) => {
+const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBackToSelf, onOpenDirectory }) => {
   const { id: paramId } = useParams();
   const id = paramId || userId || currentUser?.id;
   const navigate = useNavigate();
   const location = useLocation();
 
   const isSelf = currentUser?.id && Number(id) === Number(currentUser.id);
-  const initialProfile = isSelf && currentUser ? currentUser : null;
+  const initialProfile = isSelf && currentUser 
+    ? currentUser 
+    : (previewUser && Number(previewUser.id) === Number(id) ? previewUser : null);
 
   const [profile, setProfile] = useState(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
@@ -48,9 +50,19 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf, onOpe
   useEffect(() => {
     setImageError(false);
     setIsEditing(false);
-    setLoading(true);
+    if (isSelf && currentUser) {
+      setProfile(currentUser);
+      setEditData(currentUser);
+      setLoading(false);
+    } else if (previewUser && Number(previewUser.id) === Number(id)) {
+      setProfile(prev => (prev && Number(prev.id) === Number(id) ? prev : previewUser));
+      setEditData(prev => (prev && Number(prev.id) === Number(id) ? prev : previewUser));
+      setLoading(false);
+    } else {
+      setLoading(!profile);
+    }
     fetchProfile();
-  }, [id]);
+  }, [id, previewUser]);
 
   const fetchProfile = async () => {
     try {
@@ -193,8 +205,30 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf, onOpe
 
 
 
-  const activeProfile = profile || (isSelf ? currentUser : null);
-  if (!activeProfile) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#64748b' }}>Profile not found</div>;
+  const activeProfile = profile || (isSelf ? currentUser : (previewUser && Number(previewUser.id) === Number(id) ? previewUser : null));
+  if (loading && !activeProfile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '0.75rem', color: '#64748b' }}>
+        <div style={{ width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTopColor: '#16a34a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Loading profile...</span>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+  if (!activeProfile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '60vh', gap: '1rem', color: '#64748b' }}>
+        <User size={48} style={{ opacity: 0.3 }} />
+        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Profile Not Found</span>
+        <span style={{ fontSize: '0.85rem' }}>The requested member profile could not be located.</span>
+        {onOpenDirectory && (
+          <button onClick={onOpenDirectory} style={{ padding: '0.5rem 1rem', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+            Back to All Members
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const isOwnProfile = Number(currentUser?.id) === Number(activeProfile.id);
   const isRestrictedUser = currentUser?.role === 'user';

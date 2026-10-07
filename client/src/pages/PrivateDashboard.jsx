@@ -1814,6 +1814,7 @@ const PrivateDashboard = ({ user, setUser }) => {
           <ProfilePage 
             currentUser={user} 
             userId={viewingProfileUserId || user.id} 
+            previewUser={viewingProfileUserId ? users.find(u => Number(u.id) === Number(viewingProfileUserId)) : user}
             onProfileUpdate={(updatedUser) => {
               if (typeof setUser !== 'undefined' && setUser) {
                 setUser(updatedUser);
@@ -4004,12 +4005,17 @@ const PrivateDashboard = ({ user, setUser }) => {
                 <ProfilePage 
                   currentUser={user} 
                   userId={viewingProfileUserId || user.id} 
+                  previewUser={viewingProfileUserId ? users.find(u => Number(u.id) === Number(viewingProfileUserId)) : user}
                   onProfileUpdate={(updated) => {
                     if (Number(user.id) === Number(updated.id)) {
                       setUser(prev => ({ ...prev, ...updated }));
                     }
                   }} 
                   onBackToSelf={() => setViewingProfileUserId(null)}
+                  onOpenDirectory={() => {
+                    setViewingProfileUserId(null);
+                    setActiveTab('members');
+                  }}
                 />
               </motion.div>
             )}
