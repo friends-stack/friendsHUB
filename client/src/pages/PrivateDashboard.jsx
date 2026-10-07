@@ -121,7 +121,7 @@ const PrivateDashboard = ({ user, setUser }) => {
         fetchMessages();
       }, 2500);
     }
-    if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'users' && user.role === 'super_admin') fetchUsers();
     if (activeTab === 'logs') fetchLogs();
     if (activeTab === 'admin') fetchSettings();
     if (activeTab === 'gallery') fetchGallery();
@@ -140,8 +140,10 @@ const PrivateDashboard = ({ user, setUser }) => {
     socket.connect();
 
     fetchMessages();
-    if (user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) {
+    if (user.role === 'super_admin') {
       fetchUsers();
+    }
+    if (user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) {
       fetchLogs();
       fetchSettings();
       if (user.role === 'super_admin' || user.role === 'admin') {
@@ -217,6 +219,9 @@ const PrivateDashboard = ({ user, setUser }) => {
   useEffect(() => {
     if ((activeTab === 'gallery' || activeTab === 'vault') && !(user?.role === 'super_admin' || user?.role === 'admin')) {
       setActiveTab('messages');
+    }
+    if (activeTab === 'users' && user?.role !== 'super_admin') {
+      setActiveTab(user?.role === 'admin' ? 'gallery' : 'messages');
     }
   }, [activeTab, user?.role]);
 
@@ -1263,7 +1268,9 @@ const PrivateDashboard = ({ user, setUser }) => {
                 {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
                   <>
                     <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
-                    <TabButton id="users" icon={Users} label="Authority Matrix" onClick={() => setMobileMenuOpen(false)} />
+                    {user.role === 'super_admin' && (
+                      <TabButton id="users" icon={Users} label="Authority Matrix" onClick={() => setMobileMenuOpen(false)} />
+                    )}
                     {(user.role === 'super_admin' || user.role === 'admin') && (
                       <>
                         <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" onClick={() => setMobileMenuOpen(false)} />
@@ -1346,7 +1353,9 @@ const PrivateDashboard = ({ user, setUser }) => {
           {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
             <>
               <div style={{ height: '1px', background: 'var(--border)', margin: '1rem 0' }} />
-              <TabButton id="users" icon={Users} label="Authority Matrix" />
+              {user.role === 'super_admin' && (
+                <TabButton id="users" icon={Users} label="Authority Matrix" />
+              )}
               {(user.role === 'super_admin' || user.role === 'admin') && (
                 <>
                   <TabButton id="gallery" icon={ImageIcon} label="Gallery Curator" />
@@ -1409,25 +1418,50 @@ const PrivateDashboard = ({ user, setUser }) => {
           width: '100%',
           boxSizing: 'border-box'
         }}>
-          {/* Logo & Brand Name */}
-          <div 
-            onClick={() => { setActiveTab('logs'); }}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
-          >
-            <img 
-              src="/logo.png" 
-              alt="Friends Logo" 
-              style={{ width: '36px', height: '36px', objectFit: 'contain' }} 
-            />
-            <span style={{ 
-              fontWeight: 900, 
-              fontSize: '1.25rem', 
-              letterSpacing: '2px', 
-              color: '#16a34a',
-              fontFamily: "'Outfit', 'Inter', sans-serif"
-            }}>
-              F.R.I.E.N.D.S
-            </span>
+          {/* Mobile Navigation Drawer Trigger & Brand Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <button 
+              type="button"
+              className="mobile-hamburger-btn"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Toggle navigation menu"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                width: '38px',
+                height: '38px',
+                cursor: 'pointer',
+                color: '#1e293b',
+                padding: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                flexShrink: 0
+              }}
+            >
+              <Menu size={22} color="#1e293b" />
+            </button>
+            <div 
+              onClick={() => { setActiveTab('logs'); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+            >
+              <img 
+                src="/logo.png" 
+                alt="Friends Logo" 
+                style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+              />
+              <span style={{ 
+                fontWeight: 900, 
+                fontSize: '1.2rem', 
+                letterSpacing: '1.5px', 
+                color: '#16a34a',
+                fontFamily: "'Outfit', 'Inter', sans-serif"
+              }}>
+                F.R.I.E.N.D.S
+              </span>
+            </div>
           </div>
 
           {/* Right Action Icons: Bell & Avatar dropdown */}
@@ -2070,8 +2104,8 @@ const PrivateDashboard = ({ user, setUser }) => {
               </motion.div>
             )}
 
-            {/* (Admin tabs logs/users/settings logic similar to before) */}
-            {activeTab === 'users' && (
+            {/* Authority Matrix Tab — strictly restricted to Super Admin */}
+            {activeTab === 'users' && user.role === 'super_admin' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -3052,28 +3086,52 @@ const PrivateDashboard = ({ user, setUser }) => {
           <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'messages' ? 700 : 500 }}>Friends Chat</span>
         </button>
 
-        {/* 3. Matrix */}
-        <button 
-          onClick={() => setActiveTab('users')} 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            gap: '3px', 
-            background: 'none', 
-            border: 'none', 
-            color: activeTab === 'users' ? '#16a34a' : '#64748b',
-            cursor: 'pointer',
-            position: 'relative',
-            padding: '6px 12px'
-          }}
-        >
-          {activeTab === 'users' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
-          )}
-          <LayoutGrid size={22} color={activeTab === 'users' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'users' ? 700 : 500 }}>Matrix</span>
-        </button>
+        {/* 3. Matrix (Super Admin only) / Gallery (Admins & Members) */}
+        {user.role === 'super_admin' ? (
+          <button 
+            onClick={() => setActiveTab('users')} 
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: '3px', 
+              background: 'none', 
+              border: 'none', 
+              color: activeTab === 'users' ? '#16a34a' : '#64748b',
+              cursor: 'pointer',
+              position: 'relative',
+              padding: '6px 12px'
+            }}
+          >
+            {activeTab === 'users' && (
+              <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            )}
+            <LayoutGrid size={22} color={activeTab === 'users' ? '#16a34a' : '#64748b'} />
+            <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'users' ? 700 : 500 }}>Matrix</span>
+          </button>
+        ) : (
+          <button 
+            onClick={() => setActiveTab('gallery')} 
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              gap: '3px', 
+              background: 'none', 
+              border: 'none', 
+              color: activeTab === 'gallery' ? '#16a34a' : '#64748b',
+              cursor: 'pointer',
+              position: 'relative',
+              padding: '6px 12px'
+            }}
+          >
+            {activeTab === 'gallery' && (
+              <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            )}
+            <ImageIcon size={22} color={activeTab === 'gallery' ? '#16a34a' : '#64748b'} />
+            <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'gallery' ? 700 : 500 }}>Gallery</span>
+          </button>
+        )}
 
         {/* 4. Vault */}
         <button 

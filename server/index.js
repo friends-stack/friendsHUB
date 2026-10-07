@@ -601,8 +601,8 @@ const checkPermission = (permission) => async (req, res, next) => {
     return next();
   }
 
-  // Admin role has canToggleFeatures, canViewLogs, canManageAdmins
-  if (req.user.role === 'admin' && (permission === 'canToggleFeatures' || permission === 'canViewLogs' || permission === 'canManageAdmins')) {
+  // Admin role has canToggleFeatures, canViewLogs
+  if (req.user.role === 'admin' && (permission === 'canToggleFeatures' || permission === 'canViewLogs')) {
     return next();
   }
 
