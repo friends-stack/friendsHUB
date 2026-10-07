@@ -10,7 +10,7 @@ import {
 import { AnimatePresence } from 'framer-motion';
 
 
-const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf }) => {
+const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf, onOpenDirectory }) => {
   const { id: paramId } = useParams();
   const id = paramId || userId || currentUser?.id;
   const navigate = useNavigate();
@@ -47,6 +47,8 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf }) => 
 
   useEffect(() => {
     setImageError(false);
+    setIsEditing(false);
+    setLoading(true);
     fetchProfile();
   }, [id]);
 
@@ -347,24 +349,55 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf }) => 
           </div>
         </div>
 
-        {!isSelf && onBackToSelf && (
-          <button
-            type="button"
-            onClick={onBackToSelf}
-            style={{
-              padding: '0.45rem 0.9rem',
-              background: 'rgba(22, 163, 74, 0.1)',
-              border: '1px solid #16a34a',
-              borderRadius: '8px',
-              color: '#16a34a',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            👤 My Profile
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {onOpenDirectory && (
+            <button
+              type="button"
+              onClick={onOpenDirectory}
+              style={{
+                padding: '0.45rem 0.85rem',
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                color: '#334155',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s'
+              }}
+              title="View all community members and admins"
+            >
+              👥 All Members
+            </button>
+          )}
+
+          {!isSelf && onBackToSelf && (
+            <button
+              type="button"
+              onClick={onBackToSelf}
+              style={{
+                padding: '0.45rem 0.85rem',
+                background: 'rgba(22, 163, 74, 0.1)',
+                border: '1px solid #16a34a',
+                borderRadius: '8px',
+                color: '#16a34a',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.15s'
+              }}
+              title="Return to your own profile"
+            >
+              👤 My Profile
+            </button>
+          )}
+        </div>
       </header>
 
       <main style={{ maxWidth: '800px', margin: '2rem auto', padding: '0 1rem' }}>
@@ -680,12 +713,143 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf }) => 
 
                 </form>
               </motion.div>
+            ) : !isOwnProfile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ background: 'white', borderRadius: '16px', padding: '1.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                      Community Identity
+                    </h3>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: 800, 
+                      padding: '0.3rem 0.75rem', 
+                      borderRadius: '100px',
+                      background: profile.role === 'super_admin' ? 'linear-gradient(135deg, #1e3a8a, #3b82f6)' : profile.role === 'admin' ? 'rgba(22, 163, 74, 0.12)' : '#f1f5f9',
+                      color: profile.role === 'super_admin' ? 'white' : profile.role === 'admin' ? '#16a34a' : '#475569',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {profile.role === 'super_admin' ? '⭐ Founder & Super Admin' : profile.role === 'admin' ? '🛡️ Admin' : '👤 Community Member'}
+                    </span>
+                  </div>
+
+                  <p style={{ color: '#475569', fontSize: '0.9rem', lineHeight: '1.6', margin: '0 0 1.25rem' }}>
+                    {profile.bio || "This member hasn't added a bio yet. They are an active, verified participant in the group."}
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
+                    {profile.telegram_username && (
+                      <a 
+                        href={`https://t.me/${profile.telegram_username.replace(/^@/, '')}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.6rem 1.1rem',
+                          background: '#0284c7',
+                          color: 'white',
+                          borderRadius: '10px',
+                          textDecoration: 'none',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          transition: 'all 0.2s',
+                          boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)'
+                        }}
+                      >
+                        <SendIcon size={15} /> Message on Telegram
+                      </a>
+                    )}
+                    {profile.mobile && (
+                      <a 
+                        href={`tel:${profile.mobile}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.6rem 1.1rem',
+                          background: 'rgba(22, 163, 74, 0.1)',
+                          border: '1px solid #16a34a',
+                          color: '#16a34a',
+                          borderRadius: '10px',
+                          textDecoration: 'none',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <Phone size={15} /> Call / Text
+                      </a>
+                    )}
+                    {profile.email && (
+                      <a 
+                        href={`mailto:${profile.email}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          padding: '0.6rem 1.1rem',
+                          background: '#f8fafc',
+                          border: '1px solid #cbd5e1',
+                          color: '#334155',
+                          borderRadius: '10px',
+                          textDecoration: 'none',
+                          fontSize: '0.85rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        <Mail size={15} /> {profile.email}
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: 'white', borderRadius: '16px', padding: '1.75rem', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0' }}>
+                  <h3 style={{ margin: '0 0 1.25rem', fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                    Mutual Member Information
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Full Name</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.full_name || 'Not provided'}</strong>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Preferred Name</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.nickname || 'Not provided'}</strong>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Date of Birth</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.dob ? new Date(profile.dob).toLocaleDateString() : 'Not provided'}</strong>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Gender</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.gender || 'Not specified'}</strong>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Location</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.address || 'Not specified'}</strong>
+                    </div>
+                    <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Joined Community</span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Active Member'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div style={{ background: 'white', borderRadius: '16px', padding: '2rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <h3 style={{ marginBottom: '1.5rem' }}>Activity Feed</h3>
-                <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
-                   <MessageSquare size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-                   <p>No recent activity from this user</p>
+                <h3 style={{ marginBottom: '1.5rem' }}>Personal Identity Overview</h3>
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                   <p style={{ margin: '0 0 1rem' }}>This is your public identity visible to all friends, admins, and founders.</p>
+                   <button 
+                     onClick={() => setIsEditing(true)} 
+                     className="btn-primary" 
+                     style={{ padding: '0.6rem 1.5rem', fontSize: '0.9rem' }}
+                   >
+                     <Edit2 size={15} style={{ marginRight: '0.4rem', verticalAlign: 'middle' }} /> Update My Details
+                   </button>
                 </div>
               </div>
             )}

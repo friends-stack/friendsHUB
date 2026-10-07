@@ -10,7 +10,7 @@ import {
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
   MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
   Home, LayoutGrid, Bell, ChevronDown, ExternalLink,
-  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing
+  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing, Search, Calendar
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
@@ -86,6 +86,16 @@ const PrivateDashboard = ({ user, setUser }) => {
     }
   });
   const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberRoleFilter, setMemberRoleFilter] = useState('all');
+
+  const handleViewProfile = (targetUserId) => {
+    setViewingProfileUserId(targetUserId);
+    setActiveTab('profile');
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [pendingMedia, setPendingMedia] = useState({ url: '', type: 'text' });
@@ -160,7 +170,7 @@ const PrivateDashboard = ({ user, setUser }) => {
         fetchMessages();
       }, 2500);
     }
-    if (activeTab === 'users' && user.role === 'super_admin') fetchUsers();
+    if (activeTab === 'users' || activeTab === 'members') fetchUsers();
     if (activeTab === 'logs') fetchLogs();
     if (activeTab === 'admin') fetchSettings();
     if (activeTab === 'gallery') fetchGallery();
@@ -180,9 +190,7 @@ const PrivateDashboard = ({ user, setUser }) => {
 
     fetchMessages();
     fetchNotifications();
-    if (user.role === 'super_admin') {
-      fetchUsers();
-    }
+    fetchUsers();
     if (user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) {
       fetchLogs();
       fetchSettings();
@@ -338,11 +346,21 @@ const PrivateDashboard = ({ user, setUser }) => {
 
   const fetchUsers = async () => {
     try {
-      const { data } = await axios.get('/api/admin/users', {
+      const endpoint = user?.role === 'super_admin' ? '/api/admin/users' : '/api/users';
+      const { data } = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setUsers(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      try {
+        const { data } = await axios.get('/api/users', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
+        setUsers(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   const fetchLogs = async () => {
@@ -1659,7 +1677,8 @@ const PrivateDashboard = ({ user, setUser }) => {
               {/* Nav buttons */}
               <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, overflowY: 'auto' }}>
                 <TabButton id="messages" icon={MessageSquare} label="Friends Chat" onClick={() => setMobileMenuOpen(false)} />
-                <TabButton id="profile" icon={User} label="My Profile" onClick={() => setMobileMenuOpen(false)} />
+                <TabButton id="members" icon={Users} label="Community Members" onClick={() => setMobileMenuOpen(false)} />
+                <TabButton id="profile" icon={User} label="My Profile" onClick={() => { setViewingProfileUserId(null); setMobileMenuOpen(false); }} />
 
                 {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
                   <>
@@ -1743,7 +1762,8 @@ const PrivateDashboard = ({ user, setUser }) => {
           }}
         >
           <TabButton id="messages" icon={MessageSquare} label="Friends Chat" />
-          <TabButton id="profile" icon={User} label="My Profile" />
+          <TabButton id="members" icon={Users} label="Community Members" />
+          <TabButton id="profile" icon={User} label="My Profile" onClick={() => setViewingProfileUserId(null)} />
 
           
           {(user.role === 'super_admin' || user.role === 'admin' || user.role === 'authorized' || user.created_by_admin === 1) && (
@@ -1791,12 +1811,21 @@ const PrivateDashboard = ({ user, setUser }) => {
       {/* Main Content */}
       {activeTab === 'profile' ? (
         <div ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', height: '100vh' }}>
-          <ProfilePage currentUser={user} userId={user.id} onProfileUpdate={(updatedUser) => {
-            if (typeof setUser !== 'undefined' && setUser) {
-              setUser(updatedUser);
-            }
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-          }} />
+          <ProfilePage 
+            currentUser={user} 
+            userId={viewingProfileUserId || user.id} 
+            onProfileUpdate={(updatedUser) => {
+              if (typeof setUser !== 'undefined' && setUser) {
+                setUser(updatedUser);
+              }
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }}
+            onBackToSelf={() => setViewingProfileUserId(null)}
+            onOpenDirectory={() => {
+              setViewingProfileUserId(null);
+              setActiveTab('members');
+            }}
+          />
         </div>
       ) : (
       <main ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1950,7 +1979,13 @@ const PrivateDashboard = ({ user, setUser }) => {
                   <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{user?.role?.replace(/_/g, ' ')}</div>
                 </div>
                 <button 
-                  onClick={() => { setActiveTab('profile'); setShowMobileUserMenu(false); }}
+                  onClick={() => { setActiveTab('members'); setShowMobileUserMenu(false); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem', border: 'none', background: 'none', color: '#1e293b', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', borderRadius: '8px' }}
+                >
+                  <Users size={16} /> Community Members
+                </button>
+                <button 
+                  onClick={() => { setViewingProfileUserId(null); setActiveTab('profile'); setShowMobileUserMenu(false); }}
                   style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem', border: 'none', background: 'none', color: '#1e293b', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', borderRadius: '8px' }}
                 >
                   <User size={16} /> My Profile
@@ -2013,17 +2048,36 @@ const PrivateDashboard = ({ user, setUser }) => {
                   }}>
                     G
                   </div>
-                  <div>
-                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#1e293b', whiteSpace: 'nowrap' }}>Friends Group</h2>
+                  <div 
+                    onClick={() => setActiveTab('members')}
+                    style={{ cursor: 'pointer' }}
+                    title="View Community Members & Mutual Profiles"
+                  >
+                    <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#1e293b', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      Friends Group
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.5rem', background: 'rgba(22, 163, 74, 0.1)', color: '#16a34a', borderRadius: '100px' }}>
+                        👥 {users.length > 0 ? `${users.length} Members` : 'Directory'}
+                      </span>
+                    </h2>
                   </div>
                 </div>
             ) : (
               <div>
                 <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>
-                  {activeTab === 'messages' && 'Secure Internal Communication'}
+                  {activeTab === 'members' && '👥 Community Directory & Profiles'}
+                  {activeTab === 'users' && 'System Authority Matrix'}
+                  {activeTab === 'logs' && 'Friends Saving & Capital Management'}
+                  {activeTab === 'admin' && 'Core Engine & Permissions'}
+                  {activeTab === 'gallery' && 'Friends Gallery Curator'}
+                  {activeTab === 'vault' && 'Private Photos & Videos Vault'}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                  {activeTab === 'messages' && 'Real-time encrypted message stream'}
+                  {activeTab === 'members' && 'Mutual profile viewing for all members, admins & superadmins'}
+                  {activeTab === 'users' && 'Configure member permissions and system access'}
+                  {activeTab === 'logs' && 'Real-time savings pool and transaction ledgers'}
+                  {activeTab === 'admin' && 'Advanced system configurations'}
+                  {activeTab === 'gallery' && 'Shared memory assets and community posts'}
+                  {activeTab === 'vault' && 'Secure private files and personal media'}
                 </p>
               </div>
             )}
@@ -2590,6 +2644,335 @@ const PrivateDashboard = ({ user, setUser }) => {
                     </button>
                   </div>
                 </form>
+              </motion.div>
+            )}
+
+            {/* Community Members Directory Tab — accessible to all members, admins & superadmins */}
+            {activeTab === 'members' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Header card with Search and Filter */}
+                <div className="glass-card" style={{ padding: '1.75rem', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                        <Users size={24} color="#16a34a" /> Community Members & Admins
+                      </h3>
+                      <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                        Browse mutual profiles of all group members, view details, and connect directly.
+                      </p>
+                    </div>
+                    <span style={{ 
+                      fontSize: '0.8rem', 
+                      fontWeight: 700, 
+                      padding: '0.4rem 0.9rem', 
+                      borderRadius: '100px', 
+                      background: 'rgba(22, 163, 74, 0.1)', 
+                      color: '#16a34a',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      👥 {users.filter(u => u.status !== 'deleted').length} Active Members
+                    </span>
+                  </div>
+
+                  {/* Search and Role Filter Chips */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input 
+                        type="text"
+                        placeholder="Search by name, nickname, email, telegram, or phone..."
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem 1rem 0.75rem 2.75rem',
+                          borderRadius: '14px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                          transition: 'all 0.2s',
+                          boxSizing: 'border-box'
+                        }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = '#16a34a'; e.currentTarget.style.background = '#ffffff'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+                      />
+                      {memberSearch && (
+                        <button 
+                          onClick={() => setMemberSearch('')}
+                          style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 700 }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginRight: '0.25rem' }}>Filter:</span>
+                      {[
+                        { id: 'all', label: 'All' },
+                        { id: 'super_admin', label: 'Super Admins' },
+                        { id: 'admin', label: 'Admins' },
+                        { id: 'member', label: 'Members' }
+                      ].map(tab => (
+                        <button
+                          key={tab.id}
+                          onClick={() => setMemberRoleFilter(tab.id)}
+                          style={{
+                            padding: '0.35rem 0.85rem',
+                            borderRadius: '100px',
+                            border: memberRoleFilter === tab.id ? '1px solid #16a34a' : '1px solid #e2e8f0',
+                            background: memberRoleFilter === tab.id ? 'rgba(22, 163, 74, 0.1)' : '#ffffff',
+                            color: memberRoleFilter === tab.id ? '#16a34a' : '#64748b',
+                            fontSize: '0.8rem',
+                            fontWeight: memberRoleFilter === tab.id ? 700 : 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Directory Cards Grid */}
+                {(() => {
+                  const filtered = users.filter(u => {
+                    if (u.status === 'deleted') return false;
+                    const query = memberSearch.toLowerCase().trim();
+                    const matchSearch = !query ||
+                      (u.full_name && u.full_name.toLowerCase().includes(query)) ||
+                      (u.nickname && u.nickname.toLowerCase().includes(query)) ||
+                      (u.email && u.email.toLowerCase().includes(query)) ||
+                      (u.telegram_username && u.telegram_username.toLowerCase().includes(query)) ||
+                      (u.mobile && u.mobile.includes(query)) ||
+                      (u.role && u.role.toLowerCase().includes(query));
+
+                    if (memberRoleFilter === 'super_admin') return matchSearch && u.role === 'super_admin';
+                    if (memberRoleFilter === 'admin') return matchSearch && u.role === 'admin';
+                    if (memberRoleFilter === 'member') return matchSearch && (u.role === 'user' || u.role === 'authorized');
+                    return matchSearch;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+                        <Users size={48} style={{ opacity: 0.25, marginBottom: '1rem' }} />
+                        <h4 style={{ margin: '0 0 0.5rem', color: '#0f172a' }}>No members found</h4>
+                        <p style={{ margin: 0, fontSize: '0.9rem' }}>Try refining your search keyword or clearing the filter.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '1.25rem' }}>
+                      {filtered.map(u => {
+                        const isSelfCard = Number(u.id) === Number(user.id);
+                        const isSuperAdmin = u.role === 'super_admin';
+                        const isAdmin = u.role === 'admin';
+
+                        return (
+                          <div 
+                            key={u.id}
+                            style={{
+                              background: 'white',
+                              borderRadius: '20px',
+                              border: isSelfCard ? '2px solid #16a34a' : '1px solid #e2e8f0',
+                              overflow: 'hidden',
+                              boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              transition: 'all 0.2s',
+                              position: 'relative'
+                            }}
+                          >
+                            {/* Card Top Banner */}
+                            <div style={{
+                              height: '64px',
+                              background: isSuperAdmin 
+                                ? 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)' 
+                                : isAdmin 
+                                  ? 'linear-gradient(135deg, #065f46 0%, #10b981 100%)' 
+                                  : 'linear-gradient(135deg, #334155 0%, #64748b 100%)',
+                              position: 'relative',
+                              padding: '0.5rem 1rem',
+                              display: 'flex',
+                              justifyContent: 'flex-end',
+                              alignItems: 'flex-start'
+                            }}>
+                              <span style={{
+                                fontSize: '0.65rem',
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '100px',
+                                background: 'rgba(255,255,255,0.22)',
+                                color: 'white',
+                                backdropFilter: 'blur(4px)',
+                                letterSpacing: '0.5px'
+                              }}>
+                                {isSuperAdmin ? '⭐ Super Admin' : isAdmin ? '🛡️ Admin' : '👤 Member'}
+                              </span>
+                            </div>
+
+                            {/* Card Body */}
+                            <div style={{ padding: '1.25rem', paddingTop: '0', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                              {/* Avatar & You badge */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '-36px', marginBottom: '0.75rem' }}>
+                                <div style={{ position: 'relative' }}>
+                                  {u.profile_picture ? (
+                                    <img 
+                                      src={resolveImageUrl(u.profile_picture)} 
+                                      alt={u.nickname || u.full_name} 
+                                      onError={(e) => handleImageError(e, u.profile_picture)}
+                                      style={{
+                                        width: '64px',
+                                        height: '64px',
+                                        borderRadius: '16px',
+                                        objectFit: 'cover',
+                                        border: '3px solid white',
+                                        boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
+                                        background: '#f8fafc'
+                                      }}
+                                    />
+                                  ) : (
+                                    <div style={{
+                                      width: '64px',
+                                      height: '64px',
+                                      borderRadius: '16px',
+                                      background: isSuperAdmin ? 'linear-gradient(135deg, #2563eb, #1d4ed8)' : isAdmin ? 'linear-gradient(135deg, #16a34a, #15803d)' : 'linear-gradient(135deg, #475569, #334155)',
+                                      color: 'white',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '1.6rem',
+                                      fontWeight: 800,
+                                      border: '3px solid white',
+                                      boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
+                                      textTransform: 'uppercase'
+                                    }}>
+                                      {(u.nickname || u.full_name || u.email || 'U')[0]}
+                                    </div>
+                                  )}
+                                </div>
+                                {isSelfCard && (
+                                  <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#16a34a', background: 'rgba(22, 163, 74, 0.1)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
+                                    (You)
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Names */}
+                              <div style={{ marginBottom: '0.75rem' }}>
+                                <h4 style={{ margin: '0 0 0.15rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {u.full_name || u.nickname || u.email.split('@')[0]}
+                                </h4>
+                                <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  {u.nickname && u.nickname !== u.full_name && (
+                                    <span style={{ fontWeight: 600, color: '#16a34a' }}>@{u.nickname}</span>
+                                  )}
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>• {u.email}</span>
+                                </div>
+                              </div>
+
+                              {/* Bio snippet */}
+                              {u.bio && (
+                                <p style={{ fontSize: '0.82rem', color: '#475569', margin: '0 0 0.75rem', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {u.bio}
+                                </p>
+                              )}
+
+                              {/* Contact snippets */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1.25rem', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                                {u.telegram_username && (
+                                  <div style={{ fontSize: '0.8rem', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Send size={13} />
+                                    <a 
+                                      href={`https://t.me/${u.telegram_username.replace(/^@/, '')}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      style={{ color: '#0284c7', textDecoration: 'none', fontWeight: 600 }}
+                                    >
+                                      @{u.telegram_username.replace(/^@/, '')}
+                                    </a>
+                                  </div>
+                                )}
+                                {u.mobile && (
+                                  <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Phone size={13} />
+                                    <span>{u.mobile}</span>
+                                  </div>
+                                )}
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <Calendar size={13} />
+                                  <span>Joined {new Date(u.created_at).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button 
+                                  onClick={() => handleViewProfile(u.id)}
+                                  style={{
+                                    flex: 1,
+                                    padding: '0.65rem 1rem',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    background: isSelfCard ? '#16a34a' : 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                                    color: 'white',
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.45rem',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                    transition: 'transform 0.15s, opacity 0.15s'
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                                >
+                                  <User size={15} /> {isSelfCard ? 'View My Profile' : 'View Full Profile'}
+                                </button>
+
+                                {u.telegram_username && (
+                                  <a 
+                                    href={`https://t.me/${u.telegram_username.replace(/^@/, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Message ${u.nickname || 'user'} on Telegram`}
+                                    style={{
+                                      width: '38px',
+                                      height: '38px',
+                                      borderRadius: '12px',
+                                      border: '1px solid #cbd5e1',
+                                      background: '#f8fafc',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#0284c7',
+                                      textDecoration: 'none',
+                                      transition: 'all 0.15s',
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <Send size={16} />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </motion.div>
             )}
 
@@ -3685,7 +4068,30 @@ const PrivateDashboard = ({ user, setUser }) => {
           <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'messages' ? 700 : 500 }}>Friends Chat</span>
         </button>
 
-        {/* 3. Matrix (Super Admin only) / Gallery (Admins & Members) */}
+        {/* 3. Members Directory */}
+        <button 
+          onClick={() => setActiveTab('members')} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: activeTab === 'members' ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 8px'
+          }}
+        >
+          {activeTab === 'members' && (
+            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <Users size={22} color={activeTab === 'members' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'members' ? 700 : 500 }}>Members</span>
+        </button>
+
+        {/* 4. Matrix (Super Admin only) / Gallery (Admins & Members) */}
         {user.role === 'super_admin' ? (
           <button 
             onClick={() => setActiveTab('users')} 
@@ -3699,7 +4105,7 @@ const PrivateDashboard = ({ user, setUser }) => {
               color: activeTab === 'users' ? '#16a34a' : '#64748b',
               cursor: 'pointer',
               position: 'relative',
-              padding: '6px 12px'
+              padding: '6px 8px'
             }}
           >
             {activeTab === 'users' && (
@@ -3721,7 +4127,7 @@ const PrivateDashboard = ({ user, setUser }) => {
               color: activeTab === 'gallery' ? '#16a34a' : '#64748b',
               cursor: 'pointer',
               position: 'relative',
-              padding: '6px 12px'
+              padding: '6px 8px'
             }}
           >
             {activeTab === 'gallery' && (
@@ -3731,29 +4137,6 @@ const PrivateDashboard = ({ user, setUser }) => {
             <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'gallery' ? 700 : 500 }}>Gallery</span>
           </button>
         )}
-
-        {/* 4. Vault */}
-        <button 
-          onClick={() => setActiveTab('vault')} 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            gap: '3px', 
-            background: 'none', 
-            border: 'none', 
-            color: activeTab === 'vault' ? '#16a34a' : '#64748b',
-            cursor: 'pointer',
-            position: 'relative',
-            padding: '6px 12px'
-          }}
-        >
-          {activeTab === 'vault' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
-          )}
-          <Lock size={22} color={activeTab === 'vault' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'vault' ? 700 : 500 }}>Vault</span>
-        </button>
 
         {/* 5. Me */}
         <button 

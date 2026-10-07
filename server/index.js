@@ -911,7 +911,7 @@ app.get('/api/auth/me', checkAuth, async (req, res) => {
 });
 
 app.get('/api/users', checkAuth, async (req, res) => {
-  const users = await db.prepare("SELECT id, email, role, nickname, full_name, profile_picture, created_at FROM users WHERE status != 'deleted' ORDER BY created_at DESC").all();
+  const users = await db.prepare("SELECT id, email, role, nickname, full_name, profile_picture, telegram_username, mobile, bio, created_at FROM users WHERE status != 'deleted' ORDER BY created_at DESC").all();
   res.json(users);
 });
 
@@ -1008,7 +1008,7 @@ app.get('/api/admin/logs', checkAuth, checkPermission('canViewLogs'), async (req
 
 // User Management (Super Admin & Admin)
 app.get('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), async (req, res) => {
-  const users = await db.prepare('SELECT id, email, role, nickname, full_name, telegram_username, telegram_id, status, created_by_admin, created_at FROM users ORDER BY created_at DESC').all();
+  const users = await db.prepare('SELECT id, email, role, nickname, full_name, telegram_username, telegram_id, status, created_by_admin, created_at, profile_picture, mobile, bio FROM users ORDER BY created_at DESC').all();
   res.json(users);
 });
 
