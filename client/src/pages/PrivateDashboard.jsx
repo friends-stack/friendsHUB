@@ -121,6 +121,11 @@ const PrivateDashboard = ({ user, setUser }) => {
   const sidebarRef = useRef(null);
   const fileInputRef = useRef(null);
   const [galleryFilePreview, setGalleryFilePreview] = useState(null);
+  const [selectedGalleryFile, setSelectedGalleryFile] = useState(null);
+  const [galleryTitle, setGalleryTitle] = useState('');
+  const [isPostingGallery, setIsPostingGallery] = useState(false);
+  const [galleryFormError, setGalleryFormError] = useState('');
+  const galleryTitleInputRef = useRef(null);
   const [vaultFilePreview, setVaultFilePreview] = useState(null);
   const galleryFileInputRef = useRef(null);
   const galleryUrlInputRef = useRef(null);
@@ -400,13 +405,26 @@ const PrivateDashboard = ({ user, setUser }) => {
   };
 
   const handleAddGallery = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const title = formData.get('title')?.trim();
-    const file = formData.get('file');
+    if (e && e.preventDefault) e.preventDefault();
+    setGalleryFormError('');
 
-    if (!title) return showToast('Please provide a title for the memory');
-    if (!file || !file.name) return showToast('Please select an image file to upload');
+    const title = galleryTitle.trim();
+    const file = selectedGalleryFile || (galleryFileInputRef.current && galleryFileInputRef.current.files && galleryFileInputRef.current.files[0]);
+
+    if (!title) {
+      setGalleryFormError('Please provide a title for the memory');
+      showToast('Please provide a title for the memory');
+      galleryTitleInputRef.current?.focus();
+      return;
+    }
+
+    if (!file) {
+      setGalleryFormError('Please select an image file to upload');
+      showToast('Please select an image file to upload');
+      return;
+    }
+
+    setIsPostingGallery(true);
 
     try {
       const uploadData = new FormData();
@@ -417,17 +435,26 @@ const PrivateDashboard = ({ user, setUser }) => {
         }
       });
       const url = uploadRes.url;
+      if (!url) throw new Error('No image URL returned from upload server');
 
       await axios.post('/api/admin/gallery', { url, title, caption: '' }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      e.target.reset();
+      
+      setGalleryTitle('');
+      setSelectedGalleryFile(null);
       setGalleryFilePreview(null);
+      setGalleryFormError('');
       if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
-      fetchGallery();
+      await fetchGallery();
       showToast('New memory posted to gallery successfully!');
     } catch (err) { 
-      showToast('Upload failed: ' + (err.response?.data?.error || err.message)); 
+      console.error('Gallery post error:', err);
+      const errMsg = err.response?.data?.error || err.message || 'Failed to post gallery memory';
+      setGalleryFormError(errMsg);
+      showToast('Upload failed: ' + errMsg); 
+    } finally {
+      setIsPostingGallery(false);
     }
   };
 
@@ -994,6 +1021,10 @@ const PrivateDashboard = ({ user, setUser }) => {
           z-index: 1000; justify-content: space-around; align-items: center; padding: 0 0.5rem;
           box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
         }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
 
         /* Responsive Vault Elements */
         .vault-header-row {
@@ -1100,10 +1131,12 @@ const PrivateDashboard = ({ user, setUser }) => {
             animate={{ opacity: 1, y: 0, x: '-50%' }} 
             exit={{ opacity: 0, y: 50, x: '-50%' }}
             style={{ 
-              position: 'fixed', bottom: '2rem', left: '50%', zIndex: 9999, 
-              background: '#334155', color: 'white', padding: '0.75rem 1.5rem', 
+              position: 'fixed', bottom: '5.5rem', left: '50%', zIndex: 99999, 
+              background: '#0f172a', color: 'white', padding: '0.85rem 1.75rem', 
               borderRadius: '30px', fontWeight: 600, fontSize: '0.9rem', 
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
+              boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.35)',
+              display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none',
+              maxWidth: '90vw', textAlign: 'center'
             }}
           >
             {toastMessage}
@@ -3228,7 +3261,6 @@ const PrivateDashboard = ({ user, setUser }) => {
               </motion.div>
             )}
 
-
             {activeTab === 'gallery' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 <div className="glass-card" style={{ padding: '2rem' }}>
@@ -3239,18 +3271,23 @@ const PrivateDashboard = ({ user, setUser }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>Memory Title</label>
                       <input 
+                        ref={galleryTitleInputRef}
                         name="title" 
+                        value={galleryTitle}
+                        onChange={(e) => {
+                          setGalleryTitle(e.target.value);
+                          if (galleryFormError) setGalleryFormError('');
+                        }}
                         placeholder="Give this memory a catchy title..." 
                         className="input-field" 
                         style={{ marginBottom: 0, padding: '0.85rem 1.25rem', borderRadius: '14px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }} 
-                        required 
                       />
                     </div>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>Upload Photo</label>
-                      <div 
-                        onClick={() => galleryFileInputRef.current?.click()}
+                      <label 
+                        htmlFor="gallery-memory-file-input"
                         style={{ 
                           background: '#f8fafc', 
                           padding: '1.5rem', 
@@ -3277,6 +3314,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                           <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Supports PNG, JPG, JPEG, WEBP</p>
                         </div>
                         <input 
+                          id="gallery-memory-file-input"
                           type="file" 
                           name="file" 
                           ref={galleryFileInputRef}
@@ -3285,12 +3323,14 @@ const PrivateDashboard = ({ user, setUser }) => {
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             if (f) {
+                              setSelectedGalleryFile(f);
                               const objectUrl = URL.createObjectURL(f);
                               setGalleryFilePreview({ url: objectUrl, type: 'file', name: f.name });
+                              if (galleryFormError) setGalleryFormError('');
                             }
                           }}
                         />
-                      </div>
+                      </label>
                     </div>
 
                     {galleryFilePreview && (
@@ -3312,6 +3352,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                           <button 
                             type="button" 
                             onClick={() => {
+                              setSelectedGalleryFile(null);
                               setGalleryFilePreview(null);
                               if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
                             }}
@@ -3325,7 +3366,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                               cursor: 'pointer', 
                               display: 'flex', 
                               alignItems: 'center', 
-                              justifyContent: 'center',
+                              justifyContent: 'center', 
                               fontSize: '0.75rem',
                               fontWeight: 700
                             }}
@@ -3353,39 +3394,75 @@ const PrivateDashboard = ({ user, setUser }) => {
                       </div>
                     )}
 
+                    {galleryFormError && (
+                      <div style={{
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        color: '#b91c1c',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '12px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        <AlertTriangle size={18} /> {galleryFormError}
+                      </div>
+                    )}
+
                     <button 
                       type="submit" 
+                      disabled={isPostingGallery}
                       className="memory-publish-btn" 
                       style={{ 
                         alignSelf: 'flex-start', 
                         padding: '0.85rem 2.25rem',
                         borderRadius: '14px',
                         border: 'none',
-                        background: '#16a34a',
+                        background: isPostingGallery ? '#64748b' : '#16a34a',
                         color: 'white',
                         fontWeight: 700,
                         fontSize: '0.95rem',
-                        cursor: 'pointer',
+                        cursor: isPostingGallery ? 'not-allowed' : 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '0.5rem',
-                        boxShadow: '0 4px 14px rgba(22, 163, 74, 0.25)',
-                        transition: 'all 0.25s ease'
+                        gap: '0.6rem',
+                        boxShadow: isPostingGallery ? 'none' : '0 4px 14px rgba(22, 163, 74, 0.25)',
+                        transition: 'all 0.25s ease',
+                        opacity: isPostingGallery ? 0.8 : 1
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.background = '#0f172a';
-                        e.currentTarget.style.color = '#ffffff';
-                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(15, 23, 42, 0.35)';
-                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        if (!isPostingGallery) {
+                          e.currentTarget.style.background = '#0f172a';
+                          e.currentTarget.style.color = '#ffffff';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(15, 23, 42, 0.35)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }
                       }}
                       onMouseLeave={e => {
-                        e.currentTarget.style.background = '#16a34a';
-                        e.currentTarget.style.color = 'white';
-                        e.currentTarget.style.boxShadow = '0 4px 14px rgba(22, 163, 74, 0.25)';
-                        e.currentTarget.style.transform = 'translateY(0)';
+                        if (!isPostingGallery) {
+                          e.currentTarget.style.background = '#16a34a';
+                          e.currentTarget.style.color = 'white';
+                          e.currentTarget.style.boxShadow = '0 4px 14px rgba(22, 163, 74, 0.25)';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }
                       }}
                     >
-                      <ImageIcon size={18} /> Post Gallery
+                      {isPostingGallery ? (
+                        <>
+                          <span style={{ 
+                            width: '16px', height: '16px', border: '2px solid white', 
+                            borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block',
+                            animation: 'spin 0.8s linear infinite' 
+                          }} />
+                          Posting Memory...
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon size={18} /> Post Gallery
+                        </>
+                      )}
                     </button>
                   </form>
                 </div>
