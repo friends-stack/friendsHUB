@@ -60,6 +60,54 @@ const getOriginalFileName = (url) => {
   return filenameWithTimestamp;
 };
 
+const compressImage = (file, maxWidth = 1600, quality = 0.82) => {
+  return new Promise((resolve) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return resolve(file);
+    if (file.size <= 250 * 1024) return resolve(file);
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let width = img.naturalWidth || img.width;
+      let height = img.naturalHeight || img.height;
+
+      if (width > maxWidth || height > maxWidth) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxWidth) / height);
+          height = maxWidth;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob((blob) => {
+        if (!blob || blob.size >= file.size) {
+          resolve(file);
+        } else {
+          const compressed = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+          resolve(compressed);
+        }
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+    img.src = objectUrl;
+  });
+};
+
 const PrivateDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
   const handleLogout = () => {
@@ -409,7 +457,7 @@ const PrivateDashboard = ({ user, setUser }) => {
     setGalleryFormError('');
 
     const title = galleryTitle.trim();
-    const file = selectedGalleryFile || (galleryFileInputRef.current && galleryFileInputRef.current.files && galleryFileInputRef.current.files[0]);
+    let file = selectedGalleryFile || (galleryFileInputRef.current && galleryFileInputRef.current.files && galleryFileInputRef.current.files[0]);
 
     if (!title) {
       setGalleryFormError('Please provide a title for the memory');
@@ -427,27 +475,33 @@ const PrivateDashboard = ({ user, setUser }) => {
     setIsPostingGallery(true);
 
     try {
-      const uploadData = new FormData();
-      uploadData.append('image', file);
-      const { data: uploadRes } = await axios.post('/api/admin/gallery/upload', uploadData, {
+      if (file.size > 250 * 1024) {
+        file = await compressImage(file);
+      }
+
+      const postData = new FormData();
+      postData.append('image', file);
+      postData.append('title', title);
+      postData.append('caption', '');
+
+      const { data } = await axios.post('/api/admin/gallery', postData, {
         headers: { 
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
       });
-      const url = uploadRes.url;
-      if (!url) throw new Error('No image URL returned from upload server');
 
-      await axios.post('/api/admin/gallery', { url, title, caption: '' }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      
+      if (data && data.item) {
+        setGallery(prev => [data.item, ...prev.filter(item => item.id !== data.item.id)]);
+      }
+
       setGalleryTitle('');
       setSelectedGalleryFile(null);
       setGalleryFilePreview(null);
       setGalleryFormError('');
       if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
-      await fetchGallery();
+
       showToast('New memory posted to gallery successfully!');
+      fetchGallery();
     } catch (err) { 
       console.error('Gallery post error:', err);
       const errMsg = err.response?.data?.error || err.message || 'Failed to post gallery memory';
@@ -3320,13 +3374,14 @@ const PrivateDashboard = ({ user, setUser }) => {
                           ref={galleryFileInputRef}
                           accept="image/*" 
                           style={{ display: 'none' }}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const f = e.target.files?.[0];
                             if (f) {
-                              setSelectedGalleryFile(f);
                               const objectUrl = URL.createObjectURL(f);
                               setGalleryFilePreview({ url: objectUrl, type: 'file', name: f.name });
                               if (galleryFormError) setGalleryFormError('');
+                              const ready = await compressImage(f);
+                              setSelectedGalleryFile(ready);
                             }
                           }}
                         />

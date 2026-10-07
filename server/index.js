@@ -129,15 +129,19 @@ const uploadToSupabase = async (file) => {
 
   if (supabase) {
     try {
-      const { data, error } = await supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
+      const uploadPromise = supabase.storage.from('friends-info-uploads').upload(fileName, file.buffer, {
         contentType: file.mimetype,
         upsert: true
       });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Supabase upload timeout')), 4500)
+      );
+      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('friends-info-uploads').getPublicUrl(fileName);
       return urlData.publicUrl;
     } catch (err) {
-      console.warn('⚠️ Supabase upload failed, saving to local uploads folder:', err.message);
+      console.warn('⚠️ Supabase upload failed or timed out, saving to local uploads folder:', err.message);
     }
   }
   const localPath = path.join(UPLOADS_DIR, fileName);
@@ -2243,26 +2247,75 @@ app.get('/api/gallery', checkAuth, async (req, res) => {
   if (!['admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Access denied: Only admins and superadmins can view images' });
   }
-  const items = await db.prepare('SELECT * FROM gallery ORDER BY created_at DESC').all();
-  for (const item of items) {
-    item.reactions = await db.prepare("SELECT * FROM reactions WHERE target_id = ? AND target_type = 'gallery'").all(item.id);
-    item.comments = await db.prepare(`
+  try {
+    const items = await db.prepare('SELECT * FROM gallery ORDER BY created_at DESC').all();
+    if (!items || items.length === 0) return res.json([]);
+
+    const reactions = await db.prepare("SELECT * FROM reactions WHERE target_type = 'gallery'").all();
+    const comments = await db.prepare(`
       SELECT c.*, u.nickname, u.profile_picture
       FROM comments c
       JOIN users u ON c.user_id = u.id
-      WHERE c.gallery_id = ?
       ORDER BY c.created_at ASC
-    `).all(item.id);
+    `).all();
+
+    const reactionsMap = {};
+    for (const r of (reactions || [])) {
+      if (!reactionsMap[r.target_id]) reactionsMap[r.target_id] = [];
+      reactionsMap[r.target_id].push(r);
+    }
+
+    const commentsMap = {};
+    for (const c of (comments || [])) {
+      if (!commentsMap[c.gallery_id]) commentsMap[c.gallery_id] = [];
+      commentsMap[c.gallery_id].push(c);
+    }
+
+    for (const item of items) {
+      item.reactions = reactionsMap[item.id] || [];
+      item.comments = commentsMap[item.id] || [];
+    }
+    res.json(items);
+  } catch (err) {
+    console.error('Error fetching gallery:', err);
+    res.status(500).json({ error: 'Failed to fetch gallery' });
   }
-  res.json(items);
 });
 
-app.post('/api/admin/gallery', checkAuth, async (req, res) => {
+app.post('/api/admin/gallery', checkAuth, upload.single('image'), async (req, res) => {
   if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
-  const { url, title, caption } = req.body;
+  let url = req.body?.url;
+  const title = req.body?.title || '';
+  const caption = req.body?.caption || '';
+
+  if (req.file) {
+    try {
+      url = await uploadToSupabase(req.file);
+    } catch (uploadErr) {
+      console.error('Gallery file upload error:', uploadErr);
+      return res.status(500).json({ error: 'Failed to upload image' });
+    }
+  }
+
+  if (!url) return res.status(400).json({ error: 'Image file or URL is required' });
+
   const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
-  await insert.run(url, title, caption);
-  res.json({ success: true });
+  const result = await insert.run(url, title, caption);
+  const newId = result.lastInsertRowid || result.id || Date.now();
+
+  res.json({ 
+    success: true, 
+    url,
+    item: {
+      id: newId,
+      url,
+      title,
+      caption,
+      created_at: new Date().toISOString(),
+      reactions: [],
+      comments: []
+    }
+  });
 });
 
 // Single image upload endpoint
