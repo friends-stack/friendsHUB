@@ -33,7 +33,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     if (isSuperAdmin) {
       buttons[2] = ['💰 Check Savings', '🏷️ Track Username'];
       buttons[3] = ['👤 My Identity', '📋 Track All Usernames'];
-      buttons.push(['⚙️ Access Requests', '📋 Pending Approvals']);
+      buttons.push(['⚙️ Access Requests', '🛡️ Manage Admins']);
     }
     return Markup.keyboard(buttons).resize();
   };
@@ -65,6 +65,18 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     // 1. Check or seed bot_access record
     let access = await db.prepare('SELECT * FROM bot_access WHERE telegram_id = ?').get(tgId);
+    if (!access && rawUsername) {
+      access = await db.prepare('SELECT * FROM bot_access WHERE LOWER(username) = LOWER(?)').get(rawUsername);
+      if (access) {
+        await db.prepare('UPDATE bot_access SET telegram_id = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+          tgId,
+          firstName || access.first_name,
+          lastName || access.last_name,
+          access.id
+        );
+        access.telegram_id = tgId;
+      }
+    }
     if (isSuperAdminEnv) {
       if (!access) {
         await db.prepare('INSERT INTO bot_access (telegram_id, first_name, last_name, username, role) VALUES (?, ?, ?, ?, ?)').run(
@@ -236,6 +248,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // Register commands for Telegram UI menu
   bot.telegram.setMyCommands([
     { command: 'start', description: 'Start bot & detect username' },
+    { command: 'admins', description: 'Super Admin: Manage admins & roles' },
+    { command: 'addadmin', description: 'Super Admin: Add admin by username/ID' },
+    { command: 'removeadmin', description: 'Super Admin: Remove admin privileges' },
+    { command: 'setrole', description: 'Super Admin: Change user role' },
     { command: 'track', description: 'Track your Telegram username live' },
     { command: 'trackusers', description: 'Super Admin: Track all member usernames' },
     { command: 'post', description: 'Post text to website live chat' },
@@ -885,6 +901,426 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     });
   });
 
+  // ==========================================
+  // SUPER ADMIN: ADMIN & ROLE MANAGEMENT ENGINE
+  // ==========================================
+
+  // Universal helper to apply role updates, promotions, demotions, and deletions
+  const applyRoleChange = async ({ targetInput, newRole, adminProfile, ctx }) => {
+    if (!targetInput) {
+      return { success: false, message: '⚠️ Target username or Telegram ID is required.' };
+    }
+
+    const cleanTarget = targetInput.trim().replace(/^@/, '');
+    const isNumericId = /^\d+$/.test(cleanTarget);
+    const superAdminChatId = process.env.ADMIN_CHAT_ID ? process.env.ADMIN_CHAT_ID.toString() : '';
+
+    // Safety: Protect Super Admin from demotion / removal
+    if (isNumericId && superAdminChatId && cleanTarget === superAdminChatId) {
+      return { success: false, message: '⛔ Cannot modify the Super Admin account.' };
+    }
+
+    const roleNormalized = (newRole || 'admin').toLowerCase();
+    const validRoles = ['admin', 'user', 'member', 'pending', 'rejected', 'remove', 'delete'];
+    if (!validRoles.includes(roleNormalized)) {
+      return {
+        success: false,
+        message: `⚠️ Invalid role "<b>${escapeHtml(newRole)}</b>". Supported roles: <code>admin</code>, <code>user</code> (member), <code>pending</code>, <code>rejected</code>, <code>remove</code>.`
+      };
+    }
+
+    const assignedRole = (roleNormalized === 'member') ? 'user' : roleNormalized;
+
+    // 1. Find in bot_access
+    let access = null;
+    if (isNumericId) {
+      access = await db.prepare('SELECT * FROM bot_access WHERE telegram_id = ?').get(cleanTarget);
+    }
+    if (!access) {
+      access = await db.prepare('SELECT * FROM bot_access WHERE LOWER(username) = LOWER(?)').get(cleanTarget);
+    }
+
+    // 2. Find in users table
+    let user = null;
+    if (isNumericId) {
+      user = await db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(cleanTarget);
+    }
+    if (!user) {
+      user = await db.prepare('SELECT * FROM users WHERE LOWER(telegram_username) = LOWER(?) OR LOWER(telegram_username) = LOWER(?)').get(`@${cleanTarget}`, cleanTarget);
+    }
+
+    if (access && access.role === 'super_admin') {
+      return { success: false, message: '⛔ Cannot modify a Super Admin account.' };
+    }
+    if (user && user.role === 'super_admin') {
+      return { success: false, message: '⛔ Cannot modify a Super Admin account.' };
+    }
+
+    // A) REMOVE / DELETE ACTION
+    if (assignedRole === 'remove' || assignedRole === 'delete') {
+      const targetTgId = access?.telegram_id || (isNumericId ? cleanTarget : null);
+      if (access) {
+        await db.prepare('DELETE FROM bot_access WHERE id = ?').run(access.id);
+      } else if (targetTgId) {
+        await db.prepare('DELETE FROM bot_access WHERE telegram_id = ?').run(targetTgId);
+      }
+      if (targetTgId) {
+        await db.prepare('UPDATE users SET telegram_id = NULL WHERE telegram_id = ?').run(targetTgId);
+      }
+      if (user && user.role === 'admin') {
+        await db.prepare("UPDATE users SET role = 'authorized' WHERE id = ?").run(user.id);
+      }
+
+      logAction(adminProfile.user?.id || null, 'TG_ADMIN_REMOVE', `Super Admin removed ${cleanTarget} from bot permissions`);
+
+      // Notify target user if valid telegram ID
+      if (targetTgId && /^\d+$/.test(targetTgId)) {
+        try {
+          await bot.telegram.sendMessage(
+            targetTgId,
+            `⛔ <b>BOT ACCESS REVOKED</b>\n\nYour access to the F.R.I.E.N.D.S bot has been removed by the Super Admin.`,
+            { parse_mode: 'HTML' }
+          );
+        } catch (e) {}
+      }
+
+      return {
+        success: true,
+        message:
+          `🗑️ <b>USER REMOVED FROM BOT</b>\n\n` +
+          `Target: <code>${escapeHtml(cleanTarget)}</code>\n` +
+          `Status: Completely purged from bot permissions.`
+      };
+    }
+
+    // B) ASSIGN OR UPDATE ROLE
+    let targetTgId = access?.telegram_id || (isNumericId ? cleanTarget : null);
+    const targetName = access
+      ? ([access.first_name, access.last_name].filter(Boolean).join(' ') || access.username || cleanTarget)
+      : (user ? (user.nickname || user.email) : cleanTarget);
+
+    if (access) {
+      await db.prepare('UPDATE bot_access SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(assignedRole, access.id);
+    } else {
+      const tempTgId = isNumericId ? cleanTarget : `pending_user_${cleanTarget.toLowerCase()}`;
+      await db.prepare('INSERT INTO bot_access (telegram_id, username, role) VALUES (?, ?, ?)').run(
+        tempTgId,
+        cleanTarget,
+        assignedRole
+      );
+      targetTgId = tempTgId;
+    }
+
+    // Synchronize with users table if web user is linked
+    if (user) {
+      const newWebRole = (assignedRole === 'admin') ? 'admin' : 'authorized';
+      await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newWebRole, user.id);
+    }
+
+    logAction(adminProfile.user?.id || null, 'TG_ROLE_SET', `Super Admin assigned ${assignedRole.toUpperCase()} to ${targetName} (${cleanTarget})`);
+
+    // Notify target user on Telegram if messageable numeric ID
+    if (targetTgId && /^\d+$/.test(targetTgId)) {
+      try {
+        if (assignedRole === 'admin') {
+          await bot.telegram.sendMessage(
+            targetTgId,
+            `🎉 <b>ACCESS LEVEL UPDATED!</b>\n\n` +
+            `🛡️ You have been granted <b>ADMIN</b> access to the F.R.I.E.N.D.S bot by the Super Admin!\n\n` +
+            `You can now post to the live chat, broadcast announcements, and upload to the gallery.\n\n` +
+            `👇 <i>Use your refreshed menu below:</i>`,
+            { parse_mode: 'HTML', ...getAdminKeyboard(false) }
+          );
+        } else if (assignedRole === 'user') {
+          await bot.telegram.sendMessage(
+            targetTgId,
+            `ℹ️ <b>ACCESS LEVEL UPDATED</b>\n\n` +
+            `👤 Your bot role has been set to <b>MEMBER</b> (View-Only) by the Super Admin.\n\n` +
+            `You can view messages and check savings.`,
+            { parse_mode: 'HTML', ...getMemberKeyboard() }
+          );
+        } else if (assignedRole === 'rejected') {
+          await bot.telegram.sendMessage(
+            targetTgId,
+            `⛔ <b>ACCESS RESTRICTED</b>\n\nYour request/access to the F.R.I.E.N.D.S bot has been declined/revoked by the Super Admin.`,
+            { parse_mode: 'HTML' }
+          );
+        }
+      } catch (e) {
+        console.warn(`Could not send direct notification to ${targetTgId}:`, e.message);
+      }
+    }
+
+    const roleBadges = {
+      admin: '🛡️ ADMIN (Full Posting & Viewing Privileges)',
+      user: '👤 MEMBER (View-Only Access)',
+      pending: '⏳ PENDING (Awaiting Approval)',
+      rejected: '🚫 REJECTED / ACCESS REVOKED'
+    };
+
+    return {
+      success: true,
+      message:
+        `✅ <b>ROLE CONFIGURED SUCCESSFULLY</b>\n\n` +
+        `👤 User: <b>${escapeHtml(targetName)}</b>\n` +
+        `🏷️ Target: <code>${escapeHtml(cleanTarget)}</code>\n` +
+        `🛡️ Assigned Role: <b>${roleBadges[assignedRole] || assignedRole.toUpperCase()}</b>\n` +
+        `📅 Updated: ${new Date().toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa' })}`
+    };
+  };
+
+  // SUPER ADMIN DASHBOARD
+  const handleAdminDashboard = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      if (ctx.callbackQuery) {
+        return ctx.answerCbQuery('⛔ Only Super Admin can manage admins and roles.', { show_alert: true });
+      }
+      return ctx.reply('⛔ Access Denied: Only Super Admin can manage bot admins and member roles.');
+    }
+
+    const admins = await db.prepare("SELECT * FROM bot_access WHERE role = 'admin' ORDER BY updated_at DESC").all();
+    const members = await db.prepare("SELECT COUNT(*) as count FROM bot_access WHERE role = 'user'").get();
+    const pending = await db.prepare("SELECT COUNT(*) as count FROM bot_access WHERE role = 'pending'").get();
+    const total = await db.prepare("SELECT COUNT(*) as count FROM bot_access").get();
+
+    const text =
+      `🛡️ <b>SUPER ADMIN - ADMIN & ROLE MANAGEMENT</b>\n\n` +
+      `📊 <b>System Overview:</b>\n` +
+      `• 👑 Super Admin: <b>1</b>\n` +
+      `• 🛡️ Active Admins: <b>${admins.length}</b>\n` +
+      `• 👤 Approved Members: <b>${members?.count || 0}</b>\n` +
+      `• ⏳ Pending Requests: <b>${pending?.count || 0}</b>\n` +
+      `• 👥 Total Bot Records: <b>${total?.count || 0}</b>\n\n` +
+      `Manage your administration team and bot member roles below:`;
+
+    const buttons = [
+      [
+        Markup.button.callback('📋 View & Manage Admins', 'admin_mgr_list_admins'),
+        Markup.button.callback('➕ Add / Promote Admin', 'admin_mgr_add_start')
+      ],
+      [
+        Markup.button.callback('👥 All Bot Users & Roles', 'admin_mgr_list_all'),
+        Markup.button.callback('⚙️ Pending Requests', 'admin_mgr_pending')
+      ],
+      [
+        Markup.button.callback('🔄 Refresh Dashboard', 'admin_mgr_refresh')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // LIST & MANAGE ADMINS
+  const handleListAdmins = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.answerCbQuery ? ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true }) : ctx.reply('⛔ Super Admin only.');
+    }
+
+    const admins = await db.prepare("SELECT * FROM bot_access WHERE role = 'admin' ORDER BY updated_at DESC").all();
+
+    if (admins.length === 0) {
+      const text =
+        `🛡️ <b>ADMIN MANAGEMENT</b>\n\n` +
+        `ℹ️ <i>There are currently no additional admins registered on the bot.</i>\n\n` +
+        `You can add or promote an admin at any time by clicking <b>➕ Add / Promote Admin</b> below or using <code>/addadmin @username</code>.`;
+
+      const buttons = [
+        [Markup.button.callback('➕ Add / Promote Admin', 'admin_mgr_add_start')],
+        [Markup.button.callback('⬅️ Back to Dashboard', 'admin_mgr_dashboard')]
+      ];
+
+      return respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+    }
+
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery();
+    }
+
+    await ctx.reply(`🛡️ <b>ACTIVE BOT ADMINS (${admins.length})</b>\n\nSelect an admin below to manage, demote, or change their role:`, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('➕ Add Another Admin', 'admin_mgr_add_start'),
+          Markup.button.callback('⬅️ Back to Dashboard', 'admin_mgr_dashboard')
+        ]
+      ])
+    });
+
+    for (const a of admins) {
+      const name = [a.first_name, a.last_name].filter(Boolean).join(' ') || a.username || 'Admin';
+      const username = a.username ? `@${a.username}` : 'No @username';
+      const tgLink = a.username ? ` <a href="https://t.me/${a.username}">[Chat]</a>` : '';
+      const updatedDate = a.updated_at ? new Date(a.updated_at).toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' }) : 'N/A';
+
+      const adminCard =
+        `🛡️ <b>${escapeHtml(name)}</b>\n` +
+        `🏷️ ${escapeHtml(username)}${tgLink}\n` +
+        `🆔 ID: <code>${a.telegram_id}</code>\n` +
+        `📅 Last Updated: ${updatedDate}\n` +
+        `🔒 Role: <b>ADMIN</b>`;
+
+      const actionButtons = [
+        [
+          Markup.button.callback('👤 Demote to Member', `admin_act_demote_${a.telegram_id}`),
+          Markup.button.callback('🚫 Revoke Access', `admin_act_revoke_${a.telegram_id}`)
+        ],
+        [
+          Markup.button.callback('✏️ Set Required Role', `admin_act_rolesel_${a.telegram_id}`),
+          Markup.button.callback('🗑️ Remove from Bot', `admin_act_delete_${a.telegram_id}`)
+        ]
+      ];
+
+      await ctx.reply(adminCard, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(actionButtons)
+      });
+    }
+  };
+
+  // LIST ALL USERS & ROLES
+  const handleListAllUsers = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.answerCbQuery ? ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true }) : ctx.reply('⛔ Super Admin only.');
+    }
+
+    const allUsers = await db.prepare("SELECT * FROM bot_access ORDER BY role ASC, updated_at DESC LIMIT 30").all();
+
+    let text = `👥 <b>ALL BOT USERS & ASSIGNED ROLES (${allUsers.length})</b>\n\n`;
+
+    const roleIcons = {
+      super_admin: '👑 SUPER',
+      admin: '🛡️ ADMIN',
+      user: '👤 MEMBER',
+      pending: '⏳ PENDING',
+      rejected: '🚫 REVOKED'
+    };
+
+    allUsers.forEach((u, i) => {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'User';
+      const tgUser = u.username ? `@${u.username}` : '<i>No username</i>';
+      const badge = roleIcons[u.role] || u.role.toUpperCase();
+      text += `<b>${i + 1}. ${escapeHtml(name)}</b> [${badge}]\n` +
+              `   🏷️ ${tgUser} | 🆔 <code>${u.telegram_id}</code>\n\n`;
+    });
+
+    const buttons = [
+      [
+        Markup.button.callback('➕ Add / Configure Admin', 'admin_mgr_add_start'),
+        Markup.button.callback('📋 Manage Admins', 'admin_mgr_list_admins')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Dashboard', 'admin_mgr_dashboard')
+      ]
+    ];
+
+    await respondWithCard(ctx, text, Markup.inlineKeyboard(buttons));
+  };
+
+  // Register Keyboard Hears for Super Admin
+  bot.hears(['🛡️ Manage Admins', '👥 Manage Admins', '/admins', '/manageadmins'], handleAdminDashboard);
+
+  // Direct Command: /admins or /manageadmins
+  bot.command(['admins', 'manageadmins'], handleAdminDashboard);
+
+  // Direct Command: /addadmin <target> [role]
+  bot.command('addadmin', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.reply('⛔ Only Super Admin can add or assign admin roles.');
+    }
+    const parts = ctx.message.text.trim().split(/\s+/);
+    if (parts.length < 2) {
+      return ctx.reply(
+        '⚠️ <b>Usage:</b> <code>/addadmin &lt;@username|telegram_id&gt; [admin|user]</code>\n\n' +
+        'Example: <code>/addadmin @alex admin</code>\n' +
+        'Example: <code>/addadmin 123456789 admin</code>',
+        { parse_mode: 'HTML' }
+      );
+    }
+    const target = parts[1];
+    const role = parts[2] || 'admin';
+    const result = await applyRoleChange({ targetInput: target, newRole: role, adminProfile: profile, ctx });
+    await ctx.reply(result.message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📋 View All Admins', 'admin_mgr_list_admins'),
+          Markup.button.callback('🛡️ Admin Dashboard', 'admin_mgr_dashboard')
+        ]
+      ])
+    });
+  });
+
+  // Direct Command: /removeadmin <target>
+  bot.command('removeadmin', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.reply('⛔ Only Super Admin can remove admins.');
+    }
+    const parts = ctx.message.text.trim().split(/\s+/);
+    if (parts.length < 2) {
+      return ctx.reply('⚠️ <b>Usage:</b> <code>/removeadmin &lt;@username|telegram_id&gt;</code>', { parse_mode: 'HTML' });
+    }
+    const target = parts[1];
+    const result = await applyRoleChange({ targetInput: target, newRole: 'user', adminProfile: profile, ctx });
+    await ctx.reply(result.message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📋 View All Admins', 'admin_mgr_list_admins'),
+          Markup.button.callback('🛡️ Admin Dashboard', 'admin_mgr_dashboard')
+        ]
+      ])
+    });
+  });
+
+  // Direct Command: /setrole <target> <role>
+  bot.command('setrole', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.reply('⛔ Only Super Admin can assign roles.');
+    }
+    const parts = ctx.message.text.trim().split(/\s+/);
+    if (parts.length < 3) {
+      return ctx.reply(
+        '⚠️ <b>Usage:</b> <code>/setrole &lt;@username|telegram_id&gt; &lt;admin|user|pending|rejected|remove&gt;</code>\n\n' +
+        'Example: <code>/setrole @alex admin</code>\n' +
+        'Example: <code>/setrole @alex user</code>',
+        { parse_mode: 'HTML' }
+      );
+    }
+    const target = parts[1];
+    const role = parts[2];
+    const result = await applyRoleChange({ targetInput: target, newRole: role, adminProfile: profile, ctx });
+    await ctx.reply(result.message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📋 View All Admins', 'admin_mgr_list_admins'),
+          Markup.button.callback('🛡️ Admin Dashboard', 'admin_mgr_dashboard')
+        ]
+      ])
+    });
+  });
+
+  // Direct Command: /removeuser <target>
+  bot.command('removeuser', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.reply('⛔ Only Super Admin can remove users.');
+    }
+    const parts = ctx.message.text.trim().split(/\s+/);
+    if (parts.length < 2) {
+      return ctx.reply('⚠️ <b>Usage:</b> <code>/removeuser &lt;@username|telegram_id&gt;</code>', { parse_mode: 'HTML' });
+    }
+    const target = parts[1];
+    const result = await applyRoleChange({ targetInput: target, newRole: 'remove', adminProfile: profile, ctx });
+    await ctx.reply(result.message, { parse_mode: 'HTML' });
+  });
+
   // Direct Command: /approve <tgId> <admin|user>
   bot.command('approve', async (ctx) => {
     const profile = await getTelegramProfile(ctx);
@@ -897,17 +1333,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
     const targetTgId = parts[1].trim();
     const assignedRole = (parts[2] && parts[2].toLowerCase() === 'user') ? 'user' : 'admin';
-
-    await db.prepare("INSERT INTO bot_access (telegram_id, role) VALUES (?, ?) ON CONFLICT(telegram_id) DO UPDATE SET role = ?, updated_at = CURRENT_TIMESTAMP").run(targetTgId, assignedRole, assignedRole);
-    ctx.reply(`✅ Telegram user ${targetTgId} has been approved as ${assignedRole.toUpperCase()}.`);
-
-    try {
-      await bot.telegram.sendMessage(
-        targetTgId,
-        `🎉 <b>ACCESS GRANTED!</b>\n\nYou have been approved as <b>${assignedRole.toUpperCase()}</b> by the Super Admin.\nUse /start to access the menu.`,
-        { parse_mode: 'HTML' }
-      );
-    } catch (e) {}
+    const result = await applyRoleChange({ targetInput: targetTgId, newRole: assignedRole, adminProfile: profile, ctx });
+    ctx.reply(result.message, { parse_mode: 'HTML' });
   });
 
   // Direct Command: /reject <tgId>
@@ -919,9 +1346,146 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const parts = ctx.message.text.split(' ');
     if (parts.length < 2) return ctx.reply('Usage: /reject <telegram_id>');
     const targetTgId = parts[1].trim();
+    const result = await applyRoleChange({ targetInput: targetTgId, newRole: 'rejected', adminProfile: profile, ctx });
+    ctx.reply(result.message, { parse_mode: 'HTML' });
+  });
 
-    await db.prepare("INSERT INTO bot_access (telegram_id, role) VALUES (?, 'rejected') ON CONFLICT(telegram_id) DO UPDATE SET role = 'rejected', updated_at = CURRENT_TIMESTAMP").run(targetTgId);
-    ctx.reply(`❌ Telegram user ${targetTgId} access has been rejected.`);
+  // Action Callbacks for Admin Manager
+  bot.action('admin_mgr_dashboard', handleAdminDashboard);
+  bot.action('admin_mgr_refresh', handleAdminDashboard);
+  bot.action('admin_mgr_list_admins', handleListAdmins);
+  bot.action('admin_mgr_list_all', handleListAllUsers);
+
+  bot.action('admin_mgr_pending', async (ctx) => {
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.reply('⛔ Super Admin only.');
+    const pending = await db.prepare("SELECT * FROM bot_access WHERE role = 'pending' ORDER BY created_at DESC").all();
+    if (pending.length === 0) {
+      return ctx.reply('✅ There are currently NO pending access requests.', getAdminKeyboard(true));
+    }
+    for (const item of pending) {
+      const name = [item.first_name, item.last_name].filter(Boolean).join(' ') || item.username || 'User';
+      const username = item.username ? `@${item.username}` : 'No username';
+      await ctx.reply(
+        `👤 <b>${escapeHtml(name)}</b>\n` +
+        `🏷️ ${escapeHtml(username)}\n` +
+        `🆔 <code>${item.telegram_id}</code>\n` +
+        `📅 Requested: ${new Date(item.created_at).toLocaleString('en-US', { timeZone: 'Africa/Addis_Ababa' })}`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [
+              Markup.button.callback('🛡️ Approve Admin', `grant_admin_${item.telegram_id}`),
+              Markup.button.callback('👤 Approve Member', `grant_member_${item.telegram_id}`)
+            ],
+            [
+              Markup.button.callback('❌ Reject', `grant_reject_${item.telegram_id}`)
+            ]
+          ])
+        }
+      );
+    }
+  });
+
+  bot.action('admin_mgr_add_start', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) {
+      return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    }
+    userStates.set(ctx.from.id.toString(), { action: 'awaiting_add_admin_target' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+    await ctx.reply(
+      `➕ <b>ADD OR CONFIGURE ADMIN</b>\n\n` +
+      `Please reply with the Telegram <b>@username</b> (e.g. <code>@username</code>) or <b>Telegram ID</b> (e.g. <code>123456789</code>):\n\n` +
+      `<i>(Or tap Cancel below to exit)</i>`,
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('❌ Cancel', 'admin_mgr_cancel')]
+        ])
+      }
+    );
+  });
+
+  bot.action('admin_mgr_cancel', async (ctx) => {
+    userStates.delete(ctx.from.id.toString());
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery('Cancelled');
+      await ctx.editMessageText('❌ Operation cancelled.');
+    }
+  });
+
+  bot.action(/^admin_act_demote_(\S+)$/, async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    const target = ctx.match[1];
+    const result = await applyRoleChange({ targetInput: target, newRole: 'user', adminProfile: profile, ctx });
+    await ctx.answerCbQuery('Demoted to Member');
+    await ctx.editMessageText(result.message, { parse_mode: 'HTML' });
+  });
+
+  bot.action(/^admin_act_revoke_(\S+)$/, async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    const target = ctx.match[1];
+    const result = await applyRoleChange({ targetInput: target, newRole: 'rejected', adminProfile: profile, ctx });
+    await ctx.answerCbQuery('Access Revoked');
+    await ctx.editMessageText(result.message, { parse_mode: 'HTML' });
+  });
+
+  bot.action(/^admin_act_delete_(\S+)$/, async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    const target = ctx.match[1];
+    const result = await applyRoleChange({ targetInput: target, newRole: 'remove', adminProfile: profile, ctx });
+    await ctx.answerCbQuery('Removed from Bot');
+    await ctx.editMessageText(result.message, { parse_mode: 'HTML' });
+  });
+
+  bot.action(/^admin_act_rolesel_(\S+)$/, async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    const target = ctx.match[1];
+    await ctx.answerCbQuery();
+    await ctx.editMessageText(
+      `🎯 <b>SET REQUIRED ROLE FOR USER</b>\n\nTarget: <code>${escapeHtml(target)}</code>\n\nChoose the required role to assign:`,
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback('🛡️ Admin (Full Access)', `admin_assign_admin_${target}`),
+            Markup.button.callback('👤 Member (View Only)', `admin_assign_user_${target}`)
+          ],
+          [
+            Markup.button.callback('⏳ Pending', `admin_assign_pending_${target}`),
+            Markup.button.callback('🚫 Revoked', `admin_assign_rejected_${target}`)
+          ],
+          [
+            Markup.button.callback('🗑️ Remove / Delete', `admin_assign_remove_${target}`),
+            Markup.button.callback('⬅️ Cancel', 'admin_mgr_list_admins')
+          ]
+        ])
+      }
+    );
+  });
+
+  bot.action(/^admin_assign_(admin|user|pending|rejected|remove)_(.+)$/, async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isSuperAdmin) return ctx.answerCbQuery('⛔ Super Admin only.', { show_alert: true });
+    const newRole = ctx.match[1];
+    const target = ctx.match[2];
+    const result = await applyRoleChange({ targetInput: target, newRole, adminProfile: profile, ctx });
+    await ctx.answerCbQuery('Role updated!');
+    await ctx.editMessageText(result.message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📋 View All Admins', 'admin_mgr_list_admins'),
+          Markup.button.callback('🛡️ Admin Dashboard', 'admin_mgr_dashboard')
+        ]
+      ])
+    });
   });
 
   // Account Linking: /login <email> <password>
@@ -1065,6 +1629,34 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         {
           parse_mode: 'HTML',
           ...getAdminKeyboard(profile.isSuperAdmin)
+        }
+      );
+    }
+
+    if (state?.action === 'awaiting_add_admin_target') {
+      userStates.delete(tgId);
+      const target = text.trim();
+      const cleanTarget = target.replace(/^@/, '');
+
+      return ctx.reply(
+        `🎯 <b>CONFIGURE ADMIN & ROLE</b>\n\n` +
+        `Target: <b>${escapeHtml(target)}</b>\n\n` +
+        `Select the required role to assign to this user:`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [
+              Markup.button.callback('🛡️ Role: ADMIN (Full Access)', `admin_assign_admin_${cleanTarget}`),
+              Markup.button.callback('👤 Role: MEMBER (View Only)', `admin_assign_user_${cleanTarget}`)
+            ],
+            [
+              Markup.button.callback('🚫 Revoke / Reject Access', `admin_assign_rejected_${cleanTarget}`),
+              Markup.button.callback('🗑️ Remove from Bot', `admin_assign_remove_${cleanTarget}`)
+            ],
+            [
+              Markup.button.callback('❌ Cancel', 'admin_mgr_cancel')
+            ]
+          ])
         }
       );
     }
