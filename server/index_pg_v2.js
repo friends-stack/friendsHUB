@@ -636,9 +636,50 @@ app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res
 });
 
 app.delete('/api/savings/members/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(req.params.id);
-  await db.prepare('DELETE FROM savings_members WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  const memberId = req.params.id;
+  const member = await db.prepare('SELECT id, name FROM savings_members WHERE id = ?').get(memberId);
+  if (!member) {
+    return res.status(404).json({ error: 'Member not found' });
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+
+  const allUsers = await db.prepare('SELECT id, nickname, full_name, email, role FROM users').all();
+  const cleanMemberName = member.name.trim().toLowerCase().replace(/\s+/g, '');
+
+  const matchedUser = allUsers.find(u => {
+    const userFullName = (u.full_name || '').trim().toLowerCase().replace(/\s+/g, '');
+    const userNickname = (u.nickname || '').trim().toLowerCase().replace(/\s+/g, '');
+    const userEmail = (u.email || '').trim().toLowerCase();
+    const emailPrefix = userEmail.split('@')[0];
+
+    return (
+      (userFullName && userFullName === cleanMemberName) ||
+      (userNickname && userNickname === cleanMemberName) ||
+      (userEmail && userEmail === member.name.trim().toLowerCase()) ||
+      (userFullName && (cleanMemberName.includes(userFullName) || userFullName.includes(cleanMemberName))) ||
+      (userNickname && (cleanMemberName.includes(userNickname) || userNickname.includes(cleanMemberName))) ||
+      (emailPrefix && emailPrefix === cleanMemberName)
+    );
+  });
+
+  if (matchedUser && (matchedUser.role === 'super_admin' || matchedUser.email?.toLowerCase() === superAdminEmail)) {
+    return res.status(403).json({ error: 'Cannot delete the Super Admin account' });
+  }
+
+  if (matchedUser) {
+    const result = await deleteUserCompletely(matchedUser.id, req.user);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+  }
+
+  await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(memberId);
+  await db.prepare('DELETE FROM savings_members WHERE id = ?').run(memberId);
+
+  io.emit('savings_update');
+
+  res.json({ success: true, message: `Member ${member.name} permanently removed from system` });
 });
 
 app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, res) => {

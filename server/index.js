@@ -714,6 +714,13 @@ const deleteUserCompletely = async (id, actingUser) => {
   await db.prepare('DELETE FROM posts WHERE user_id = ?').run(id);
   await db.prepare('DELETE FROM memories WHERE user_id = ?').run(id);
   await db.prepare('DELETE FROM bot_access WHERE user_id = ?').run(id);
+  if (targetUser.telegram_id) {
+    await db.prepare('DELETE FROM bot_access WHERE telegram_id = ?').run(targetUser.telegram_id);
+  }
+  if (targetUser.telegram_username) {
+    const cleanTg = targetUser.telegram_username.replace(/^@/, '');
+    await db.prepare('DELETE FROM bot_access WHERE LOWER(username) = LOWER(?)').run(cleanTg);
+  }
   await db.prepare('DELETE FROM logs WHERE user_id = ?').run(id);
   await db.prepare("UPDATE system_settings SET value = '' WHERE key = 'clerk_id' AND value = ?").run(String(id));
 
@@ -1135,9 +1142,55 @@ app.post('/api/savings/members', checkAuth, checkSavingsManager, async (req, res
 });
 
 app.delete('/api/savings/members/:id', checkAuth, checkSavingsManager, async (req, res) => {
-  await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(req.params.id);
-  await db.prepare('DELETE FROM savings_members WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  const memberId = req.params.id;
+  const member = await db.prepare('SELECT id, name FROM savings_members WHERE id = ?').get(memberId);
+  if (!member) {
+    return res.status(404).json({ error: 'Member not found' });
+  }
+
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
+
+  // Find any corresponding user or admin in the system
+  const allUsers = await db.prepare('SELECT id, nickname, full_name, email, role FROM users').all();
+  const cleanMemberName = member.name.trim().toLowerCase().replace(/\s+/g, '');
+
+  const matchedUser = allUsers.find(u => {
+    const userFullName = (u.full_name || '').trim().toLowerCase().replace(/\s+/g, '');
+    const userNickname = (u.nickname || '').trim().toLowerCase().replace(/\s+/g, '');
+    const userEmail = (u.email || '').trim().toLowerCase();
+    const emailPrefix = userEmail.split('@')[0];
+
+    return (
+      (userFullName && userFullName === cleanMemberName) ||
+      (userNickname && userNickname === cleanMemberName) ||
+      (userEmail && userEmail === member.name.trim().toLowerCase()) ||
+      (userFullName && (cleanMemberName.includes(userFullName) || userFullName.includes(cleanMemberName))) ||
+      (userNickname && (cleanMemberName.includes(userNickname) || userNickname.includes(cleanMemberName))) ||
+      (emailPrefix && emailPrefix === cleanMemberName)
+    );
+  });
+
+  // Never allow deleting the Super Admin
+  if (matchedUser && (matchedUser.role === 'super_admin' || matchedUser.email?.toLowerCase() === superAdminEmail)) {
+    return res.status(403).json({ error: 'Cannot delete the Super Admin account' });
+  }
+
+  // If this member is an active user or admin on the system, purge them completely
+  if (matchedUser) {
+    const result = await deleteUserCompletely(matchedUser.id, req.user);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+  }
+
+  // Also clean up from savings tables regardless
+  await db.prepare('DELETE FROM savings_transactions WHERE member_id = ?').run(memberId);
+  await db.prepare('DELETE FROM savings_members WHERE id = ?').run(memberId);
+
+  // Broadcast to all active clients
+  io.emit('savings_update');
+
+  res.json({ success: true, message: `Member ${member.name} permanently removed from system` });
 });
 
 app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, res) => {

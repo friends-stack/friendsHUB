@@ -555,14 +555,31 @@ const SavingsTracker = ({ user }) => {
       showToast("Only Super Admin (ermiasgesgis@gmail.com) can remove members");
       return;
     }
-    confirmAction("Remove Member", `Are you sure you want to PERMANENTLY remove ${memberName} and all their transaction history?`, async () => {
-      try {
-        await axios.delete(`${API_BASE}/api/savings/members/${memberId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-        await fetchAllData();
-        setConfirmation({ ...confirmation, isOpen: false });
-        showSuccess("Member removed permanently.");
-      } catch (err) { showToast(err.response?.data?.error || "Error deleting member"); }
-    });
+    confirmAction(
+      "Permanently Remove Member",
+      `Are you sure you want to PERMANENTLY remove ${memberName}?\n\nThis user/admin will be completely purged from the system, database, and bot access, and will no longer be visible anywhere.`,
+      async () => {
+        try {
+          await axios.delete(`${API_BASE}/api/savings/members/${memberId}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          // Optimistically update state immediately
+          setMembers(prev => prev.filter(m => m.id !== memberId));
+          setSystemUsers(prev => prev.filter(u => u.id !== memberId && u.name !== memberName && u.nickname !== memberName));
+          const cached = getCachedSavings();
+          if (cached) {
+            cached.members = (cached.members || []).filter(m => m.id !== memberId);
+            cached.systemUsers = (cached.systemUsers || []).filter(u => u.id !== memberId && u.name !== memberName && u.nickname !== memberName);
+            localStorage.setItem('cached_savings_data', JSON.stringify(cached));
+          }
+          await fetchAllData();
+          setConfirmation({ ...confirmation, isOpen: false });
+          showSuccess(`${memberName} was permanently purged from the system.`);
+        } catch (err) {
+          showToast(err.response?.data?.error || "Error deleting member");
+        }
+      }
+    );
   };
 
   const [selectedWeekIds, setSelectedWeekIds] = useState([]);
@@ -1439,7 +1456,7 @@ const SavingsTracker = ({ user }) => {
                               />
                             </div>
                           </div>
-                          {isSuperAdmin && (
+                          {isSuperAdmin && m.role !== 'super_admin' && (
                             <button 
                               onClick={() => handleDeleteMember(m.id, m.name)}
                               style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', padding: '0.5rem', fontWeight: 700, fontSize: '0.85rem' }}
