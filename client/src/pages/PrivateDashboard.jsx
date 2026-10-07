@@ -85,6 +85,7 @@ const PrivateDashboard = ({ user, setUser }) => {
       return [];
     }
   });
+  const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [pendingMedia, setPendingMedia] = useState({ url: '', type: 'text' });
@@ -913,6 +914,7 @@ const PrivateDashboard = ({ user, setUser }) => {
     <button 
       onClick={() => {
         if (!disabled) {
+          if (id === 'profile') setViewingProfileUserId(null);
           setActiveTab(id);
           if (onClick) onClick();
         }
@@ -2188,8 +2190,27 @@ const PrivateDashboard = ({ user, setUser }) => {
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
                             {Number(msg.sender_id || msg.senderId) !== Number(user.id) ? (
-                              <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.1rem' }}>
-                                {msg.sender_email ? (msg.sender_email.split('@')[0].charAt(0).toUpperCase() + msg.sender_email.split('@')[0].slice(1)) : 'User'}
+                              <div 
+                                onClick={() => {
+                                  const targetId = msg.sender_id || msg.senderId;
+                                  if (targetId) {
+                                    setViewingProfileUserId(targetId);
+                                    setActiveTab('profile');
+                                  }
+                                }}
+                                style={{ 
+                                  fontSize: '0.82rem', 
+                                  color: '#16a34a', 
+                                  marginBottom: '0.1rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem'
+                                }}
+                                title="Click to view profile"
+                              >
+                                👤 {msg.sender_email ? (msg.sender_email.split('@')[0].charAt(0).toUpperCase() + msg.sender_email.split('@')[0].slice(1)) : 'User'}
                               </div>
                             ) : (
                               <div />
@@ -2764,7 +2785,34 @@ const PrivateDashboard = ({ user, setUser }) => {
                                  {u.status}
                                </span>
                             </td>
-                            <td style={{ padding: '1.25rem 2rem', textAlign: 'right' }}>
+                            <td style={{ padding: '1.25rem 2rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingProfileUserId(u.id);
+                                  setActiveTab('profile');
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem',
+                                  padding: '0.4rem 0.85rem',
+                                  borderRadius: '8px',
+                                  border: '1px solid #16a34a',
+                                  background: 'rgba(22, 163, 74, 0.08)',
+                                  color: '#16a34a',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  marginRight: '0.75rem',
+                                  transition: 'all 0.15s'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#16a34a'; e.currentTarget.style.color = 'white'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(22, 163, 74, 0.08)'; e.currentTarget.style.color = '#16a34a'; }}
+                                title={`View ${u.nickname || u.full_name || u.email}'s Profile`}
+                              >
+                                <User size={13} /> View Profile
+                              </button>
                               {u.email !== user.email && u.role !== 'super_admin' && (
                                 <button 
                                   onClick={() => {
@@ -3550,7 +3598,36 @@ const PrivateDashboard = ({ user, setUser }) => {
                 exit={{ opacity: 0, y: -10 }}
                 style={{ flex: 1, minHeight: 0 }}
               >
-                <SavingsTracker user={user} />
+                <SavingsTracker 
+                  user={user} 
+                  onViewProfile={(targetId) => {
+                    if (targetId) {
+                      setViewingProfileUserId(targetId);
+                      setActiveTab('profile');
+                    }
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'profile' && (
+              <motion.div 
+                key="profile"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+              >
+                <ProfilePage 
+                  currentUser={user} 
+                  userId={viewingProfileUserId || user.id} 
+                  onProfileUpdate={(updated) => {
+                    if (Number(user.id) === Number(updated.id)) {
+                      setUser(prev => ({ ...prev, ...updated }));
+                    }
+                  }} 
+                  onBackToSelf={() => setViewingProfileUserId(null)}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -3680,7 +3757,10 @@ const PrivateDashboard = ({ user, setUser }) => {
 
         {/* 5. Me */}
         <button 
-          onClick={() => setActiveTab('profile')} 
+          onClick={() => {
+            setViewingProfileUserId(null);
+            setActiveTab('profile');
+          }} 
           style={{ 
             display: 'flex', 
             flexDirection: 'column', 

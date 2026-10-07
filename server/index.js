@@ -20,14 +20,22 @@ let pool = null;
 let sqliteDb = null;
 let isPostgres = false;
 
-if (process.env.DATABASE_URL) {
+const PERMANENT_DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.edewgfzcthbjpgwzoqwh:Ermias%401361e@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+
+if (PERMANENT_DATABASE_URL) {
   try {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      connectionString: PERMANENT_DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 15,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
+    });
+    pool.on('error', (err) => {
+      console.warn('⚠️ Unexpected idle client error on PostgreSQL pool:', err.message);
     });
     isPostgres = true;
-    console.log('🔌 PostgreSQL mode enabled with DATABASE_URL.');
+    console.log('🔌 Permanent Cloud PostgreSQL database connected successfully.');
   } catch (err) {
     console.warn('⚠️ Could not initialize PostgreSQL pool, falling back to SQLite:', err.message);
   }
@@ -614,8 +622,9 @@ app.use(express.json());
 app.use(morgan('dev'));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-123';
-const TG_TOKEN = process.env.TG_TOKEN;
+const JWT_SECRET = process.env.JWT_SECRET || 'friends_info_secret_key_2026';
+const TG_TOKEN = process.env.TG_TOKEN || '8783688702:AAHFs9AJBXfLX-t6lfuAtXB1Cpr1bYTPprI';
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5046785167';
 const bot = TG_TOKEN ? new Telegraf(TG_TOKEN) : null;
 
 

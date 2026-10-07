@@ -10,13 +10,13 @@ import {
 import { AnimatePresence } from 'framer-motion';
 
 
-const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
+const ProfilePage = ({ currentUser, userId, onProfileUpdate, onBackToSelf }) => {
   const { id: paramId } = useParams();
   const id = paramId || userId || currentUser?.id;
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isSelf = !paramId || (currentUser?.id && Number(paramId) === Number(currentUser.id));
+  const isSelf = currentUser?.id && Number(id) === Number(currentUser.id);
   const initialProfile = isSelf && currentUser ? currentUser : null;
 
   const [profile, setProfile] = useState(initialProfile);
@@ -317,13 +317,54 @@ const ProfilePage = ({ currentUser, userId, onProfileUpdate }) => {
       </AnimatePresence>
       {/* Header */}
       <header style={{ 
-        background: 'white', padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem',
+        background: 'white', padding: '1rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 100
       }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem' }}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Profile</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button 
+            type="button"
+            onClick={() => {
+              if (onBackToSelf) onBackToSelf();
+              else navigate(-1);
+            }} 
+            style={{ 
+              background: '#f1f5f9', border: 'none', cursor: 'pointer', padding: '0.5rem',
+              borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="Go back"
+          >
+            <ArrowLeft size={20} color="#334155" />
+          </button>
+          <div>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+              {isSelf ? 'My Profile' : `${profile?.nickname || profile?.full_name || 'Member'}'s Profile`}
+            </h1>
+            {!isSelf && (
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                Community Identity • {profile?.role ? profile.role.toUpperCase() : 'MEMBER'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {!isSelf && onBackToSelf && (
+          <button
+            type="button"
+            onClick={onBackToSelf}
+            style={{
+              padding: '0.45rem 0.9rem',
+              background: 'rgba(22, 163, 74, 0.1)',
+              border: '1px solid #16a34a',
+              borderRadius: '8px',
+              color: '#16a34a',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            👤 My Profile
+          </button>
+        )}
       </header>
 
       <main style={{ maxWidth: '800px', margin: '2rem auto', padding: '0 1rem' }}>
