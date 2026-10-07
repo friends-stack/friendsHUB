@@ -37,7 +37,7 @@ const App = () => {
           localStorage.setItem('user', JSON.stringify(data.user));
         }
       }).catch(err => {
-        if (err.response?.status === 401 || err.response?.status === 403) {
+        if (err.response?.status === 401 && (err.response?.data?.error?.includes('terminated') || err.response?.data?.error?.includes('Invalid token'))) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           setUser(null);

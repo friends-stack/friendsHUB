@@ -573,11 +573,20 @@ const checkAuth = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await db.prepare('SELECT id, email, role, nickname, full_name, status, created_by_admin, profile_picture, cover_photo, mobile, address, gender, dob, bio, telegram_username, fav_food_drink FROM users WHERE id = ?').get(decoded.id);
-    if (!user || user.status === 'blocked' || user.status === 'deleted') {
+    let user = null;
+    try {
+      user = await db.prepare('SELECT id, email, role, nickname, full_name, status, created_by_admin, profile_picture, cover_photo, mobile, address, gender, dob, bio, telegram_username, fav_food_drink FROM users WHERE id = ?').get(decoded.id);
+    } catch (dbErr) {
+      console.warn('DB checkAuth warning:', dbErr.message);
+    }
+
+    if (user && (user.status === 'blocked' || user.status === 'deleted')) {
       return res.status(401).json({ error: 'Identity not found or account terminated' });
     }
-    req.user = user;
+
+    req.user = user 
+      ? { ...user, id: parseInt(user.id) } 
+      : { ...decoded, id: parseInt(decoded.id) };
     next();
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });

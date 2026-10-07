@@ -282,7 +282,9 @@ const PrivateDashboard = ({ user, setUser }) => {
 
   const fetchGallery = async () => {
     try {
-      const { data } = await axios.get('/api/gallery');
+      const { data } = await axios.get('/api/gallery', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
       setGallery(data);
     } catch (err) { console.error(err); }
   };

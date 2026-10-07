@@ -4,9 +4,17 @@ import App from './App.jsx'
 import './index.css'
 import axios from 'axios'
 
-// Request interceptor: dynamically swap localhost backend endpoint with the current host origin in production
+// Request interceptor: dynamically swap localhost backend endpoint with the current host origin in production, and automatically supply Authorization header
 axios.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers = config.headers || {};
+      if (!config.headers.Authorization) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+
     const isProd = import.meta.env.PROD;
     const isLocalIp = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
     
@@ -85,13 +93,13 @@ axios.interceptors.response.use(
   (error) => Promise.reject(error)
 );
 
-// Global axios interceptor: auto-logout if token is expired (401)
+// Global axios interceptor: only auto-logout if session verification specifically fails
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const reqUrl = error.config?.url || '';
+    if (error.response?.status === 401 && (reqUrl.includes('/api/auth/me') || error.response?.data?.error?.includes('terminated'))) {
       const currentPath = window.location.pathname;
-      // Only force logout if we're on a protected page, not the login page itself
       if (currentPath !== '/' && currentPath !== '/login') {
         localStorage.clear();
         window.location.href = '/login';
