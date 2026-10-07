@@ -402,36 +402,33 @@ const PrivateDashboard = ({ user, setUser }) => {
   const handleAddGallery = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const title = formData.get('title');
-    const caption = formData.get('caption');
-    let url = formData.get('url');
+    const title = formData.get('title')?.trim();
     const file = formData.get('file');
 
+    if (!title) return showToast('Please provide a title for the memory');
+    if (!file || !file.name) return showToast('Please select an image file to upload');
+
     try {
-      // If a file is selected, upload it first
-      // NOTE: Do NOT manually set Content-Type here — axios must auto-set
-      // multipart/form-data WITH the correct boundary for multer to parse it.
-      if (file && file.name) {
-        const uploadData = new FormData();
-        uploadData.append('image', file);
-        const { data: uploadRes } = await axios.post('/api/admin/gallery/upload', uploadData, {
-          headers: { 
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        url = uploadRes.url;
-      }
+      const uploadData = new FormData();
+      uploadData.append('image', file);
+      const { data: uploadRes } = await axios.post('/api/admin/gallery/upload', uploadData, {
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const url = uploadRes.url;
 
-      if (!url) return showToast('Please provide a URL or select a file');
-
-      await axios.post('/api/admin/gallery', { url, title, caption }, {
+      await axios.post('/api/admin/gallery', { url, title, caption: '' }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       e.target.reset();
       setGalleryFilePreview(null);
+      if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
       fetchGallery();
-      showToast('New memory added to gallery!');
-    } catch (err) { showToast('Upload failed: ' + (err.response?.data?.error || err.message)); }
+      showToast('New memory posted to gallery successfully!');
+    } catch (err) { 
+      showToast('Upload failed: ' + (err.response?.data?.error || err.message)); 
+    }
   };
 
   const handleUpdateGallery = async (e) => {
@@ -3238,46 +3235,58 @@ const PrivateDashboard = ({ user, setUser }) => {
                   <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <ImageIcon size={20} color="var(--accent)" /> Add New Memory
                   </h3>
-                  <form onSubmit={handleAddGallery} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    <div className="memory-row-inputs">
-                      <input name="title" placeholder="Catchy Title" className="input-field" style={{ flex: 1, marginBottom: 0 }} required />
-                      <input name="caption" placeholder="Short description..." className="input-field" style={{ flex: 1, marginBottom: 0 }} />
+                  <form onSubmit={handleAddGallery} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>Memory Title</label>
+                      <input 
+                        name="title" 
+                        placeholder="Give this memory a catchy title..." 
+                        className="input-field" 
+                        style={{ marginBottom: 0, padding: '0.85rem 1.25rem', borderRadius: '14px', border: '1px solid #cbd5e1', fontSize: '0.95rem' }} 
+                        required 
+                      />
                     </div>
                     
-                    <div className="memory-upload-container" style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '1rem', borderRadius: '12px', border: '1px dashed var(--border)' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 1: Paste URL</label>
-                        <input 
-                          name="url" 
-                          ref={galleryUrlInputRef}
-                          placeholder="https://..." 
-                          className="input-field" 
-                          style={{ marginBottom: 0 }}
-                          onChange={(e) => {
-                            const val = e.target.value?.trim();
-                            if (val) {
-                              setGalleryFilePreview({ url: val, type: 'url' });
-                            } else if (galleryFilePreview?.type === 'url') {
-                              setGalleryFilePreview(null);
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="memory-upload-divider" style={{ width: '1px', height: '40px', background: 'var(--border)' }} />
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem' }}>Option 2: Upload File</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>Upload Photo</label>
+                      <div 
+                        onClick={() => galleryFileInputRef.current?.click()}
+                        style={{ 
+                          background: '#f8fafc', 
+                          padding: '1.5rem', 
+                          borderRadius: '16px', 
+                          border: '2px dashed #cbd5e1',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.65rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#16a34a'; e.currentTarget.style.background = 'rgba(22, 163, 74, 0.04)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+                      >
+                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(22, 163, 74, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+                          <Camera size={24} />
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                            {galleryFilePreview ? 'Change Selected Image' : 'Click to select image from your device'}
+                          </span>
+                          <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#64748b' }}>Supports PNG, JPG, JPEG, WEBP</p>
+                        </div>
                         <input 
                           type="file" 
                           name="file" 
                           ref={galleryFileInputRef}
                           accept="image/*" 
-                          style={{ fontSize: '0.8rem' }}
+                          style={{ display: 'none' }}
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             if (f) {
                               const objectUrl = URL.createObjectURL(f);
                               setGalleryFilePreview({ url: objectUrl, type: 'file', name: f.name });
-                              if (galleryUrlInputRef.current) galleryUrlInputRef.current.value = '';
                             }
                           }}
                         />
@@ -3305,7 +3314,6 @@ const PrivateDashboard = ({ user, setUser }) => {
                             onClick={() => {
                               setGalleryFilePreview(null);
                               if (galleryFileInputRef.current) galleryFileInputRef.current.value = '';
-                              if (galleryUrlInputRef.current) galleryUrlInputRef.current.value = '';
                             }}
                             style={{ 
                               background: '#ef4444', 
@@ -3345,7 +3353,40 @@ const PrivateDashboard = ({ user, setUser }) => {
                       </div>
                     )}
 
-                    <button type="submit" className="btn-primary memory-publish-btn" style={{ alignSelf: 'flex-start', padding: '0.75rem 2rem' }}>post Gallery</button>
+                    <button 
+                      type="submit" 
+                      className="memory-publish-btn" 
+                      style={{ 
+                        alignSelf: 'flex-start', 
+                        padding: '0.85rem 2.25rem',
+                        borderRadius: '14px',
+                        border: 'none',
+                        background: '#16a34a',
+                        color: 'white',
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        boxShadow: '0 4px 14px rgba(22, 163, 74, 0.25)',
+                        transition: 'all 0.25s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = '#0f172a';
+                        e.currentTarget.style.color = '#ffffff';
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(15, 23, 42, 0.35)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = '#16a34a';
+                        e.currentTarget.style.color = 'white';
+                        e.currentTarget.style.boxShadow = '0 4px 14px rgba(22, 163, 74, 0.25)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      <ImageIcon size={18} /> Post Gallery
+                    </button>
                   </form>
                 </div>
 
