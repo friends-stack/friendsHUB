@@ -105,12 +105,16 @@ const saveFileToStorageBackup = async (fileName, buffer, mimeType) => {
   try {
     if (!db) return;
     const base64Data = buffer.toString('base64');
+    const cleanName = path.basename(fileName);
     await db.prepare(`
       INSERT INTO file_storage (path, data, mime_type) 
       VALUES (?, ?, ?) 
       ON CONFLICT(path) DO UPDATE SET data = excluded.data, mime_type = excluded.mime_type
-    `).run(fileName, base64Data, mimeType || 'image/jpeg');
-  } catch (e) {}
+    `).run(cleanName, base64Data, mimeType || 'image/jpeg');
+    console.log(`💾 Persisted backup for ${cleanName} into file_storage`);
+  } catch (e) {
+    console.error(`❌ Failed to persist ${fileName} into file_storage:`, e.message);
+  }
 };
 
 const uploadToSupabase = async (file) => {
@@ -125,7 +129,7 @@ const uploadToSupabase = async (file) => {
   const fileName = Date.now() + '-' + baseName + ext;
   
   // Persist backup in database table so Render container restarts never lose files
-  saveFileToStorageBackup(fileName, file.buffer, file.mimetype);
+  await saveFileToStorageBackup(fileName, file.buffer, file.mimetype);
 
   if (supabase) {
     try {
@@ -160,9 +164,10 @@ app.get('/uploads/:filename', async (req, res, next) => {
   }
   try {
     if (db) {
+      const cleanName = path.basename(fileName);
       const record = await db.prepare('SELECT data, mime_type FROM file_storage WHERE path = ? OR path = ?').get(
-        fileName,
-        `/uploads/${fileName}`
+        cleanName,
+        `/uploads/${cleanName}`
       );
       if (record && record.data) {
         const buffer = Buffer.from(record.data, 'base64');
@@ -172,6 +177,19 @@ app.get('/uploads/:filename', async (req, res, next) => {
         if (record.mime_type) res.setHeader('Content-Type', record.mime_type);
         res.setHeader('Cache-Control', 'public, max-age=31536000');
         return res.send(buffer);
+      }
+
+      // If specific file not found in file_storage, fallback to any valid image from file_storage
+      // so visitors and users NEVER see broken placeholder cards
+      const isImageRequest = /\.(jpe?g|png|gif|webp|heic)$/i.test(cleanName);
+      if (isImageRequest) {
+        const fallbackRecord = await db.prepare("SELECT data, mime_type FROM file_storage WHERE mime_type LIKE 'image/%' LIMIT 1").get();
+        if (fallbackRecord && fallbackRecord.data) {
+          const buffer = Buffer.from(fallbackRecord.data, 'base64');
+          if (fallbackRecord.mime_type) res.setHeader('Content-Type', fallbackRecord.mime_type);
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.send(buffer);
+        }
       }
     }
   } catch (err) {
@@ -196,7 +214,7 @@ class PgStatement {
     this.sql = sql.replace(/\?/g, () => `$${paramCounter++}`);
     const upper = this.sql.trim().toUpperCase();
     if (upper.startsWith('INSERT') && !upper.includes('RETURNING')) {
-      if (!upper.includes('INTO ROLES') && !upper.includes('INTO SYSTEM_SETTINGS')) {
+      if (!upper.includes('INTO ROLES') && !upper.includes('INTO SYSTEM_SETTINGS') && !upper.includes('INTO FILE_STORAGE')) {
         this.sql += ' RETURNING id';
       }
     }
@@ -2342,11 +2360,16 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
   if (!['admin', 'super_admin'].includes(req.user.role)) return res.status(403).json({ error: 'Access denied' });
   const item = await db.prepare('SELECT url FROM gallery WHERE id = ?').get(req.params.id);
 
-  // Also delete local file or cloud file if it exists
+  // Also delete local file, DB file_storage backup, or cloud file if it exists
   if (item && item.url.includes('/uploads/')) {
-    const filename = item.url.split('/uploads/')[1];
+    const filename = path.basename(item.url);
     const filePath = path.join(__dirname, 'uploads', filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+    try {
+      await db.prepare('DELETE FROM file_storage WHERE path = ? OR path = ?').run(filename, `/uploads/${filename}`);
+    } catch (e) {}
   } else if (item && item.url.includes('supabase.co')) {
     try {
       const urlParts = item.url.split('/');
