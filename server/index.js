@@ -644,6 +644,11 @@ app.use(express.json());
 app.use(morgan('dev'));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Lightweight ping/health check endpoints for cron-job.org and uptime monitors
+app.get(['/ping', '/api/ping', '/health', '/api/health'], (req, res) => {
+  res.status(200).send('OK');
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || 'friends_info_secret_key_2026';
 const TG_TOKEN = process.env.TG_TOKEN || '8783688702:AAHFs9AJBXfLX-t6lfuAtXB1Cpr1bYTPprI';
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5046785167';
