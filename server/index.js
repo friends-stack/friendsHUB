@@ -757,12 +757,45 @@ const logAction = (userId, action, details) => {
     return;
   }
 
-  if (bot && process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
-    const alertPrefix = action.includes('ALERT') ? '⚠️ SECURITY ALERT' : '🔔';
-    const message = action.includes('ALERT') 
-      ? `${alertPrefix}: ${details}`
-      : `${alertPrefix} ${details}`;
-    bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, message).catch(console.error);
+  const alertPrefix = action.includes('ALERT') ? '⚠️ SECURITY ALERT' : '🔔';
+  const cleanDetails = details ? String(details).replace(/^🔔\s*/, '') : '';
+  const message = action.includes('ALERT') 
+    ? `${alertPrefix}: ${cleanDetails}`
+    : `${alertPrefix} ${cleanDetails}`;
+
+  // Emit real-time notification to all connected web admins and superadmins
+  try {
+    io.emit('new_notification', {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: action.toLowerCase(),
+      category: action.includes('SAVINGS') ? 'saving_payment' : 'system',
+      title: message,
+      description: cleanDetails,
+      created_at: new Date().toISOString()
+    });
+  } catch (err) {}
+
+  // Broadcast to Telegram Super Admin and all approved Admins
+  if (bot) {
+    const recipients = new Set();
+    if (process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
+      recipients.add(process.env.ADMIN_CHAT_ID.toString());
+    }
+
+    try {
+      const adminUsers = db.prepare(`
+        SELECT telegram_id FROM bot_access WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
+        UNION
+        SELECT telegram_id FROM users WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
+      `).all();
+      for (const a of adminUsers) {
+        if (a.telegram_id) recipients.add(a.telegram_id.toString());
+      }
+    } catch (e) {}
+
+    for (const chatId of recipients) {
+      bot.telegram.sendMessage(chatId, message).catch((e) => console.warn(`Could not deliver bot alert to ${chatId}:`, e.message));
+    }
   }
 };
 
@@ -2154,29 +2187,48 @@ io.on('connection', (socket) => {
         io.to('private').emit('receive_message', broadcastMsg);
       }
 
-      // Telegram forwarding
-      if (bot && process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
+      // Telegram forwarding to Super Admin and all admins
+      if (bot) {
         const localTime = new Date().toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-        const caption = `💬 NEW MESSAGE\nFrom: ${sender.email}\nTo: ${receiverId ? 'User ' + receiverId : 'GROUP'}\nTime: ${localTime}\n\n${content || ''}`;
-        if (media_url) {
-          const filename = media_url.split('/').pop();
-          const filePath = path.join(__dirname, 'uploads', filename);
-          if (fs.existsSync(filePath)) {
-            const fileStream = fs.createReadStream(filePath);
-            let cleanFilename = filename;
-            const hyphenIndex = filename.indexOf('-');
-            if (hyphenIndex !== -1) cleanFilename = filename.substring(hyphenIndex + 1);
-            if (media_type === 'image') {
-              bot.telegram.sendPhoto(process.env.ADMIN_CHAT_ID, { source: fileStream }, { caption }).catch(console.error);
+        const senderLabel = sender.nickname || sender.full_name || sender.email;
+        const caption = `💬 NEW MESSAGE\nFrom: ${senderLabel}\nTo: ${receiverId ? 'User ' + receiverId : 'GROUP'}\nTime: ${localTime}\n\n${content || ''}`;
+
+        const recipients = new Set();
+        if (process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
+          recipients.add(process.env.ADMIN_CHAT_ID.toString());
+        }
+        try {
+          const adminRows = db.prepare(`
+            SELECT telegram_id FROM bot_access WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
+            UNION
+            SELECT telegram_id FROM users WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
+          `).all();
+          for (const a of adminRows) {
+            if (a.telegram_id) recipients.add(a.telegram_id.toString());
+          }
+        } catch (e) {}
+
+        for (const chatId of recipients) {
+          if (media_url) {
+            const filename = media_url.split('/').pop();
+            const filePath = path.join(__dirname, 'uploads', filename);
+            if (fs.existsSync(filePath)) {
+              const fileStream = fs.createReadStream(filePath);
+              let cleanFilename = filename;
+              const hyphenIndex = filename.indexOf('-');
+              if (hyphenIndex !== -1) cleanFilename = filename.substring(hyphenIndex + 1);
+              if (media_type === 'image') {
+                bot.telegram.sendPhoto(chatId, { source: fileStream }, { caption }).catch(console.error);
+              } else {
+                bot.telegram.sendDocument(chatId, { source: fileStream, filename: cleanFilename }, { caption }).catch(console.error);
+              }
             } else {
-              bot.telegram.sendDocument(process.env.ADMIN_CHAT_ID, { source: fileStream, filename: cleanFilename }, { caption }).catch(console.error);
+              if (media_type === 'image') bot.telegram.sendPhoto(chatId, { url: media_url }, { caption }).catch(console.error);
+              else bot.telegram.sendDocument(chatId, { url: media_url }, { caption }).catch(console.error);
             }
           } else {
-            if (media_type === 'image') bot.telegram.sendPhoto(process.env.ADMIN_CHAT_ID, { url: media_url }, { caption }).catch(console.error);
-            else bot.telegram.sendDocument(process.env.ADMIN_CHAT_ID, { url: media_url }, { caption }).catch(console.error);
+            bot.telegram.sendMessage(chatId, caption).catch(console.error);
           }
-        } else {
-          bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, caption).catch(console.error);
         }
       }
     }

@@ -255,7 +255,11 @@ const PrivateDashboard = ({ user, setUser }) => {
     
     socket.emit('join_room', 'private');
     socket.on('receive_message', (msg) => {
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => {
+        if (!msg || !msg.id) return prev;
+        if (prev.some(m => Number(m.id) === Number(msg.id))) return prev;
+        return [...prev, msg];
+      });
       fetchNotifications();
     });
 
@@ -360,7 +364,18 @@ const PrivateDashboard = ({ user, setUser }) => {
       const { data } = await axios.get('/api/messages', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      setMessages(data);
+      if (Array.isArray(data)) {
+        setMessages(prev => {
+          const map = new Map();
+          for (const m of prev) {
+            if (m && m.id) map.set(Number(m.id), m);
+          }
+          for (const m of data) {
+            if (m && m.id) map.set(Number(m.id), m);
+          }
+          return Array.from(map.values()).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        });
+      }
     } catch (err) { console.error(err); }
   };
 
