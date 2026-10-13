@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -155,6 +156,103 @@ const uploadToSupabase = async (file) => {
 
 const app = express();
 
+// Reverse proxy trust (Render HTTPS termination)
+app.set('trust proxy', 1);
+
+// Disable X-Powered-By header
+app.disable('x-powered-by');
+
+// Audited CORS configuration
+const allowedOrigins = [
+  'https://friendshub-pewx.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5000'
+];
+if (process.env.CLIENT_URL) allowedOrigins.push(process.env.CLIENT_URL);
+if (process.env.ALLOWED_ORIGINS) {
+  process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).forEach(o => {
+    if (o && !allowedOrigins.includes(o)) allowedOrigins.push(o);
+  });
+}
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, uptime monitors, same-origin)
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+
+// HTTP Security Headers via Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://*.supabase.co",
+        "https://ui-avatars.com",
+        "https://images.unsplash.com"
+      ],
+      mediaSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://*.supabase.co",
+        "https://assets.mixkit.co"
+      ],
+      connectSrc: [
+        "'self'",
+        "wss:",
+        "ws:",
+        "https://*.supabase.co",
+        "https://nominatim.openstreetmap.org"
+      ],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  xFrameOptions: { action: 'deny' },
+  xContentTypeOptions: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
+
+// Permissions-Policy header
+app.use((req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(self), microphone=(self), geolocation=(self), clipboard-write=(self), payment=(), usb=()'
+  );
+  next();
+});
+
 // Custom handler for /uploads to recover files from database if disk was cleared by Render container restart
 app.get('/uploads/:filename', async (req, res, next) => {
   const fileName = req.params.filename;
@@ -202,8 +300,9 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -639,10 +738,8 @@ const db = {
 });
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
-app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Lightweight ping/health check endpoints for cron-job.org and uptime monitors
 app.all(['/ping', '/api/ping', '/health', '/api/health'], (req, res) => {
