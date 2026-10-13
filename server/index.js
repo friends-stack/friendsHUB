@@ -645,7 +645,13 @@ app.use(morgan('dev'));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Lightweight ping/health check endpoints for cron-job.org and uptime monitors
-app.get(['/ping', '/api/ping', '/health', '/api/health'], (req, res) => {
+app.all(['/ping', '/api/ping', '/health', '/api/health'], (req, res) => {
+  res.set({
+    'Content-Type': 'text/plain',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
   res.status(200).send('OK');
 });
 
