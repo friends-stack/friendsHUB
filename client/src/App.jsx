@@ -27,7 +27,15 @@ const App = () => {
   });
 
   useEffect(() => {
+    // Automatic website visit tracking for all admin bot notifications
     const token = localStorage.getItem('token');
+    try {
+      axios.post('/api/track-visit', {
+        path: window.location.pathname,
+        referrer: document.referrer || null
+      }, token ? { headers: { Authorization: `Bearer ${token}` } } : {}).catch(() => {});
+    } catch (e) {}
+
     if (token) {
       axios.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }

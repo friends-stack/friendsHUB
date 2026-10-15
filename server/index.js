@@ -756,6 +756,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'friends_info_secret_key_2026';
 const TG_TOKEN = process.env.TG_TOKEN || '8783688702:AAHFs9AJBXfLX-t6lfuAtXB1Cpr1bYTPprI';
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || '5046785167';
 const bot = TG_TOKEN ? new Telegraf(TG_TOKEN) : null;
+const botNotifier = require('./botNotifier');
 
 
 // RBAC Middleware
@@ -885,25 +886,7 @@ const logAction = (userId, action, details) => {
 
   // Broadcast to Telegram Super Admin and all approved Admins
   if (bot) {
-    const recipients = new Set();
-    if (process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
-      recipients.add(process.env.ADMIN_CHAT_ID.toString());
-    }
-
-    try {
-      const adminUsers = db.prepare(`
-        SELECT telegram_id FROM bot_access WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
-        UNION
-        SELECT telegram_id FROM users WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
-      `).all();
-      for (const a of adminUsers) {
-        if (a.telegram_id) recipients.add(a.telegram_id.toString());
-      }
-    } catch (e) {}
-
-    for (const chatId of recipients) {
-      bot.telegram.sendMessage(chatId, message).catch((e) => console.warn(`Could not deliver bot alert to ${chatId}:`, e.message));
-    }
+    botNotifier.sendToAllAdmins(bot, db, message).catch((e) => console.warn(`Could not deliver bot alert:`, e.message));
   }
 };
 
@@ -1109,6 +1092,9 @@ app.post('/api/auth/login', async (req, res) => {
   const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
   const displayName = user.full_name || user.nickname || user.email.split('@')[0];
   logAction(user.id, 'LOGIN_SUCCESS', `${displayName} is visiting the friend's website`);
+  if (bot) {
+    botNotifier.notifyWebsiteVisit({ bot, db, user, ip: req.ip, path: '/private' }).catch(console.error);
+  }
   res.json({
     token,
     user: {
@@ -1139,6 +1125,9 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     const jwtToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
     const displayName = user.full_name || user.nickname || user.email.split('@')[0];
     logAction(user.id, '2FA_SUCCESS', `${displayName} is visiting the friend's website`);
+    if (bot) {
+      botNotifier.notifyWebsiteVisit({ bot, db, user, ip: req.ip, path: '/private' }).catch(console.error);
+    }
     const isAuthorized = ['super_admin', 'admin'].includes(user.role) || user.created_by_admin === 1;
     res.json({
       token: jwtToken,
@@ -1156,6 +1145,24 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     logAction(userId, '2FA_FAILED', `Invalid MFA attempt`);
     res.status(401).json({ error: 'Invalid 2FA token' });
   }
+});
+
+// Website visit tracking endpoint
+app.post('/api/track-visit', async (req, res) => {
+  let user = null;
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      user = await db.prepare('SELECT id, email, role, nickname, full_name, telegram_username FROM users WHERE id = ?').get(decoded.id);
+    } catch (e) {}
+  }
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
+  const pagePath = req.body?.path || '/';
+  if (bot) {
+    botNotifier.notifyWebsiteVisit({ bot, db, user, ip, path: pagePath }).catch(console.error);
+  }
+  res.json({ success: true });
 });
 
 app.post('/api/auth/setup-2fa', checkAuth, async (req, res) => {
@@ -1463,6 +1470,30 @@ app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, 
     : `🔔 Missed record of ${amount} ETB signed by ${clerkName} for ${memberNameStr} (total missed: ${formattedMemberMissed}), now you all have ${formattedTotal}${notes ? ` (Notes: "${notes}")` : ''}`;
 
   logAction(req.user.id, 'SAVINGS_UPDATE', humanMessage);
+
+  if (bot) {
+    if (type === 'payment') {
+      botNotifier.notifyNewPayment({
+        bot, db,
+        memberName: memberNameStr,
+        amount: parseFloat(amount || 0),
+        type,
+        clerkName,
+        notes,
+        memberId: member_id
+      }).catch(console.error);
+    } else {
+      botNotifier.notifyMissedPayment({
+        bot, db,
+        memberName: memberNameStr,
+        amount: parseFloat(amount || 0),
+        clerkName,
+        notes,
+        memberId: member_id
+      }).catch(console.error);
+    }
+  }
+
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
@@ -2077,6 +2108,18 @@ app.get('/api/memories', checkAuth, async (req, res) => {
 app.post('/api/memories', checkAuth, async (req, res) => {
   const { title, content, media_url } = req.body;
   const result = await db.prepare('INSERT INTO memories (user_id, title, content, media_url) VALUES (?, ?, ?, ?)').run(req.user.id, title, content, media_url);
+  if (bot && media_url) {
+    botNotifier.notifyNewMedia({
+      bot, db,
+      uploader: req.user,
+      title: title || 'Community Memory',
+      caption: content || '',
+      mediaUrl: media_url,
+      mediaType: 'image',
+      category: 'Memories Timeline',
+      uploadsDir: UPLOADS_DIR
+    }).catch(console.error);
+  }
   res.json({ success: true, id: result.lastInsertRowid });
 });
 
@@ -2297,47 +2340,15 @@ io.on('connection', (socket) => {
 
       // Telegram forwarding to Super Admin and all admins
       if (bot) {
-        const localTime = new Date().toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-        const senderLabel = sender.nickname || sender.full_name || sender.email;
-        const caption = `💬 NEW MESSAGE\nFrom: ${senderLabel}\nTo: ${receiverId ? 'User ' + receiverId : 'GROUP'}\nTime: ${localTime}\n\n${content || ''}`;
-
-        const recipients = new Set();
-        if (process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
-          recipients.add(process.env.ADMIN_CHAT_ID.toString());
-        }
-        try {
-          const adminRows = db.prepare(`
-            SELECT telegram_id FROM bot_access WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
-            UNION
-            SELECT telegram_id FROM users WHERE role IN ('admin', 'super_admin') AND telegram_id IS NOT NULL
-          `).all();
-          for (const a of adminRows) {
-            if (a.telegram_id) recipients.add(a.telegram_id.toString());
-          }
-        } catch (e) {}
-
-        for (const chatId of recipients) {
-          if (media_url) {
-            const filename = media_url.split('/').pop();
-            const filePath = path.join(__dirname, 'uploads', filename);
-            if (fs.existsSync(filePath)) {
-              const fileStream = fs.createReadStream(filePath);
-              let cleanFilename = filename;
-              const hyphenIndex = filename.indexOf('-');
-              if (hyphenIndex !== -1) cleanFilename = filename.substring(hyphenIndex + 1);
-              if (media_type === 'image') {
-                bot.telegram.sendPhoto(chatId, { source: fileStream }, { caption }).catch(console.error);
-              } else {
-                bot.telegram.sendDocument(chatId, { source: fileStream, filename: cleanFilename }, { caption }).catch(console.error);
-              }
-            } else {
-              if (media_type === 'image') bot.telegram.sendPhoto(chatId, { url: media_url }, { caption }).catch(console.error);
-              else bot.telegram.sendDocument(chatId, { url: media_url }, { caption }).catch(console.error);
-            }
-          } else {
-            bot.telegram.sendMessage(chatId, caption).catch(console.error);
-          }
-        }
+        botNotifier.notifyNewChat({
+          bot, db,
+          sender,
+          content,
+          mediaUrl: media_url,
+          mediaType: media_type,
+          receiverId,
+          uploadsDir: UPLOADS_DIR
+        }).catch(console.error);
       }
     }
   });
@@ -2480,6 +2491,19 @@ app.post('/api/admin/gallery', checkAuth, upload.single('image'), async (req, re
   const insert = db.prepare('INSERT INTO gallery (url, title, caption) VALUES (?, ?, ?)');
   const result = await insert.run(url, title, caption);
   const newId = result.lastInsertRowid || result.id || Date.now();
+
+  if (bot) {
+    botNotifier.notifyNewMedia({
+      bot, db,
+      uploader: req.user,
+      title: title || 'Gallery Image',
+      caption,
+      mediaUrl: url,
+      mediaType: 'image',
+      category: 'Gallery Curator',
+      uploadsDir: UPLOADS_DIR
+    }).catch(console.error);
+  }
 
   res.json({ 
     success: true, 
@@ -2660,8 +2684,11 @@ cron.schedule('0 9 * * 6', async () => {
     for (const m of members) {
       await db.prepare('INSERT INTO savings_transactions (member_id, amount, type, confirmed_by) VALUES (?, ?, ?, ?)').run(m.id, amount, 'expected', 'system');
     }
-    if (bot && process.env.ADMIN_CHAT_ID && process.env.ADMIN_CHAT_ID !== 'YOUR_CHAT_ID') {
-      bot.telegram.sendMessage(process.env.ADMIN_CHAT_ID, `🔔 Reminder: Today is Saturday! Don't forget to save your weekly contribution of ${amount} ETB.`).catch(console.error);
+    if (bot) {
+      botNotifier.sendToAllAdmins(
+        bot, db,
+        `🔔 <b>Weekly Reminder:</b> Today is Saturday! Don't forget to save your weekly contribution of ETB ${amount}.`
+      ).catch(console.error);
     }
     console.log(`Cron: Added expected balance of ${amount} ETB for ${members.length} active members.`);
   } catch (error) {

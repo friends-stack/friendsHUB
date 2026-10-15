@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const botNotifier = require('./botNotifier');
 
 module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR }) {
   if (!bot || !process.env.TG_TOKEN || process.env.TG_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN') {
@@ -26,13 +27,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   const getAdminKeyboard = (isSuperAdmin = false) => {
     const buttons = [
       ['📝 Post', '👥 View Messages'],
-      ['💰 Check Savings', '🏷️ Usernames']
+      ['💰 Check Savings', '📊 Financial Summary'],
+      ['🏷️ Usernames', '👤 My Identity']
     ];
     if (isSuperAdmin) {
-      buttons.push(['⚙️ Requests', '🛡️ Manage Admins']);
-      buttons.push(['👤 My Identity']);
+      buttons.splice(2, 0, ['⚙️ Requests', '🛡️ Manage Admins']);
     } else {
-      buttons.push(['👤 My Identity', 'ℹ️ Help']);
+      buttons.push(['ℹ️ Help']);
     }
     return Markup.keyboard(buttons).resize();
   };
@@ -246,19 +247,18 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   // Register commands for Telegram UI menu
   bot.telegram.setMyCommands([
-    { command: 'start', description: 'Start bot & detect username' },
-    { command: 'admins', description: 'Super Admin: Manage admins & roles' },
-    { command: 'addadmin', description: 'Super Admin: Add admin by username/ID' },
-    { command: 'removeadmin', description: 'Super Admin: Remove admin privileges' },
-    { command: 'setrole', description: 'Super Admin: Change user role' },
-    { command: 'track', description: 'Track your Telegram username live' },
-    { command: 'trackusers', description: 'Super Admin: Track all member usernames' },
+    { command: 'start', description: 'Start bot & show main menu' },
     { command: 'post', description: 'Post text to website live chat' },
     { command: 'announce', description: 'Broadcast announcement to site' },
     { command: 'messages', description: 'View latest messages from site' },
     { command: 'savings', description: 'Check savings & investments overview' },
+    { command: 'finance', description: 'Detailed financial summary & categories' },
+    { command: 'usernames', description: 'Browse community & admin usernames' },
+    { command: 'track', description: 'Track your Telegram username live' },
+    { command: 'trackusers', description: 'View all platform user identities' },
     { command: 'whoami', description: 'Check your access permissions' },
     { command: 'requests', description: 'Super Admin: review access requests' },
+    { command: 'admins', description: 'Super Admin: manage admins & roles' },
     { command: 'help', description: 'Show all bot commands and buttons' }
   ]).catch(console.error);
 
@@ -305,7 +305,14 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         usernameDetectedText +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
         `🛡️ <b>Role:</b> ADMIN\n` +
-        `✅ Permissions: Full Posting Privileges Granted (Chat, Announcements, Gallery).\n\n` +
+        `✅ <b>Operational Permissions Granted:</b>\n` +
+        `• 💬 Post messages to live chat & announcements\n` +
+        `• 🖼️ Upload images to website gallery\n` +
+        `• 👥 View recent messages & full chat history\n` +
+        `• 💰 Check savings pool & working capital\n` +
+        `• 📊 View detailed financial summaries by category\n` +
+        `• 🏷️ Platform directories & username tracking\n` +
+        `• 🔔 Automatic real-time system alerts\n\n` +
         `👇 <b>Use the persistent buttons below to post or view messages:</b>`,
         {
           parse_mode: 'HTML',
@@ -441,13 +448,17 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (decision === 'admin') {
       await db.prepare("UPDATE bot_access SET role = 'admin', updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?").run(targetTgId);
+      try {
+        await db.prepare("UPDATE users SET role = 'admin' WHERE telegram_id = ?").run(targetTgId);
+      } catch (uErr) {}
+
       logAction(adminProfile.user?.id || null, 'TG_APPROVE_ADMIN', `Super Admin approved ${targetName} (${targetTgId}) as Admin`);
 
       await ctx.editMessageText(
         `✅ <b>REQUEST APPROVED AS ADMIN</b>\n\n` +
         `👤 User: <b>${escapeHtml(targetName)}</b>\n` +
         `🆔 Telegram ID: <code>${targetTgId}</code>\n` +
-        `🛡️ Role Granted: <b>ADMIN (Full Posting & Viewing Privileges)</b>\n` +
+        `🛡️ Role Granted: <b>ADMIN (Full Operational Privileges)</b>\n` +
         `📅 Decision Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa' })}`,
         { parse_mode: 'HTML' }
       );
@@ -459,7 +470,14 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           targetTgId,
           `🎉 <b>ACCESS GRANTED BY SUPER ADMIN!</b>\n\n` +
           `🛡️ You have been granted <b>ADMIN</b> access to the F.R.I.E.N.D.S bot!\n\n` +
-          `You can now view messages and post directly to the website live chat, announcements, and gallery.\n\n` +
+          `All admin features have been unlocked for you:\n` +
+          `• 💬 Post messages to live chat & announcements\n` +
+          `• 🖼️ Upload media to gallery\n` +
+          `• 👥 View recent messages & full chat history\n` +
+          `• 💰 Check savings pool & working capital\n` +
+          `• 📊 View detailed financial summaries by category\n` +
+          `• 🏷️ Platform directories & username tracking\n` +
+          `• 🔔 Automatic real-time system alerts\n\n` +
           `👇 <b>Use the buttons below to begin:</b>`,
           {
             parse_mode: 'HTML',
@@ -469,6 +487,14 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       } catch (e) {
         console.warn(`Could not send approval message to ${targetTgId}:`, e.message);
       }
+
+      // Notify all other admins
+      botNotifier.sendToAllAdmins(
+        bot, db,
+        `🛡️ <b>NEW ADMIN APPROVED</b>\n\n` +
+        `👤 User: <b>${escapeHtml(targetName)}</b> (<code>${targetTgId}</code>)\n` +
+        `✅ Granted <b>ADMIN</b> operational privileges by Super Admin.`
+      ).catch(console.error);
     } else if (decision === 'member') {
       await db.prepare("UPDATE bot_access SET role = 'user', updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?").run(targetTgId);
       logAction(adminProfile.user?.id || null, 'TG_APPROVE_MEMBER', `Super Admin approved ${targetName} (${targetTgId}) as Member`);
@@ -1338,6 +1364,33 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     });
   });
 
+  // Direct Command & Button: 📊 Financial Summary
+  const handleFinancialSummary = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isAdmin) {
+      return ctx.reply('⛔ Access Denied: Only Admins can view the full financial summary.');
+    }
+    try {
+      const totals = await botNotifier.calculateFinancialTotals(db);
+      const text = botNotifier.formatFinancialSummaryText(totals);
+      return ctx.reply(text, { parse_mode: 'HTML' });
+    } catch (err) {
+      return ctx.reply('⚠️ Error generating financial summary: ' + err.message);
+    }
+  };
+
+  bot.hears(['📊 Financial Summary', 'Financial Summary', '/finance', '/financialsummary'], handleFinancialSummary);
+  bot.command(['finance', 'financialsummary'], handleFinancialSummary);
+
+  // Direct Command: /trackusers (Available to all admins)
+  bot.command('trackusers', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.isAdmin) {
+      return ctx.reply('⛔ Access Denied: Only Admins can view all member usernames.');
+    }
+    return handleListAllUsersDirectory(ctx);
+  });
+
   // ==========================================
   // SUPER ADMIN: ADMIN & ROLE MANAGEMENT ENGINE
   // ==========================================
@@ -2164,6 +2217,17 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         );
         logAction(senderUser.id, 'TG_POST_GALLERY', `Posted image to Gallery: ${cleanTitle}`);
 
+        botNotifier.notifyNewMedia({
+          bot, db,
+          uploader: senderUser,
+          title: cleanTitle,
+          caption: `Published by ${senderUser.nickname || senderUser.email} via Telegram Bot`,
+          mediaUrl: fileUrl,
+          mediaType: 'image',
+          category: 'Gallery Curator',
+          uploadsDir: UPLOADS_DIR
+        }).catch(console.error);
+
         return ctx.reply(
           `🖼️ <b>Photo Published to Website Gallery!</b>\n\nTitle: <b>${escapeHtml(cleanTitle)}</b>`,
           {
@@ -2190,12 +2254,22 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         reply_to_id: null,
         content: cleanCaption,
         media_url: fileUrl,
-        media_type: 'image',
+        mediaType: 'image',
         created_at: now
       };
 
       io.to('private').emit('receive_message', broadcastMsg);
       logAction(senderUser.id, 'TG_POST_PHOTO', `Posted photo to live chat`);
+
+      botNotifier.notifyNewChat({
+        bot, db,
+        sender: senderUser,
+        content: cleanCaption,
+        mediaUrl: fileUrl,
+        mediaType: 'image',
+        receiverId: null,
+        uploadsDir: UPLOADS_DIR
+      }).catch(console.error);
 
       ctx.reply(
         `📷 <b>Photo posted to Friends Chat!</b>`,
