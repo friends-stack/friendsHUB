@@ -1527,7 +1527,7 @@ app.delete('/api/savings/transactions/:id', checkAuth, checkPaymentClerk, async 
 
 app.get('/api/savings/history', checkAuth, async (req, res) => {
   const { startDate, endDate } = req.query;
-  let query = `SELECT t.*, m.name as member_name FROM savings_transactions t JOIN savings_members m ON t.member_id = m.id`;
+  let query = `SELECT t.*, m.name as member_name FROM savings_transactions t LEFT JOIN savings_members m ON t.member_id = m.id`;
   const params = [];
   if (startDate && endDate) {
     query += ` WHERE t.created_at BETWEEN ? AND ?`;

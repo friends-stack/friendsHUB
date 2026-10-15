@@ -1036,9 +1036,9 @@ const SavingsTracker = ({ user }) => {
           )}
 
           {activeView === 'member-detail' && selectedMember && (() => {
-            const m = processedMembers.find(pm => pm.id === selectedMember.id) || selectedMember;
+            const m = processedMembers.find(pm => String(pm.id) === String(selectedMember.id)) || selectedMember;
             const isOnTrack = (m.currentDebt || 0) === 0;
-            const memberHistory = history.filter(h => h.member_id === m.id);
+            const memberHistory = history.filter(h => String(h.member_id) === String(m.id));
 
             return (
               <motion.div key="detail" initial={{ opacity:0, y: 8 }} animate={{ opacity:1, y: 0 }} style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
@@ -3304,8 +3304,8 @@ const SavingsTracker = ({ user }) => {
         {deleteModalState.isOpen && deleteModalState.transaction && (() => {
           const tx = deleteModalState.transaction;
           const isPayment = tx.type === 'payment';
-          const member = members.find(m => m.id === tx.member_id);
-          const memberName = member ? member.name : 'Member';
+          const member = members.find(m => String(m.id) === String(tx.member_id));
+          const memberName = tx.member_name || (member ? member.name : null) || 'Member';
           const txTypeLabel = isPayment ? 'Cash In (Payment)' : 'Cash Out (Missed)';
           const formattedAmt = formatCurrency(tx.amount);
 
@@ -3831,11 +3831,11 @@ const MemberCard = ({ member, onClick, formatCurrency }) => {
 };
 const TransactionItem = ({ transaction, full, showBorder, formatCurrency, systemUsers = [], members = [], canDelete = false, onDelete }) => {
   const isPayment = transaction.type === 'payment';
-  const member = members.find(m => m.id === transaction.member_id);
-  const memberName = member ? member.name : 'Unknown Member';
+  const member = members.find(m => String(m.id) === String(transaction.member_id));
+  const memberName = transaction.member_name || (member ? member.name : null) || 'Unknown Member';
   
-  const clerkUser = systemUsers.find(u => u.email === transaction.confirmed_by);
-  const clerkName = clerkUser ? clerkUser.nickname : transaction.confirmed_by;
+  const clerkUser = systemUsers.find(u => u.email === transaction.confirmed_by || String(u.id) === String(transaction.confirmed_by));
+  const clerkName = clerkUser ? (clerkUser.nickname || clerkUser.full_name || clerkUser.email?.split('@')[0]) : (transaction.confirmed_by || 'Admin');
 
   let bgColor = isPayment ? '#F0FDF4' : '#FEF2F2';
   let textColor = isPayment ? '#16A34A' : '#DC2626';
