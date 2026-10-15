@@ -23,18 +23,19 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       .replace(/>/g, '&gt;');
   };
 
+  const WEBSITE_URL = 'https://friendshub-pewx.onrender.com/';
+
   // Keyboard generators
   const getAdminKeyboard = (isSuperAdmin = false) => {
     const buttons = [
       ['📝 Post', '👥 View Messages'],
-      ['💰 Check Savings', '📊 Financial Summary'],
-      ['🏷️ Usernames', '👤 My Identity']
+      ['💰 Check Savings', '🏷️ Usernames']
     ];
     if (isSuperAdmin) {
-      buttons.splice(2, 0, ['⚙️ Requests', '🛡️ Manage Admins']);
-    } else {
-      buttons.push(['ℹ️ Help']);
+      buttons.push(['⚙️ Requests', '🛡️ Manage Admins']);
     }
+    buttons.push(['📊 Financial Summary', '👤 My Identity']);
+    buttons.push([Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']);
     return Markup.keyboard(buttons).resize();
   };
 
@@ -42,7 +43,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     return Markup.keyboard([
       ['👥 View Messages', '💰 Check Savings'],
       ['🏷️ Usernames', '👤 My Identity'],
-      ['ℹ️ Help']
+      [Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']
     ]).resize();
   };
 
@@ -248,6 +249,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // Register commands for Telegram UI menu
   bot.telegram.setMyCommands([
     { command: 'start', description: 'Start bot & show main menu' },
+    { command: 'website', description: 'Open FriendsHUB website' },
     { command: 'post', description: 'Post text to website live chat' },
     { command: 'announce', description: 'Broadcast announcement to site' },
     { command: 'messages', description: 'View latest messages from site' },
@@ -1381,6 +1383,24 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   bot.hears(['📊 Financial Summary', 'Financial Summary', '/finance', '/financialsummary'], handleFinancialSummary);
   bot.command(['finance', 'financialsummary'], handleFinancialSummary);
+
+  // Direct Command & Button: 🌐 Open Website
+  const handleOpenWebsite = async (ctx) => {
+    const text =
+      `🌐 <b>F.R.I.E.N.D.S PLATFORM PORTAL</b>\n\n` +
+      `Click the button below to launch the official website:\n` +
+      `🔗 <a href="${WEBSITE_URL}">${WEBSITE_URL}</a>`;
+
+    const inlineBtn = Markup.inlineKeyboard([
+      [Markup.button.url('🚀 Open FriendsHUB in Browser', WEBSITE_URL)],
+      [Markup.button.webApp('📱 Launch in Telegram WebApp', WEBSITE_URL)]
+    ]);
+
+    return ctx.reply(text, { parse_mode: 'HTML', ...inlineBtn });
+  };
+
+  bot.hears(['🌐 Open Website', 'Open Website', '/website', '/site', 'website'], handleOpenWebsite);
+  bot.command(['website', 'site'], handleOpenWebsite);
 
   // Direct Command: /trackusers (Available to all admins)
   bot.command('trackusers', async (ctx) => {
