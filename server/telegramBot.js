@@ -25,6 +25,26 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   const WEBSITE_URL = 'https://friendshub-pewx.onrender.com/';
 
+  // Inspirational friendship quotes for welcoming users
+  const FRIENDSHIP_QUOTES = [
+    "“A friend is someone who knows all about you and still loves you.”",
+    "“Life is better with friends.”",
+    "“If you have crazy friends, you have everything.”",
+    "“God gave us relatives. Thank God we can choose our friends.”",
+    "“Friendship is the only cement that will ever hold the world together.”",
+    "“Good friends make good times better and hard times easier.”",
+    "“I'll be there for you, 'cause you're there for me too.” — F.R.I.E.N.D.S",
+    "“True friends are never apart, maybe in distance but never in heart.”",
+    "“There are friends, there is family, and then there are friends that become family.”",
+    "“It's not that diamonds are a girl's best friend, but it's your best friends who are your diamonds.”",
+    "“A sweet friendship refreshes the soul.”",
+    "“Things are never quite as scary when you've got a best friend.”"
+  ];
+
+  const getRandomFriendshipQuote = () => {
+    return FRIENDSHIP_QUOTES[Math.floor(Math.random() * FRIENDSHIP_QUOTES.length)];
+  };
+
   // Keyboard generators
   const getAdminKeyboard = (isSuperAdmin = false) => {
     const buttons = [
@@ -274,18 +294,21 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // START HANDLER: Detects Telegram username on start and sets up access
   bot.start(async (ctx) => {
     const tgId = ctx.from.id.toString();
-    const username = ctx.from.username ? `@${ctx.from.username.replace(/^@/, '')}` : null;
+    const rawUsername = ctx.from.username ? ctx.from.username.replace(/^@/, '') : '';
+    const username = rawUsername ? `@${rawUsername}` : null;
     const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || ctx.from.username || 'Friend';
     const profile = await getTelegramProfile(ctx);
 
-    const usernameDetectedText = username
-      ? `🏷️ <b>Detected Username:</b> <code>${escapeHtml(username)}</code>\n`
-      : `⚠️ <b>Detected Username:</b> <i>No @username set in your Telegram profile</i>\n`;
+    const usernameDisplay = username
+      ? `@${escapeHtml(rawUsername)}`
+      : '<i>No @username set</i>';
+
+    const quote = getRandomFriendshipQuote();
 
     const trackInlineButtons = [
       [
         Markup.button.callback('🔍 Track My Username', 'track_my_username'),
-        ...(username ? [Markup.button.url('🔗 Open Profile', `https://t.me/${ctx.from.username.replace(/^@/, '')}`)] : [])
+        ...(username ? [Markup.button.url('🔗 Open Profile', `https://t.me/${rawUsername}`)] : [])
       ]
     ];
     if (profile.isAdmin) {
@@ -294,12 +317,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (profile.isSuperAdmin) {
       await ctx.reply(
-        `👑 <b>Welcome, Super Admin ${escapeHtml(name)}!</b>\n\n` +
-        usernameDetectedText +
-        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
-        `🛡️ <b>Role:</b> SUPER ADMIN\n` +
-        `✅ You have full platform authority. You can post directly to the website live chat, broadcast announcements, track user identities, and approve/reject new user access requests.\n\n` +
-        `👇 <b>Use the persistent menu buttons below to take action:</b>`,
+        `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+        `🛡️ <b>Your role:</b> SUPER ADMIN\n\n` +
+        `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
+        `✅ You can interact with the bot and the website according to your assigned permissions.\n\n` +
+        `✨ <i>${quote}</i>`,
         {
           parse_mode: 'HTML',
           ...getAdminKeyboard(true)
@@ -313,19 +336,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (profile.isAdmin) {
       await ctx.reply(
-        `🛡️ <b>Welcome, Admin ${escapeHtml(name)}!</b>\n\n` +
-        usernameDetectedText +
-        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
-        `🛡️ <b>Role:</b> ADMIN\n` +
-        `✅ <b>Operational Permissions Granted:</b>\n` +
-        `• 💬 Post messages to live chat & announcements\n` +
-        `• 🖼️ Upload images to website gallery\n` +
-        `• 👥 View recent messages & full chat history\n` +
-        `• 💰 Check savings pool & working capital\n` +
-        `• 📊 View detailed financial summaries by category\n` +
-        `• 🏷️ Platform directories & username tracking\n` +
-        `• 🔔 Automatic real-time system alerts\n\n` +
-        `👇 <b>Use the persistent menu buttons below to post or view messages:</b>`,
+        `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+        `🛡️ <b>Your role:</b> ADMIN\n\n` +
+        `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
+        `✅ You can interact with the bot and the website according to your assigned permissions.\n\n` +
+        `✨ <i>${quote}</i>`,
         {
           parse_mode: 'HTML',
           ...getAdminKeyboard(false)
@@ -339,12 +355,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (profile.canView && profile.role === 'user') {
       await ctx.reply(
-        `👋 <b>Welcome back, ${escapeHtml(name)}!</b>\n\n` +
-        usernameDetectedText +
-        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
-        `👤 <b>Role:</b> APPROVED MEMBER (View-Only)\n` +
-        `✅ Permissions: You can view messages, savings data, and track your identity.\n\n` +
-        `ℹ️ Note: Only Admins and Super Admin can post messages to the website live chat.`,
+        `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+        `🛡️ <b>Your role:</b> MEMBER\n\n` +
+        `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
+        `✅ You can interact with the bot and the website according to your assigned permissions.\n\n` +
+        `✨ <i>${quote}</i>`,
         {
           parse_mode: 'HTML',
           ...getMemberKeyboard()
@@ -358,13 +374,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (profile.isPending) {
       return ctx.reply(
-        `⏳ <b>ACCESS REQUEST PENDING</b>\n\n` +
-        `Hello ${escapeHtml(name)},\n` +
-        usernameDetectedText +
+        `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+        `🛡️ <b>Your role:</b> PENDING APPROVAL\n\n` +
+        `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
-        `Your request is currently waiting for review by the Super Admin.\n\n` +
-        `🔒 <b>You cannot view messages or post content until your request is approved.</b>\n\n` +
-        `You will receive an instant notification right here once the Super Admin grants you access.`,
+        `⏳ <i>Your access request is currently waiting for review by the Super Admin. You will receive an instant notification right here once granted access.</i>\n\n` +
+        `✨ <i>${quote}</i>`,
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
@@ -376,10 +391,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     if (profile.isRejected) {
       return ctx.reply(
-        `⛔ <b>Access Restricted</b>\n\n` +
-        usernameDetectedText +
-        `Your request to access the bot was declined by the Super Admin.\n` +
-        `If you believe this is an error, please contact the administrator.`
+        `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+        `🛡️ <b>Your role:</b> RESTRICTED\n\n` +
+        `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
+        `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
+        `⛔ <i>Your request to access the bot was declined by the Super Admin. If you believe this is an error, please contact the administrator.</i>\n\n` +
+        `✨ <i>${quote}</i>`,
+        { parse_mode: 'HTML' }
       );
     }
 
@@ -395,13 +413,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     );
 
     await ctx.reply(
-      `👋 <b>Welcome to the F.R.I.E.N.D.S Platform Bot!</b>\n\n` +
-      usernameDetectedText +
+      `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
+      `🛡️ <b>Your role:</b> PENDING APPROVAL\n\n` +
+      `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
       `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n\n` +
-      `🔒 <i>This platform and bot are strictly private and role-based.</i>\n\n` +
-      `📨 <b>Your access request has been sent to the Super Admin.</b>\n\n` +
-      `🚫 You cannot see any messages or use bot features until the Super Admin gives you permission.\n\n` +
-      `Please wait for confirmation.`,
+      `📨 <b>Your access request has been sent to the Super Admin.</b>\n` +
+      `🚫 <i>You cannot interact with private features until the Super Admin approves your request.</i>\n\n` +
+      `✨ <i>${quote}</i>`,
       { 
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
