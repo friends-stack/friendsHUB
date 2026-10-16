@@ -702,52 +702,430 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   bot.command('cancel', handleCancel);
 
   // ==========================================
-  // MAIN MENU: 👥 VIEW MESSAGES (WITH MSG, TIME, DATE & TELEGRAM USERNAMES)
+  // MAIN MENU: 👥 VIEW MESSAGES (PAGINATION, DATE FILTER, SEARCH & MEDIA SUPPORT)
   // ==========================================
+  // Session map for message viewer filters: tgId -> { page, startDate, endDate, dateLabel, query }
+  const msgViewerStates = new Map();
+
+  const getAddisDateString = (daysOffset = 0) => {
+    const d = new Date();
+    if (daysOffset !== 0) d.setDate(d.getDate() + daysOffset);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Addis_Ababa',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(d);
+  };
+
+  const formatMediaBadge = (mediaType, mediaUrl) => {
+    if (!mediaUrl) {
+      if (mediaType === 'image' || mediaType === 'photo') return '🖼️ <b>[Photo Attached]</b>\n';
+      if (mediaType === 'video') return '🎥 <b>[Video Attached]</b>\n';
+      if (mediaType === 'audio') return '🎵 <b>[Audio Attached]</b>\n';
+      if (mediaType === 'file' || mediaType === 'document') return '📎 <b>[Document Attached]</b>\n';
+      return '';
+    }
+
+    let fullUrl = mediaUrl;
+    if (fullUrl.startsWith('/')) {
+      fullUrl = WEBSITE_URL.replace(/\/$/, '') + fullUrl;
+    } else if (fullUrl.includes('localhost:5000')) {
+      fullUrl = fullUrl.replace(/http:\/\/localhost:5000/g, WEBSITE_URL.replace(/\/$/, ''));
+    }
+
+    const type = (mediaType || '').toLowerCase();
+    if (type === 'image' || type === 'photo' || /\.(jpe?g|png|gif|webp)$/i.test(fullUrl)) {
+      return `🖼️ <b>Photo:</b> <a href="${escapeHtml(fullUrl)}">View Image</a>\n`;
+    }
+    if (type === 'video' || /\.(mp4|mov|webm)$/i.test(fullUrl)) {
+      return `🎥 <b>Video:</b> <a href="${escapeHtml(fullUrl)}">Watch Video</a>\n`;
+    }
+    if (type === 'audio' || /\.(mp3|wav|ogg)$/i.test(fullUrl)) {
+      return `🎵 <b>Audio:</b> <a href="${escapeHtml(fullUrl)}">Play Audio</a>\n`;
+    }
+    return `📎 <b>Attachment:</b> <a href="${escapeHtml(fullUrl)}">Download File</a>\n`;
+  };
+
+  const fetchMessagesPaged = async ({ page = 1, pageSize = 5, startDate = null, endDate = null, query = null }) => {
+    const whereClauses = [];
+    const params = [];
+
+    if (startDate) {
+      whereClauses.push('m.created_at >= ?');
+      params.push(startDate + 'T00:00:00');
+    }
+    if (endDate) {
+      whereClauses.push('m.created_at <= ?');
+      params.push(endDate + 'T23:59:59.999Z');
+    }
+    if (query && query.trim()) {
+      const qTerm = '%' + query.trim().replace(/^@/, '').toLowerCase() + '%';
+      whereClauses.push(`(
+        LOWER(COALESCE(m.content, '')) LIKE ? OR
+        LOWER(COALESCE(u.nickname, '')) LIKE ? OR
+        LOWER(COALESCE(u.full_name, '')) LIKE ? OR
+        LOWER(COALESCE(u.email, '')) LIKE ? OR
+        LOWER(COALESCE(u.telegram_username, '')) LIKE ? OR
+        LOWER(COALESCE(b.username, '')) LIKE ? OR
+        CAST(COALESCE(b.telegram_id, '') AS TEXT) LIKE ? OR
+        CAST(COALESCE(u.telegram_id, '') AS TEXT) LIKE ?
+      )`);
+      params.push(qTerm, qTerm, qTerm, qTerm, qTerm, qTerm, qTerm, qTerm);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
+      ${whereSql}
+    `;
+    const countRes = await db.prepare(countSql).get(...params);
+    const total = Number(countRes?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const validPage = Math.min(Math.max(1, page), totalPages);
+    const offset = (validPage - 1) * pageSize;
+
+    const selectSql = `
+      SELECT m.id, m.content, m.media_url, m.media_type, m.created_at,
+             u.id as user_id, u.nickname, u.full_name, u.email, u.telegram_username,
+             b.username as bot_username, b.telegram_id as b_tg_id, u.telegram_id as u_tg_id
+    FROM messages m
+    LEFT JOIN users u ON m.sender_id = u.id
+    LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
+    ${whereSql}
+    ORDER BY m.created_at DESC
+    LIMIT ? OFFSET ?
+    `;
+    const items = await db.prepare(selectSql).all(...params, pageSize, offset);
+
+    return { items, total, page: validPage, totalPages, pageSize, offset };
+  };
+
+  const renderMessageView = async (ctx, tgId, isEdit = false) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile.canView) {
+      if (ctx.callbackQuery) await ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.', getMainKeyboard(profile));
+    }
+
+    let state = msgViewerStates.get(tgId);
+    if (!state) {
+      state = { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+      msgViewerStates.set(tgId, state);
+    }
+
+    const { items, total, page, totalPages, offset } = await fetchMessagesPaged({
+      page: state.page || 1,
+      pageSize: 5,
+      startDate: state.startDate,
+      endDate: state.endDate,
+      query: state.query
+    });
+    state.page = page;
+    state.totalPages = totalPages;
+
+    const startIdx = total === 0 ? 0 : offset + 1;
+    const endIdx = Math.min(offset + items.length, total);
+
+    let text = `👥 <b>COMMUNITY CHAT MESSAGES</b>\n\n`;
+    text += `📖 <b>Page ${page} of ${totalPages}</b> — Showing ${startIdx}–${endIdx} of ${total} messages\n`;
+
+    if (state.dateLabel || state.startDate) {
+      text += `📅 <b>Date Filter:</b> ${escapeHtml(state.dateLabel || `${state.startDate} to ${state.endDate}`)}\n`;
+    }
+    if (state.query) {
+      text += `🔍 <b>Search:</b> "${escapeHtml(state.query)}"\n`;
+    }
+    text += `────────────────────────\n\n`;
+
+    if (items.length === 0) {
+      text += `💬 <i>No messages found matching your criteria.</i>\n\n`;
+    } else {
+      text += items.map((m, idx) => {
+        const itemNumber = offset + idx + 1;
+        const dateObj = new Date(m.created_at);
+        const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
+        const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+
+        const senderName = m.nickname || m.full_name || m.email || 'Member';
+        const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
+        const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
+        const tgLink = rawTg ? ` <a href="https://t.me/${escapeHtml(rawTg)}">[Profile]</a>` : '';
+        const tgIdStr = (m.b_tg_id || m.u_tg_id) ? ` | 🆔 <code>${m.b_tg_id || m.u_tg_id}</code>` : '';
+        const mediaBadge = formatMediaBadge(m.media_type, m.media_url);
+
+        const contentText = m.content ? escapeHtml(m.content) : (m.media_url ? '<i>(Media without caption)</i>' : '<i>(Empty message)</i>');
+
+        return (
+          `<b>#${itemNumber}</b> • 💬 <b>${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay}${tgLink}${tgIdStr})\n` +
+          `📅 <b>Date:</b> ${msgDate} | ⏰ <b>Time:</b> ${msgTime}\n` +
+          `${mediaBadge}` +
+          `📝 <b>Message:</b> ${contentText}`
+        );
+      }).join('\n\n──────────────\n\n');
+      text += `\n\n────────────────────────`;
+    }
+
+    // Build inline buttons
+    const buttons = [];
+    const navRow = [];
+    if (page > 1) {
+      navRow.push(Markup.button.callback('◀️ Previous Page', 'msg_prev'));
+    }
+    if (page < totalPages) {
+      navRow.push(Markup.button.callback('▶️ Next Page', 'msg_next'));
+    }
+    if (navRow.length > 0) {
+      buttons.push(navRow);
+    }
+
+    buttons.push([
+      Markup.button.callback('📅 Filter by Date', 'msg_filter_date'),
+      Markup.button.callback('🔍 Search Messages', 'msg_search_prompt')
+    ]);
+
+    const actionRow = [Markup.button.callback('🔄 Refresh', 'msg_refresh')];
+    if (state.startDate || state.query) {
+      actionRow.push(Markup.button.callback('❌ Clear Filters', 'msg_clear_filters'));
+    }
+    buttons.push(actionRow);
+
+    buttons.push([
+      Markup.button.callback('🔙 Back to Main Menu', 'msg_main_menu')
+    ]);
+
+    const keyboard = Markup.inlineKeyboard(buttons);
+
+    if (isEdit && ctx.callbackQuery) {
+      try {
+        await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
+      } catch (err) {
+        if (!err.message?.includes('message is not modified')) {
+          await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
+        }
+      }
+      try {
+        await ctx.answerCbQuery();
+      } catch (e) {}
+    } else {
+      await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
+    }
+  };
+
+  const renderDateFilterDialog = async (ctx) => {
+    const text =
+      `📅 <b>FILTER MESSAGES BY DATE</b>\n\n` +
+      `Choose a timeframe preset or specify custom start and end dates:\n\n` +
+      `<i>Displays only messages submitted during the selected period (5 per page).</i>`;
+
+    const buttons = [
+      [
+        Markup.button.callback('📅 Today', 'msg_date_today'),
+        Markup.button.callback('📅 Yesterday', 'msg_date_yesterday')
+      ],
+      [
+        Markup.button.callback('📅 Last 7 Days', 'msg_date_week'),
+        Markup.button.callback('📅 Last 30 Days', 'msg_date_month')
+      ],
+      [
+        Markup.button.callback('✍️ Enter Custom Dates', 'msg_date_custom')
+      ],
+      [
+        Markup.button.callback('❌ Clear Date Filter', 'msg_date_clear'),
+        Markup.button.callback('🔙 Back to Messages', 'msg_date_back')
+      ]
+    ];
+
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+        await ctx.answerCbQuery();
+      } catch (e) {
+        await ctx.reply(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+      }
+    } else {
+      await ctx.reply(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+  };
+
   const handleViewMessages = async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    // Fresh launch: initialize with page 1
+    msgViewerStates.set(tgId, { page: 1, startDate: null, endDate: null, dateLabel: null, query: null });
+    await renderMessageView(ctx, tgId, false);
+  };
+  bot.hears(['👥 View Messages', '/messages', '5', 'View Messages', 'messages'], handleViewMessages);
+  bot.command(['messages', 'viewmessages'], handleViewMessages);
+
+  // Command: /searchmsg <query>
+  bot.command(['searchmsg', 'findmsg'], async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
       return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.', getMainKeyboard(profile));
     }
-
-    const lastMessages = (await db.prepare(`
-      SELECT m.content, m.media_url, m.media_type, m.created_at,
-             u.nickname, u.full_name, u.email, u.telegram_username,
-             b.username as bot_username
-      FROM messages m 
-      LEFT JOIN users u ON m.sender_id = u.id 
-      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
-      ORDER BY m.created_at DESC LIMIT 10
-    `).all()).reverse();
-
-    if (lastMessages.length === 0) {
-      return ctx.reply('💬 No messages found in the live chat.');
+    const tgId = ctx.from.id.toString();
+    const rawQuery = ctx.message.text.replace(/^\/(?:searchmsg|findmsg)\s*/i, '').trim();
+    if (!rawQuery) {
+      userStates.set(tgId, { action: 'awaiting_msg_search' });
+      return ctx.reply('🔍 <b>Search Messages</b>\n\nPlease enter the keyword, username, or Telegram ID you want to search:', { parse_mode: 'HTML', ...getCancelKeyboard() });
     }
+    msgViewerStates.set(tgId, { page: 1, startDate: null, endDate: null, dateLabel: null, query: rawQuery });
+    await renderMessageView(ctx, tgId, false);
+  });
 
-    const historyText = lastMessages.map(m => {
-      const dateObj = new Date(m.created_at);
-      const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
-      const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+  // Action callbacks for Message Viewer
+  bot.action('msg_prev', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    state.page = Math.max(1, (state.page || 1) - 1);
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
 
-      const senderName = m.nickname || m.full_name || m.email || 'Member';
-      const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
-      const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
-      const tgLink = rawTg ? ` <a href="https://t.me/${escapeHtml(rawTg)}">[Profile]</a>` : '';
-      const mediaIndicator = m.media_url ? '📷 <i>[Media Attached]</i>\n' : '';
+  bot.action('msg_next', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    state.page = (state.page || 1) + 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
 
-      return (
-        `💬 <b>${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay}${tgLink})\n` +
-        `📅 <b>Date:</b> ${msgDate} | ⏰ <b>Time:</b> ${msgTime}\n` +
-        `📝 <b>Message:</b> ${mediaIndicator}${escapeHtml(m.content || '(Media only)')}`
+  bot.action('msg_refresh', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_clear_filters', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    state.startDate = null;
+    state.endDate = null;
+    state.dateLabel = null;
+    state.query = null;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_filter_date', async (ctx) => {
+    await renderDateFilterDialog(ctx);
+  });
+
+  bot.action('msg_date_today', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    const today = getAddisDateString(0);
+    state.startDate = today;
+    state.endDate = today;
+    state.dateLabel = `Today (${today})`;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_yesterday', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    const yesterday = getAddisDateString(-1);
+    state.startDate = yesterday;
+    state.endDate = yesterday;
+    state.dateLabel = `Yesterday (${yesterday})`;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_week', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    const weekAgo = getAddisDateString(-7);
+    const today = getAddisDateString(0);
+    state.startDate = weekAgo;
+    state.endDate = today;
+    state.dateLabel = `Last 7 Days (${weekAgo} to ${today})`;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_month', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    const monthAgo = getAddisDateString(-30);
+    const today = getAddisDateString(0);
+    state.startDate = monthAgo;
+    state.endDate = today;
+    state.dateLabel = `Last 30 Days (${monthAgo} to ${today})`;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_clear', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+    state.startDate = null;
+    state.endDate = null;
+    state.dateLabel = null;
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_back', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_date_custom', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    userStates.set(tgId, { action: 'awaiting_msg_date_filter' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+    await ctx.reply(
+      `📅 <b>Custom Date Filter</b>\n\n` +
+      `Please send your desired date range:\n` +
+      `• <code>YYYY-MM-DD to YYYY-MM-DD</code> (e.g. <code>2026-10-01 to 2026-10-16</code>)\n` +
+      `• Or single day: <code>YYYY-MM-DD</code> (e.g. <code>2026-10-15</code>)\n\n` +
+      `<i>(Send ❌ Cancel or /cancel to abort)</i>`,
+      { parse_mode: 'HTML', ...getCancelKeyboard() }
+    );
+  });
+
+  bot.action('msg_search_prompt', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    userStates.set(tgId, { action: 'awaiting_msg_search' });
+    if (ctx.callbackQuery) await ctx.answerCbQuery();
+    await ctx.reply(
+      `🔍 <b>Search Messages</b>\n\n` +
+      `Please enter the keyword, username, or Telegram ID you want to find:\n\n` +
+      `<i>(Send ❌ Cancel or /cancel to abort)</i>`,
+      { parse_mode: 'HTML', ...getCancelKeyboard() }
+    );
+  });
+
+  bot.action('msg_main_menu', async (ctx) => {
+    const tgId = ctx.from.id.toString();
+    msgViewerStates.delete(tgId);
+    const profile = await getTelegramProfile(ctx);
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery('Main Menu');
+        await ctx.editMessageText(
+          `🏠 <b>Returned to Main Menu</b>\n\nUse the persistent menu buttons below to continue:`,
+          { parse_mode: 'HTML' }
+        );
+      } catch (e) {}
+    } else {
+      await ctx.reply(
+        `🏠 <b>Returned to Main Menu</b>\n\nUse the persistent menu buttons below to continue:`,
+        { parse_mode: 'HTML', ...getMainKeyboard(profile) }
       );
-    }).join('\n\n──────────────\n\n');
-
-    const extra = profile.isAdmin ? Markup.inlineKeyboard([[Markup.button.callback('📜 Show 50 Messages', 'show_messages')]]) : undefined;
-
-    ctx.reply(`💬 <b>LIVE CHAT RECENT MESSAGES</b>\n\n${historyText}`, { parse_mode: 'HTML', ...extra });
-  };
-  bot.hears(['👥 View Messages', '/messages', '5', 'View Messages', 'messages'], handleViewMessages);
-  bot.command(['messages', 'viewmessages'], handleViewMessages);
+    }
+  });
 
   // ==========================================
   // MAIN MENU: 💰 CHECK SAVINGS (SYNCED WITH MEMBERS DASHBOARD)
@@ -2195,6 +2573,68 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           ...getAdminKeyboard(profile.isSuperAdmin)
         }
       );
+    }
+
+    if (state?.action === 'awaiting_msg_search') {
+      userStates.delete(tgId);
+      const query = text.trim();
+      const viewerState = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+      viewerState.query = query;
+      viewerState.page = 1;
+      msgViewerStates.set(tgId, viewerState);
+
+      await ctx.reply(`🔍 <i>Search query set to:</i> <b>${escapeHtml(query)}</b>`, {
+        parse_mode: 'HTML',
+        ...getMainKeyboard(profile)
+      });
+      return renderMessageView(ctx, tgId, false);
+    }
+
+    if (state?.action === 'awaiting_msg_date_filter') {
+      const trimmed = text.trim();
+      const rangeMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s*(?:to|-)\s*(\d{4}-\d{2}-\d{2})$/i);
+      const singleMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})$/);
+      let startDate = null;
+      let endDate = null;
+      let dateLabel = null;
+
+      if (rangeMatch) {
+        startDate = rangeMatch[1];
+        endDate = rangeMatch[2];
+        if (startDate > endDate) {
+          const tmp = startDate;
+          startDate = endDate;
+          endDate = tmp;
+        }
+        dateLabel = `${startDate} to ${endDate}`;
+      } else if (singleMatch) {
+        startDate = singleMatch[1];
+        endDate = singleMatch[1];
+        dateLabel = startDate;
+      } else {
+        return ctx.reply(
+          `⚠️ <b>Invalid Date Format</b>\n\n` +
+          `Please provide a valid date format:\n` +
+          `• <code>YYYY-MM-DD</code> (e.g. <code>2026-10-15</code>)\n` +
+          `• <code>YYYY-MM-DD to YYYY-MM-DD</code> (e.g. <code>2026-10-01 to 2026-10-16</code>)\n\n` +
+          `<i>(Send ❌ Cancel or /cancel to abort)</i>`,
+          { parse_mode: 'HTML', ...getCancelKeyboard() }
+        );
+      }
+
+      userStates.delete(tgId);
+      const viewerState = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
+      viewerState.startDate = startDate;
+      viewerState.endDate = endDate;
+      viewerState.dateLabel = dateLabel;
+      viewerState.page = 1;
+      msgViewerStates.set(tgId, viewerState);
+
+      await ctx.reply(`📅 <i>Date filter set to:</i> <b>${escapeHtml(dateLabel)}</b>`, {
+        parse_mode: 'HTML',
+        ...getMainKeyboard(profile)
+      });
+      return renderMessageView(ctx, tgId, false);
     }
 
     if (state?.action === 'awaiting_add_admin_target') {
