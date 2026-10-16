@@ -228,7 +228,7 @@ app.use(helmet({
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],
+      frameAncestors: ["'self'", "https://web.telegram.org", "https://*.telegram.org"],
       upgradeInsecureRequests: []
     }
   },
@@ -237,7 +237,7 @@ app.use(helmet({
     includeSubDomains: true,
     preload: true
   },
-  xFrameOptions: { action: 'deny' },
+  xFrameOptions: false,
   xContentTypeOptions: true,
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   crossOriginEmbedderPolicy: false,

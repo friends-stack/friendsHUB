@@ -36,7 +36,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
     buttons.push(['📊 Financial Summary', '👤 My Identity']);
     buttons.push([Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']);
-    return Markup.keyboard(buttons).resize();
+    return Markup.keyboard(buttons).resize().persistent();
   };
 
   const getMemberKeyboard = () => {
@@ -44,13 +44,20 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       ['👥 View Messages', '💰 Check Savings'],
       ['🏷️ Usernames', '👤 My Identity'],
       [Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']
-    ]).resize();
+    ]).resize().persistent();
   };
 
   const getCancelKeyboard = () => {
     return Markup.keyboard([
       ['❌ Cancel']
-    ]).resize();
+    ]).resize().persistent();
+  };
+
+  const getMainKeyboard = (profile) => {
+    if (!profile) return getMemberKeyboard();
+    if (profile.isSuperAdmin) return getAdminKeyboard(true);
+    if (profile.isAdmin) return getAdminKeyboard(false);
+    return getMemberKeyboard();
   };
 
   // Resolve user profile, role, and permissions, keeping username live & synced
@@ -286,23 +293,26 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
 
     if (profile.isSuperAdmin) {
-      return ctx.reply(
+      await ctx.reply(
         `👑 <b>Welcome, Super Admin ${escapeHtml(name)}!</b>\n\n` +
         usernameDetectedText +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
         `🛡️ <b>Role:</b> SUPER ADMIN\n` +
         `✅ You have full platform authority. You can post directly to the website live chat, broadcast announcements, track user identities, and approve/reject new user access requests.\n\n` +
-        `👇 <b>Use the persistent buttons below to take action:</b>`,
+        `👇 <b>Use the persistent menu buttons below to take action:</b>`,
         {
           parse_mode: 'HTML',
-          ...getAdminKeyboard(true),
-          ...Markup.inlineKeyboard(trackInlineButtons)
+          ...getAdminKeyboard(true)
         }
+      );
+      return ctx.reply(
+        `👇 <b>Quick Actions & Identity Tracking:</b>`,
+        Markup.inlineKeyboard(trackInlineButtons)
       );
     }
 
     if (profile.isAdmin) {
-      return ctx.reply(
+      await ctx.reply(
         `🛡️ <b>Welcome, Admin ${escapeHtml(name)}!</b>\n\n` +
         usernameDetectedText +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
@@ -315,17 +325,20 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `• 📊 View detailed financial summaries by category\n` +
         `• 🏷️ Platform directories & username tracking\n` +
         `• 🔔 Automatic real-time system alerts\n\n` +
-        `👇 <b>Use the persistent buttons below to post or view messages:</b>`,
+        `👇 <b>Use the persistent menu buttons below to post or view messages:</b>`,
         {
           parse_mode: 'HTML',
-          ...getAdminKeyboard(false),
-          ...Markup.inlineKeyboard(trackInlineButtons)
+          ...getAdminKeyboard(false)
         }
+      );
+      return ctx.reply(
+        `👇 <b>Quick Actions & Identity Tracking:</b>`,
+        Markup.inlineKeyboard(trackInlineButtons)
       );
     }
 
     if (profile.canView && profile.role === 'user') {
-      return ctx.reply(
+      await ctx.reply(
         `👋 <b>Welcome back, ${escapeHtml(name)}!</b>\n\n` +
         usernameDetectedText +
         `🆔 <b>Telegram ID:</b> <code>${tgId}</code>\n` +
@@ -334,9 +347,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `ℹ️ Note: Only Admins and Super Admin can post messages to the website live chat.`,
         {
           parse_mode: 'HTML',
-          ...getMemberKeyboard(),
-          ...Markup.inlineKeyboard(trackInlineButtons)
+          ...getMemberKeyboard()
         }
+      );
+      return ctx.reply(
+        `👇 <b>Quick Actions & Identity Tracking:</b>`,
+        Markup.inlineKeyboard(trackInlineButtons)
       );
     }
 
@@ -656,22 +672,24 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   });
 
   // CANCEL BUTTON: '❌ Cancel'
-  bot.hears(['❌ Cancel', 'Cancel', '/cancel'], async (ctx) => {
+  const handleCancel = async (ctx) => {
     const tgId = ctx.from.id.toString();
     userStates.delete(tgId);
     pendingPosts.delete(tgId);
     const profile = await getTelegramProfile(ctx);
     const keyboard = profile.isAdmin ? getAdminKeyboard(profile.isSuperAdmin) : getMemberKeyboard();
     ctx.reply('❌ Action cancelled.', keyboard);
-  });
+  };
+  bot.hears(['❌ Cancel', 'Cancel', '/cancel'], handleCancel);
+  bot.command('cancel', handleCancel);
 
   // ==========================================
   // MAIN MENU: 👥 VIEW MESSAGES (WITH MSG, TIME, DATE & TELEGRAM USERNAMES)
   // ==========================================
-  bot.hears(['👥 View Messages', '/messages', '5'], async (ctx) => {
+  const handleViewMessages = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
-      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.');
+      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.', getMainKeyboard(profile));
     }
 
     const lastMessages = (await db.prepare(`
@@ -709,15 +727,17 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const extra = profile.isAdmin ? Markup.inlineKeyboard([[Markup.button.callback('📜 Show 50 Messages', 'show_messages')]]) : undefined;
 
     ctx.reply(`💬 <b>LIVE CHAT RECENT MESSAGES</b>\n\n${historyText}`, { parse_mode: 'HTML', ...extra });
-  });
+  };
+  bot.hears(['👥 View Messages', '/messages', '5', 'View Messages', 'messages'], handleViewMessages);
+  bot.command(['messages', 'viewmessages'], handleViewMessages);
 
   // ==========================================
   // MAIN MENU: 💰 CHECK SAVINGS (SYNCED WITH MEMBERS DASHBOARD)
   // ==========================================
-  bot.hears(['💰 Check Savings', '💰 Savings', '/savings'], async (ctx) => {
+  const handleCheckSavings = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
-      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view savings data.');
+      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view savings data.', getMainKeyboard(profile));
     }
 
     try {
@@ -788,15 +808,17 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `📅 <b>Weekly Rate:</b> ETB ${config.weekly_amount}/wk\n\n` +
         `<i>Verified live against database.</i>`;
 
-      await ctx.reply(savingsMessage, { parse_mode: 'HTML' });
+      await ctx.reply(savingsMessage, { parse_mode: 'HTML', ...getMainKeyboard(profile) });
     } catch (err) {
       console.error('Error computing savings overview:', err);
-      ctx.reply('⚠️ Error computing savings overview: ' + err.message);
+      ctx.reply('⚠️ Error computing savings overview: ' + err.message, getMainKeyboard(profile));
     }
-  });
+  };
+  bot.hears(['💰 Check Savings', '💰 Savings', '/savings', 'Check Savings', 'savings'], handleCheckSavings);
+  bot.command(['savings', 'checksavings'], handleCheckSavings);
 
   // BUTTON 6: '👤 My Identity'
-  bot.hears(['👤 My Identity', '/whoami'], async (ctx) => {
+  const handleMyIdentity = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     const tgId = ctx.from.id.toString();
     const name = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || ctx.from.username || 'User';
@@ -809,8 +831,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       `• <b>View Messages:</b> ${profile.canView ? '✅ ALLOWED' : '⛔ RESTRICTED'}\n` +
       `• <b>Post to Website:</b> ${profile.canPost ? '✅ GRANTED' : '⛔ RESTRICTED'}\n` +
       `• <b>Linked Web Account:</b> ${profile.user ? escapeHtml(profile.user.email) : 'None (linked via Telegram)'}`
-    , { parse_mode: 'HTML' });
-  });
+    , { parse_mode: 'HTML', ...getMainKeyboard(profile) });
+  };
+  bot.hears(['👤 My Identity', '/whoami', 'My Identity', 'whoami'], handleMyIdentity);
+  bot.command(['whoami', 'identity'], handleMyIdentity);
 
   // Helper to respond to both text messages and callback queries
   const respondWithCard = async (ctx, htmlText, extraMarkup) => {
@@ -1137,6 +1161,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   // Register Usernames Menu listeners & actions
   bot.hears(['🏷️ Usernames', 'Usernames', '/usernames', 'Username', '🏷️ Track Username', '📋 Track All Usernames', '/track', '/username'], handleUsernamesMenu);
+  bot.command(['usernames', 'username'], handleUsernamesMenu);
+  bot.command('track', handleMyUsernameProfile);
   bot.action('unames_menu', handleUsernamesMenu);
   bot.action('unames_members', handleListMembersDirectory);
   bot.action('unames_admins', handleListAdminsDirectory);
@@ -1320,6 +1346,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   // Register Requests Menu listeners & actions
   bot.hears(['⚙️ Requests', 'Requests', '/requests', '⚙️ Access Requests', '📋 Pending Approvals'], handleRequestsMenu);
+  bot.command('requests', handleRequestsMenu);
   bot.action('req_menu_home', handleRequestsMenu);
   bot.action('req_menu_refresh', handleRequestsMenu);
   bot.action('req_menu_pending', handleRequestsPending);
@@ -1370,14 +1397,14 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   const handleFinancialSummary = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.isAdmin) {
-      return ctx.reply('⛔ Access Denied: Only Admins can view the full financial summary.');
+      return ctx.reply('⛔ Access Denied: Only Admins can view the full financial summary.', getMainKeyboard(profile));
     }
     try {
       const totals = await botNotifier.calculateFinancialTotals(db);
       const text = botNotifier.formatFinancialSummaryText(totals);
-      return ctx.reply(text, { parse_mode: 'HTML' });
+      return ctx.reply(text, { parse_mode: 'HTML', ...getMainKeyboard(profile) });
     } catch (err) {
-      return ctx.reply('⚠️ Error generating financial summary: ' + err.message);
+      return ctx.reply('⚠️ Error generating financial summary: ' + err.message, getMainKeyboard(profile));
     }
   };
 
@@ -2046,11 +2073,11 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     ctx.reply('🔓 You have unlinked your Telegram account from the platform.');
   });
 
-  // Help command
-  bot.help(async (ctx) => {
+  // Help command & button handler
+  const handleHelp = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
     if (!profile.canView) {
-      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to use this bot.');
+      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to use this bot.', getMainKeyboard(profile));
     }
 
     if (profile.isAdmin) {
@@ -2064,9 +2091,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `<b>Monitoring:</b>\n` +
         `• <b>👥 View Messages</b> - Recent chat history\n` +
         `• <b>💰 Check Savings</b> - Working Capital & Remaining Money\n` +
+        `• <b>📊 Financial Summary</b> - Cumulative totals & financial overview\n` +
+        `• <b>🏷️ Usernames</b> - Platform member & admin usernames\n` +
         `• <b>👤 My Identity</b> - Check your active permissions\n` +
-        (profile.isSuperAdmin ? `• <b>⚙️ Access Requests</b> - Review and approve new users\n` : '') +
-        `\nAll buttons are accessible directly from your keyboard below.`,
+        `• <b>🌐 Open Website</b> - Launch official FriendsHUB website\n` +
+        (profile.isSuperAdmin ? `• <b>⚙️ Access Requests</b> - Review and approve new users\n• <b>🛡️ Manage Admins</b> - Manage admin roles and privileges\n` : '') +
+        `\nAll buttons are accessible directly from your persistent keyboard below.`,
         {
           parse_mode: 'HTML',
           ...getAdminKeyboard(profile.isSuperAdmin)
@@ -2078,7 +2108,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `You have <b>View-Only</b> permission.\n\n` +
         `• <b>👥 View Messages</b> - Read community chat messages\n` +
         `• <b>💰 Check Savings</b> - View savings & investment pool\n` +
-        `• <b>👤 My Identity</b> - Check your account details\n\n` +
+        `• <b>🏷️ Usernames</b> - Platform member directory\n` +
+        `• <b>👤 My Identity</b> - Check your account details\n` +
+        `• <b>🌐 Open Website</b> - Launch official FriendsHUB website\n\n` +
         `<i>Note: Only Admins and Super Admin can publish posts.</i>`,
         {
           parse_mode: 'HTML',
@@ -2086,7 +2118,11 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         }
       );
     }
-  });
+  };
+
+  bot.help(handleHelp);
+  bot.command('help', handleHelp);
+  bot.hears(['ℹ️ Help', 'Help', 'help', '/help', '❓ Help'], handleHelp);
 
   // Quick Action Handler for text messages
   bot.on('text', async (ctx) => {
