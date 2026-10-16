@@ -305,18 +305,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     const quote = getRandomFriendshipQuote();
 
-    const trackInlineButtons = [
-      [
-        Markup.button.callback('🔍 Track My Username', 'track_my_username'),
-        ...(username ? [Markup.button.url('🔗 Open Profile', `https://t.me/${rawUsername}`)] : [])
-      ]
-    ];
-    if (profile.isAdmin) {
-      trackInlineButtons.push([Markup.button.callback('📋 Track All Member Usernames', 'track_all_usernames')]);
-    }
-
     if (profile.isSuperAdmin) {
-      await ctx.reply(
+      return ctx.reply(
         `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
         `🛡️ <b>Your role:</b> SUPER ADMIN\n\n` +
         `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
@@ -328,14 +318,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           ...getAdminKeyboard(true)
         }
       );
-      return ctx.reply(
-        `👇 <b>Quick Actions & Identity Tracking:</b>`,
-        Markup.inlineKeyboard(trackInlineButtons)
-      );
     }
 
     if (profile.isAdmin) {
-      await ctx.reply(
+      return ctx.reply(
         `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
         `🛡️ <b>Your role:</b> ADMIN\n\n` +
         `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
@@ -347,14 +333,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           ...getAdminKeyboard(false)
         }
       );
-      return ctx.reply(
-        `👇 <b>Quick Actions & Identity Tracking:</b>`,
-        Markup.inlineKeyboard(trackInlineButtons)
-      );
     }
 
     if (profile.canView && profile.role === 'user') {
-      await ctx.reply(
+      return ctx.reply(
         `👑 <b>Hi ${escapeHtml(name)}, welcome to F.R.I.E.N.D.S Spot!</b>\n\n` +
         `🛡️ <b>Your role:</b> MEMBER\n\n` +
         `🏷️ <b>Detected Username:</b> ${usernameDisplay}\n\n` +
@@ -365,10 +347,6 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           parse_mode: 'HTML',
           ...getMemberKeyboard()
         }
-      );
-      return ctx.reply(
-        `👇 <b>Quick Actions & Identity Tracking:</b>`,
-        Markup.inlineKeyboard(trackInlineButtons)
       );
     }
 
@@ -381,10 +359,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `⏳ <i>Your access request is currently waiting for review by the Super Admin. You will receive an instant notification right here once granted access.</i>\n\n` +
         `✨ <i>${quote}</i>`,
         {
-          parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('🔍 Track My Username', 'track_my_username')]
-          ])
+          parse_mode: 'HTML'
         }
       );
     }
@@ -421,10 +396,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       `🚫 <i>You cannot interact with private features until the Super Admin approves your request.</i>\n\n` +
       `✨ <i>${quote}</i>`,
       { 
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('🔍 Track My Username', 'track_my_username')]
-        ])
+        parse_mode: 'HTML'
       }
     );
 
