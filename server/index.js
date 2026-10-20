@@ -319,15 +319,18 @@ class PgStatement {
     }
   }
   async get(...args) {
-    const res = await pool.query(this.sql, args.flat());
+    const sanitized = args.flat().map(v => v === undefined ? null : v);
+    const res = await pool.query(this.sql, sanitized);
     return res.rows[0];
   }
   async all(...args) {
-    const res = await pool.query(this.sql, args.flat());
+    const sanitized = args.flat().map(v => v === undefined ? null : v);
+    const res = await pool.query(this.sql, sanitized);
     return res.rows;
   }
   async run(...args) {
-    const res = await pool.query(this.sql, args.flat());
+    const sanitized = args.flat().map(v => v === undefined ? null : v);
+    const res = await pool.query(this.sql, sanitized);
     return {
       changes: res.rowCount,
       lastInsertRowid: res.rows?.[0]?.id !== undefined ? res.rows[0].id : null
@@ -984,20 +987,37 @@ app.put('/api/profile', checkAuth, async (req, res) => {
   } = req.body;
 
   try {
-    const oldProfile = await db.prepare('SELECT nickname, full_name, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email FROM users WHERE id = ?').get(req.user.id);
+    const oldProfile = await db.prepare('SELECT nickname, full_name, dob, gender, mobile, address, bio, telegram_username, fav_food_drink, email, profile_picture, cover_photo FROM users WHERE id = ?').get(req.user.id);
+
+    const safeNickname = nickname !== undefined ? (nickname || null) : (oldProfile ? oldProfile.nickname : null);
+    const safeFullName = full_name !== undefined ? (full_name || null) : (oldProfile ? oldProfile.full_name : null);
+    const safeDob = dob !== undefined ? (dob || null) : (oldProfile ? oldProfile.dob : null);
+    const safeGender = gender !== undefined ? (gender || null) : (oldProfile ? oldProfile.gender : null);
+    const safeMobile = mobile !== undefined ? (mobile || null) : (oldProfile ? oldProfile.mobile : null);
+    const safeAddress = address !== undefined ? (address || null) : (oldProfile ? oldProfile.address : null);
+    const safeBio = bio !== undefined ? (bio || null) : (oldProfile ? oldProfile.bio : null);
+    const safeProfilePic = profile_picture !== undefined ? (profile_picture || null) : (oldProfile ? oldProfile.profile_picture : null);
+    const safeCoverPhoto = cover_photo !== undefined ? (cover_photo || null) : (oldProfile ? oldProfile.cover_photo : null);
+    const safeTelegram = telegram_username !== undefined ? (telegram_username || null) : (oldProfile ? oldProfile.telegram_username : null);
+    const safeFavFoodDrink = fav_food_drink !== undefined ? (fav_food_drink || null) : (oldProfile ? oldProfile.fav_food_drink : null);
 
     await db.prepare(`
       UPDATE users SET 
-        nickname = COALESCE(?, nickname),
-        full_name = COALESCE(?, full_name),
-        dob = ?, gender = ?, mobile = ?, address = ?, 
+        nickname = ?, full_name = ?, dob = ?, gender = ?, mobile = ?, address = ?, 
         bio = ?, profile_picture = ?, cover_photo = ?, telegram_username = ?, fav_food_drink = ?
       WHERE id = ?
     `).run(
-      nickname !== undefined ? nickname : (oldProfile ? oldProfile.nickname : null),
-      full_name !== undefined ? full_name : (oldProfile ? oldProfile.full_name : null),
-      dob, gender, mobile, address,
-      bio, profile_picture, cover_photo, telegram_username, fav_food_drink,
+      safeNickname,
+      safeFullName,
+      safeDob,
+      safeGender,
+      safeMobile,
+      safeAddress,
+      safeBio,
+      safeProfilePic,
+      safeCoverPhoto,
+      safeTelegram,
+      safeFavFoodDrink,
       req.user.id
     );
 
@@ -1024,7 +1044,7 @@ app.put('/api/profile', checkAuth, async (req, res) => {
       }
     });
 
-    const updatedName = full_name || nickname || (oldProfile ? (oldProfile.full_name || oldProfile.nickname || oldProfile.email.split('@')[0]) : 'User');
+    const updatedName = safeFullName || safeNickname || (oldProfile ? (oldProfile.full_name || oldProfile.nickname || oldProfile.email.split('@')[0]) : 'User');
     let message = `${updatedName} updated their profile`;
     if (changes.length > 0) {
       message += `\n\n✏️ Changes:\n${changes.join('\n')}`;
@@ -1033,8 +1053,25 @@ app.put('/api/profile', checkAuth, async (req, res) => {
     }
 
     logAction(req.user.id, 'PROFILE_UPDATE', message);
-    res.json({ success: true });
+    res.json({
+      success: true,
+      user: {
+        id: req.user.id,
+        nickname: safeNickname,
+        full_name: safeFullName,
+        dob: safeDob,
+        gender: safeGender,
+        mobile: safeMobile,
+        address: safeAddress,
+        bio: safeBio,
+        profile_picture: safeProfilePic,
+        cover_photo: safeCoverPhoto,
+        telegram_username: safeTelegram,
+        fav_food_drink: safeFavFoodDrink
+      }
+    });
   } catch (err) {
+    console.error('Error in PUT /api/profile:', err);
     res.status(400).json({ error: err.message });
   }
 });

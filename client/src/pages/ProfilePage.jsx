@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -23,6 +23,7 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
 
   const [profile, setProfile] = useState(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
+  const previousIdRef = useRef(id);
 
   useEffect(() => {
     if (location.state?.edit) {
@@ -43,26 +44,27 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
 
   const showToast = (msg) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
+    setTimeout(() => setToastMessage(''), 3500);
   };
 
-
+  // Only reset edit mode and clear errors if navigating to a different profile ID
   useEffect(() => {
-    setImageError(false);
-    setIsEditing(false);
-    if (isSelf && currentUser) {
-      setProfile(currentUser);
-      setEditData(currentUser);
-      setLoading(false);
-    } else if (previewUser && Number(previewUser.id) === Number(id)) {
-      setProfile(prev => (prev && Number(prev.id) === Number(id) ? prev : previewUser));
-      setEditData(prev => (prev && Number(prev.id) === Number(id) ? prev : previewUser));
-      setLoading(false);
-    } else {
-      setLoading(!profile);
+    if (previousIdRef.current !== id) {
+      previousIdRef.current = id;
+      setIsEditing(false);
+      setImageError(false);
+    }
+    if (!profile) {
+      if (isSelf && currentUser) {
+        setProfile(currentUser);
+        setEditData(currentUser);
+      } else if (previewUser && Number(previewUser.id) === Number(id)) {
+        setProfile(previewUser);
+        setEditData(previewUser);
+      }
     }
     fetchProfile();
-  }, [id, previewUser]);
+  }, [id]);
 
   const fetchProfile = async () => {
     try {
@@ -76,17 +78,18 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
       });
       if (data) {
         setProfile(data);
-        setEditData(data);
+        // Only initialize editData from fetched data if user is not currently actively editing
+        setEditData(prev => (isEditing ? prev : data));
         if (onProfileUpdate && Number(currentUser?.id) === Number(data.id)) {
           onProfileUpdate(data);
         }
       }
       setLoading(false);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching profile:', err);
       if (isSelf && currentUser) {
         setProfile(currentUser);
-        setEditData(currentUser);
+        setEditData(prev => (isEditing ? prev : currentUser));
       }
       setLoading(false);
     }
@@ -145,14 +148,17 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
   };
 
   const handleUpdate = async (e) => {
-
     e.preventDefault();
     
-    // Ethiopian mobile validation: +251... or 09...
-    const ethioMobileRegex = /^(?:\+251|0)[1-9]\d{8}$/;
-    if (editData.mobile && !ethioMobileRegex.test(editData.mobile)) {
-      showToast('Please enter a valid Ethiopian mobile number (e.g., +251912345678 or 0912345678)');
-      return;
+    // Ethiopian mobile validation: +251... or 09... or 07... (allowing spaces/dashes)
+    if (editData.mobile && editData.mobile.trim()) {
+      const cleanMobile = editData.mobile.replace(/[\s\-]/g, '');
+      const ethioMobileRegex = /^(?:\+251|0)[79]\d{8}$/;
+      // Check if Ethiopian format or general international format
+      if (!ethioMobileRegex.test(cleanMobile) && !/^\+?[0-9]{9,15}$/.test(cleanMobile)) {
+        showToast('Please enter a valid mobile number (e.g. +251912345678 or 0912345678)');
+        return;
+      }
     }
 
     setUploading(true);
@@ -184,20 +190,37 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
         finalCoverPhoto = uploadRes.url;
       }
 
-      await axios.put('/api/profile', { 
-        ...editData, 
+      const cleanData = {
+        ...editData,
+        mobile: editData.mobile ? editData.mobile.replace(/[\s\-]/g, '') : '',
         profile_picture: finalProfilePicture,
         cover_photo: finalCoverPhoto
-      }, {
+      };
+
+      const res = await axios.put('/api/profile', cleanData, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
+
+      const updated = {
+        ...(profile || {}),
+        ...cleanData,
+        id: id
+      };
+
+      setProfile(updated);
+      setEditData(updated);
       setIsEditing(false);
       setProfileFile(null);
       setCoverFile(null);
+      showToast('✅ Profile updated successfully!');
+
+      if (onProfileUpdate && Number(currentUser?.id) === Number(id)) {
+        onProfileUpdate(updated);
+      }
       fetchProfile();
     } catch (err) {
-      console.error(err);
-      showToast('Failed to update profile: ' + (err.response?.data?.error || err.message));
+      console.error('Profile update error:', err);
+      showToast('❌ Failed to update profile: ' + (err.response?.data?.error || err.message));
     } finally {
       setUploading(false);
     }
@@ -636,10 +659,20 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
                     <>
                       <div className="edit-profile-grid">
                         <div>
-                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Full Name / Nickname</label>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Full Name</label>
+                          <input 
+                            className="input-field" 
+                            value={editData.full_name || ''} 
+                            placeholder="Enter your full name"
+                            onChange={(e) => setEditData({ ...editData, full_name: e.target.value })} 
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>Nickname / Preferred Name</label>
                           <input 
                             className="input-field" 
                             value={editData.nickname || ''} 
+                            placeholder="e.g. Teshome"
                             onChange={(e) => setEditData({ ...editData, nickname: e.target.value })} 
                           />
                         </div>
