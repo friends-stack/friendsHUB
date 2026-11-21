@@ -286,8 +286,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   };
 
   // Remove the blue ☰ Menu button from beside the input field and reset menu button
-  bot.telegram.deleteMyCommands().catch(() => {});
-  bot.telegram.setChatMenuButton({ menu_button: { type: 'default' } }).catch(() => {});
+  bot.telegram.deleteMyCommands().catch(() => { });
+  bot.telegram.setChatMenuButton({ menu_button: { type: 'default' } }).catch(() => { });
 
   // START HANDLER: Detects Telegram username on start and sets up access
   bot.start(async (ctx) => {
@@ -393,7 +393,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       `📨 <b>Your access request has been sent to the Super Admin.</b>\n` +
       `🚫 <i>You cannot interact with private features until the Super Admin approves your request.</i>\n\n` +
       `✨ <i>${quote}</i>`,
-      { 
+      {
         parse_mode: 'HTML'
       }
     );
@@ -456,7 +456,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       await db.prepare("UPDATE bot_access SET role = 'admin', updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?").run(targetTgId);
       try {
         await db.prepare("UPDATE users SET role = 'admin' WHERE telegram_id = ?").run(targetTgId);
-      } catch (uErr) {}
+      } catch (uErr) { }
 
       logAction(adminProfile.user?.id || null, 'TG_APPROVE_ADMIN', `Super Admin approved ${targetName} (${targetTgId}) as Admin`);
 
@@ -717,7 +717,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     return `📎 <b>Attachment:</b> <a href="${escapeHtml(fullUrl)}">Download File</a>\n`;
   };
 
-  const fetchMessagesPaged = async ({ page = 1, pageSize = 5, startDate = null, endDate = null, query = null }) => {
+  const fetchMessagesPaged = async ({ page = 1, pageSize = 10, startDate = null, endDate = null, query = null }) => {
     const whereClauses = [];
     const params = [];
 
@@ -735,13 +735,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         LOWER(COALESCE(m.content, '')) LIKE ? OR
         LOWER(COALESCE(u.nickname, '')) LIKE ? OR
         LOWER(COALESCE(u.full_name, '')) LIKE ? OR
-        LOWER(COALESCE(u.email, '')) LIKE ? OR
-        LOWER(COALESCE(u.telegram_username, '')) LIKE ? OR
-        LOWER(COALESCE(b.username, '')) LIKE ? OR
-        CAST(COALESCE(b.telegram_id, '') AS TEXT) LIKE ? OR
-        CAST(COALESCE(u.telegram_id, '') AS TEXT) LIKE ?
+        LOWER(COALESCE(u.email, '')) LIKE ?
       )`);
-      params.push(qTerm, qTerm, qTerm, qTerm, qTerm, qTerm, qTerm, qTerm);
+      params.push(qTerm, qTerm, qTerm, qTerm);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -750,7 +746,6 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       SELECT COUNT(*) as total
       FROM messages m
       LEFT JOIN users u ON m.sender_id = u.id
-      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
       ${whereSql}
     `;
     const countRes = await db.prepare(countSql).get(...params);
@@ -761,14 +756,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     const selectSql = `
       SELECT m.id, m.content, m.media_url, m.media_type, m.created_at,
-             u.id as user_id, u.nickname, u.full_name, u.email, u.telegram_username,
-             b.username as bot_username, b.telegram_id as b_tg_id, u.telegram_id as u_tg_id
-    FROM messages m
-    LEFT JOIN users u ON m.sender_id = u.id
-    LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
-    ${whereSql}
-    ORDER BY m.created_at DESC
-    LIMIT ? OFFSET ?
+             u.id as user_id, u.nickname, u.full_name, u.email
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      ${whereSql}
+      ORDER BY m.created_at ASC, m.id ASC
+      LIMIT ? OFFSET ?
     `;
     const items = await db.prepare(selectSql).all(...params, pageSize, offset);
 
@@ -777,9 +770,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   const renderMessageView = async (ctx, tgId, isEdit = false) => {
     const profile = await getTelegramProfile(ctx);
-    if (!profile.canView) {
+    if (!profile || !profile.isAdmin) {
       if (ctx.callbackQuery) await ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
-      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.', getMainKeyboard(profile));
+      return ctx.reply('🔒 Access Denied: Only authorized Admins and Super Admins can access this feature.', getMainKeyboard(profile));
     }
 
     let state = msgViewerStates.get(tgId);
@@ -790,7 +783,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     const { items, total, page, totalPages, offset } = await fetchMessagesPaged({
       page: state.page || 1,
-      pageSize: 5,
+      pageSize: 10,
       startDate: state.startDate,
       endDate: state.endDate,
       query: state.query
@@ -798,73 +791,61 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     state.page = page;
     state.totalPages = totalPages;
 
-    const startIdx = total === 0 ? 0 : offset + 1;
-    const endIdx = Math.min(offset + items.length, total);
-
-    let text = `👥 <b>COMMUNITY CHAT MESSAGES</b>\n\n`;
-    text += `📖 <b>Page ${page} of ${totalPages}</b> — Showing ${startIdx}–${endIdx} of ${total} messages\n`;
-
-    if (state.dateLabel || state.startDate) {
-      text += `📅 <b>Date Filter:</b> ${escapeHtml(state.dateLabel || `${state.startDate} to ${state.endDate}`)}\n`;
-    }
-    if (state.query) {
-      text += `🔍 <b>Search:</b> "${escapeHtml(state.query)}"\n`;
-    }
-    text += `────────────────────────\n\n`;
+    let text = `👥 <b>Community Messages</b> (Page ${page} of ${totalPages})\n\n`;
 
     if (items.length === 0) {
-      text += `💬 <i>No messages found matching your criteria.</i>\n\n`;
+      text += `<i>No messages found.</i>`;
     } else {
-      text += items.map((m, idx) => {
-        const itemNumber = offset + idx + 1;
+      text += items.map((m) => {
         const dateObj = new Date(m.created_at);
-        const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
-        const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+        const msgDate = dateObj.toLocaleDateString('en-US', {
+          timeZone: 'Africa/Addis_Ababa',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        const msgTime = dateObj.toLocaleTimeString('en-US', {
+          timeZone: 'Africa/Addis_Ababa',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
 
-        const senderName = m.nickname || m.full_name || m.email || 'Member';
-        const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
-        const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
-        const tgLink = rawTg ? ` <a href="https://t.me/${escapeHtml(rawTg)}">[Profile]</a>` : '';
-        const tgIdStr = (m.b_tg_id || m.u_tg_id) ? ` | 🆔 <code>${m.b_tg_id || m.u_tg_id}</code>` : '';
-        const mediaBadge = formatMediaBadge(m.media_type, m.media_url);
+        const senderName = m.nickname || m.full_name || (m.email ? m.email.split('@')[0] : '') || 'Member';
+        const actualContent = m.content ? escapeHtml(m.content) : (m.media_url ? '[Media attachment]' : '');
 
-        const contentText = m.content ? escapeHtml(m.content) : (m.media_url ? '<i>(Media without caption)</i>' : '<i>(Empty message)</i>');
-
-        return (
-          `<b>#${itemNumber}</b> • 💬 <b>${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay}${tgLink}${tgIdStr})\n` +
-          `📅 <b>Date:</b> ${msgDate} | ⏰ <b>Time:</b> ${msgTime}\n` +
-          `${mediaBadge}` +
-          `📝 <b>Message:</b> ${contentText}`
-        );
-      }).join('\n\n──────────────\n\n');
-      text += `\n\n────────────────────────`;
+        return `${escapeHtml(senderName)}\n${msgDate} | ${msgTime}\n${actualContent}`;
+      }).join('\n\n');
     }
 
-    // Build inline buttons
+    // Build navigation buttons
     const buttons = [];
     const navRow = [];
     if (page > 1) {
       navRow.push(Markup.button.callback('◀️ Previous Page', 'msg_prev'));
     }
     if (page < totalPages) {
-      navRow.push(Markup.button.callback('▶️ Next Page', 'msg_next'));
+      navRow.push(Markup.button.callback('Next Page ▶️', 'msg_next'));
     }
     if (navRow.length > 0) {
       buttons.push(navRow);
     }
 
-    buttons.push([
-      Markup.button.callback('📅 Filter by Date', 'msg_filter_date'),
-      Markup.button.callback('🔍 Search Messages', 'msg_search_prompt')
-    ]);
-
-    const actionRow = [Markup.button.callback('🔄 Refresh', 'msg_refresh')];
-    if (state.startDate || state.query) {
-      actionRow.push(Markup.button.callback('❌ Clear Filters', 'msg_clear_filters'));
+    if (totalPages > 2) {
+      const jumpRow = [];
+      if (page > 1) {
+        jumpRow.push(Markup.button.callback('⏮️ First Page', 'msg_first'));
+      }
+      if (page < totalPages) {
+        jumpRow.push(Markup.button.callback('⏭️ Latest Page', 'msg_last'));
+      }
+      if (jumpRow.length > 0) {
+        buttons.push(jumpRow);
+      }
     }
-    buttons.push(actionRow);
 
     buttons.push([
+      Markup.button.callback('🔄 Refresh', 'msg_refresh'),
       Markup.button.callback('🔙 Back to Main Menu', 'msg_main_menu')
     ]);
 
@@ -880,7 +861,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       }
       try {
         await ctx.answerCbQuery();
-      } catch (e) {}
+      } catch (e) { }
     } else {
       await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
     }
@@ -923,10 +904,15 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   };
 
   const handleViewMessages = async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) {
+      if (ctx.callbackQuery) await ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
+      return ctx.reply('🔒 Access Denied: Only authorized Admins and Super Admins can access this feature.', getMainKeyboard(profile));
+    }
     const tgId = ctx.from.id.toString();
     // Fresh launch: initialize with page 1
     msgViewerStates.set(tgId, { page: 1, startDate: null, endDate: null, dateLabel: null, query: null });
-    await renderMessageView(ctx, tgId, false);
+    await renderMessageView(ctx, tgId, Boolean(ctx.callbackQuery));
   };
   bot.hears(['👥 View Messages', '/messages', '5', 'View Messages', 'messages'], handleViewMessages);
   bot.command(['messages', 'viewmessages'], handleViewMessages);
@@ -934,8 +920,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // Command: /searchmsg <query>
   bot.command(['searchmsg', 'findmsg'], async (ctx) => {
     const profile = await getTelegramProfile(ctx);
-    if (!profile.canView) {
-      return ctx.reply('🔒 Access Denied: You must be approved by the Super Admin to view messages.', getMainKeyboard(profile));
+    if (!profile || !profile.isAdmin) {
+      return ctx.reply('🔒 Access Denied: Only authorized Admins and Super Admins can access this feature.', getMainKeyboard(profile));
     }
     const tgId = ctx.from.id.toString();
     const rawQuery = ctx.message.text.replace(/^\/(?:searchmsg|findmsg)\s*/i, '').trim();
@@ -949,6 +935,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   // Action callbacks for Message Viewer
   bot.action('msg_prev', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
     const tgId = ctx.from.id.toString();
     const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
     state.page = Math.max(1, (state.page || 1) - 1);
@@ -957,6 +945,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   });
 
   bot.action('msg_next', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
     const tgId = ctx.from.id.toString();
     const state = msgViewerStates.get(tgId) || { page: 1, startDate: null, endDate: null, dateLabel: null, query: null };
     state.page = (state.page || 1) + 1;
@@ -964,7 +954,29 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     await renderMessageView(ctx, tgId, true);
   });
 
+  bot.action('msg_first', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1 };
+    state.page = 1;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
+  bot.action('msg_last', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
+    const tgId = ctx.from.id.toString();
+    const state = msgViewerStates.get(tgId) || { page: 1 };
+    state.page = state.totalPages || 999999;
+    msgViewerStates.set(tgId, state);
+    await renderMessageView(ctx, tgId, true);
+  });
+
   bot.action('msg_refresh', async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    if (!profile || !profile.isAdmin) return ctx.answerCbQuery('⛔ Access Denied', { show_alert: true });
     const tgId = ctx.from.id.toString();
     await renderMessageView(ctx, tgId, true);
   });
@@ -1088,7 +1100,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           `🏠 <b>Returned to Main Menu</b>\n\nUse the menu buttons below to continue:`,
           { parse_mode: 'HTML' }
         );
-      } catch (e) {}
+      } catch (e) { }
     } else {
       await ctx.reply(
         `🏠 <b>Returned to Main Menu</b>\n\nUse the menu buttons below to continue:`,
@@ -1118,7 +1130,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
             await db.prepare("INSERT INTO savings_members (name) VALUES (?)").run(adminName);
           }
         }
-      } catch (syncErr) {}
+      } catch (syncErr) { }
 
       // 2. Fetch members and match with active users
       const allSavingsMembers = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
@@ -1126,7 +1138,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       const activeMembers = [];
 
       for (const m of allSavingsMembers) {
-        const matchedUser = allUsers.find(u => 
+        const matchedUser = allUsers.find(u =>
           (u.full_name && m.name.toLowerCase().replace(/\s+/g, '') === u.full_name.toLowerCase().replace(/\s+/g, '')) ||
           (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
           (u.full_name && m.name.toLowerCase().includes(u.full_name.toLowerCase())) ||
@@ -1197,7 +1209,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       `• <b>View Messages:</b> ${profile.canView ? '✅ ALLOWED' : '⛔ RESTRICTED'}\n` +
       `• <b>Post to Website:</b> ${profile.canPost ? '✅ GRANTED' : '⛔ RESTRICTED'}\n` +
       `• <b>Linked Web Account:</b> ${profile.user ? escapeHtml(profile.user.email) : 'None (linked via Telegram)'}`
-    , { parse_mode: 'HTML', ...getMainKeyboard(profile) });
+      , { parse_mode: 'HTML', ...getMainKeyboard(profile) });
   };
   bot.hears(['👤 My Identity', '/whoami', 'My Identity', 'whoami'], handleMyIdentity);
   bot.command(['whoami', 'identity'], handleMyIdentity);
@@ -1212,7 +1224,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       }
       try {
         await ctx.answerCbQuery('Username verified');
-      } catch (e) {}
+      } catch (e) { }
     } else {
       await ctx.reply(htmlText, { parse_mode: 'HTML', ...extraMarkup });
     }
@@ -1247,7 +1259,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       const rawName = [b.first_name, b.last_name].filter(Boolean).join(' ') || b.nickname || b.full_name || b.username || 'User';
       const rawTg = b.username ? b.username.replace(/^@/, '') : (b.telegram_username ? b.telegram_username.replace(/^@/, '') : '');
       const tgUsername = rawTg ? `@${rawTg}` : 'None';
-      
+
       let effectiveRole = 'member';
       if (b.bot_role === 'super_admin' || b.web_role === 'super_admin' || (process.env.ADMIN_CHAT_ID && b.telegram_id === process.env.ADMIN_CHAT_ID.toString())) {
         effectiveRole = 'super_admin';
@@ -1293,7 +1305,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
       const effectiveRole = (u.web_role === 'super_admin') ? 'super_admin'
         : (u.web_role === 'admin') ? 'admin'
-        : 'member';
+          : 'member';
 
       directory.set(`web_${u.web_id}`, {
         telegram_name: u.full_name || u.nickname || 'Member',
@@ -1884,7 +1896,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
             `⛔ <b>BOT ACCESS REVOKED</b>\n\nYour access to the F.R.I.E.N.D.S bot has been removed by the Super Admin.`,
             { parse_mode: 'HTML' }
           );
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return {
@@ -2106,7 +2118,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       const tgUser = u.username ? `@${u.username}` : '<i>No username</i>';
       const badge = roleIcons[u.role] || u.role.toUpperCase();
       text += `<b>${i + 1}. ${escapeHtml(name)}</b> [${badge}]\n` +
-              `   🏷️ ${tgUser} | 🆔 <code>${u.telegram_id}</code>\n\n`;
+        `   🏷️ ${tgUser} | 🆔 <code>${u.telegram_id}</code>\n\n`;
     });
 
     const buttons = [
@@ -2841,7 +2853,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       });
       await ctx.answerCbQuery();
     } catch (err) {
-      ctx.reply(scheduleText, { parse_mode: 'HTML' }).catch(() => {});
+      ctx.reply(scheduleText, { parse_mode: 'HTML' }).catch(() => { });
       await ctx.answerCbQuery();
     }
   });
@@ -2867,54 +2879,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
   });
 
-  // Inline action: show_messages (Admin full 50 history)
+  // Inline action: show_messages (Admin message viewer)
   bot.action('show_messages', async (ctx) => {
-    const profile = await getTelegramProfile(ctx);
-    if (!profile.canView) {
-      return ctx.answerCbQuery('⛔ Access Denied.');
-    }
-
-    const messages = (await db.prepare(`
-      SELECT m.content, m.media_url, m.created_at,
-             u.nickname, u.full_name, u.email, u.telegram_username,
-             b.username as bot_username
-      FROM messages m 
-      LEFT JOIN users u ON m.sender_id = u.id 
-      LEFT JOIN bot_access b ON (u.telegram_id = b.telegram_id OR (u.id IS NOT NULL AND b.user_id = u.id))
-      ORDER BY m.created_at DESC LIMIT 50
-    `).all()).reverse();
-
-    if (messages.length === 0) {
-      if (ctx.callbackQuery) await ctx.answerCbQuery();
-      return ctx.reply('💬 No messages found in chat history.');
-    }
-
-    if (ctx.callbackQuery) await ctx.answerCbQuery('Loaded messages');
-
-    const formattedList = messages.map((m, idx) => {
-      const dateObj = new Date(m.created_at);
-      const msgDate = dateObj.toLocaleDateString('en-US', { timeZone: 'Africa/Addis_Ababa', month: 'short', day: 'numeric', year: 'numeric' });
-      const msgTime = dateObj.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
-
-      const senderName = m.nickname || m.full_name || m.email || 'Member';
-      const rawTg = m.telegram_username ? m.telegram_username.replace(/^@/, '') : (m.bot_username ? m.bot_username.replace(/^@/, '') : '');
-      const tgDisplay = rawTg ? `@${escapeHtml(rawTg)}` : '<i>No @username</i>';
-      const mediaIndicator = m.media_url ? '📷 <i>[Media Attached]</i> ' : '';
-
-      return (
-        `<b>${idx + 1}. ${escapeHtml(senderName)}</b> (🏷️ ${tgDisplay})\n` +
-        `📅 ${msgDate} | ⏰ ${msgTime}\n` +
-        `💬 ${mediaIndicator}${escapeHtml(m.content || '(Media only)')}`
-      );
-    });
-
-    for (let i = 0; i < formattedList.length; i += 10) {
-      const chunk = formattedList.slice(i, i + 10).join('\n\n──────────────\n\n');
-      await ctx.reply(
-        `📜 <b>CHAT HISTORY (${i + 1} - ${Math.min(i + 10, formattedList.length)})</b>\n\n${chunk}`,
-        { parse_mode: 'HTML' }
-      );
-    }
+    await handleViewMessages(ctx);
   });
 
   // Decoy Command Handlers
