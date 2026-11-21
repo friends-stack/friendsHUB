@@ -238,6 +238,18 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
     io.to('private').emit('receive_message', broadcastMsg);
     logAction(senderUser.id, 'TG_POST_CHAT', `Posted text message via Telegram: "${text.substring(0, 50)}"`);
+
+    botNotifier.notifyNewChat({
+      bot, db,
+      sender: senderUser,
+      content: text,
+      mediaUrl: null,
+      mediaType: 'text',
+      receiverId: null,
+      uploadsDir: UPLOADS_DIR,
+      via: 'Telegram'
+    }).catch(console.error);
+
     return broadcastMsg;
   };
 
@@ -2754,7 +2766,8 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         mediaUrl: fileUrl,
         mediaType: 'image',
         receiverId: null,
-        uploadsDir: UPLOADS_DIR
+        uploadsDir: UPLOADS_DIR,
+        via: 'Telegram'
       }).catch(console.error);
 
       ctx.reply(
@@ -2816,6 +2829,56 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     pendingPosts.delete(tgId);
     ctx.editMessageText('❌ Post cancelled.');
     ctx.answerCbQuery('Cancelled');
+  });
+
+  // Inline action: view_sched (Payment Schedule preview)
+  bot.action(/^view_sched_(.+)$/, async (ctx) => {
+    const schedKey = ctx.match[1];
+    const sched = botNotifier.getPaymentSchedule(schedKey);
+    if (!sched) {
+      return ctx.answerCbQuery('⚠️ Payment schedule details expired.', { show_alert: true });
+    }
+
+    const scheduleText =
+      `📅 <b>PAYMENT SCHEDULE</b>\n\n` +
+      `👤 <b>Member:</b> <b>${escapeHtml(sched.memberName)}</b>\n` +
+      `💵 <b>Payment:</b> <b>ETB ${sched.amount}</b>\n\n` +
+      `<b>Consecutive Saturdays (${sched.n} Weeks):</b>\n` +
+      sched.saturdays.join('\n');
+
+    try {
+      await ctx.editMessageText(scheduleText, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('⬅️ Back to Payment Summary', `back_pay_${schedKey}`)]
+        ])
+      });
+      await ctx.answerCbQuery();
+    } catch (err) {
+      ctx.reply(scheduleText, { parse_mode: 'HTML' }).catch(() => {});
+      await ctx.answerCbQuery();
+    }
+  });
+
+  // Inline action: back_pay (Return to full financial summary)
+  bot.action(/^back_pay_(.+)$/, async (ctx) => {
+    const schedKey = ctx.match[1];
+    const sched = botNotifier.getPaymentSchedule(schedKey);
+    if (!sched) {
+      return ctx.answerCbQuery('⚠️ Payment details expired.', { show_alert: true });
+    }
+
+    try {
+      await ctx.editMessageText(sched.originalText, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback(`📅 View ${sched.n}-Week Schedule`, `view_sched_${schedKey}`)]
+        ])
+      });
+      await ctx.answerCbQuery();
+    } catch (err) {
+      await ctx.answerCbQuery();
+    }
   });
 
   // Inline action: show_messages (Admin full 50 history)

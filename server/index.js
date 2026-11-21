@@ -2281,13 +2281,24 @@ app.get('/api/messages', checkAuth, async (req, res) => {
 app.put('/api/messages/:id', checkAuth, async (req, res) => {
   const { id } = req.params;
   const { content } = req.body;
-  const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(id);
+  const msg = await db.prepare('SELECT sender_id, content FROM messages WHERE id = ?').get(id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
-  if (msg.sender_id !== req.user.id) {
+  if (msg.sender_id !== req.user.id && !['admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Unauthorized to edit this message' });
   }
+  const oldContent = msg.content;
   await db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, id);
   io.emit('message_edited', { messageId: parseInt(id), content });
+
+  if (bot) {
+    botNotifier.notifyMessageUpdate({
+      bot, db,
+      editorUser: req.user,
+      newContent: content,
+      oldContent
+    }).catch(console.error);
+  }
+
   res.json({ success: true });
 });
 
@@ -2384,7 +2395,8 @@ io.on('connection', (socket) => {
           mediaUrl: media_url,
           mediaType: media_type,
           receiverId,
-          uploadsDir: UPLOADS_DIR
+          uploadsDir: UPLOADS_DIR,
+          via: 'Live Chat'
         }).catch(console.error);
       }
     }
@@ -2392,10 +2404,20 @@ io.on('connection', (socket) => {
 
   socket.on('edit_message', async (data) => {
     const { messageId, content } = data;
-    const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(messageId);
-    if (msg && msg.sender_id === socket.user.id) {
+    const msg = await db.prepare('SELECT sender_id, content FROM messages WHERE id = ?').get(messageId);
+    if (msg && (msg.sender_id === socket.user.id || ['admin', 'super_admin'].includes(socket.user.role))) {
+      const oldContent = msg.content;
       await db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, messageId);
       io.emit('message_edited', { messageId, content });
+
+      if (bot) {
+        botNotifier.notifyMessageUpdate({
+          bot, db,
+          editorUser: socket.user,
+          newContent: content,
+          oldContent
+        }).catch(console.error);
+      }
     }
   });
 
