@@ -56,7 +56,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
     buttons.push(['📊 Financial Summary', '👤 My Identity']);
     buttons.push([Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']);
-    return Markup.keyboard(buttons).resize().persistent();
+    return Markup.keyboard(buttons).resize();
   };
 
   const getMemberKeyboard = () => {
@@ -64,13 +64,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       ['👥 View Messages', '💰 Check Savings'],
       ['🏷️ Usernames', '👤 My Identity'],
       [Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']
-    ]).resize().persistent();
+    ]).resize();
   };
 
   const getCancelKeyboard = () => {
     return Markup.keyboard([
       ['❌ Cancel']
-    ]).resize().persistent();
+    ]).resize();
   };
 
   const getMainKeyboard = (profile) => {
@@ -285,23 +285,9 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     return broadcastMsg;
   };
 
-  // Register commands for Telegram UI menu
-  bot.telegram.setMyCommands([
-    { command: 'start', description: 'Start bot & show main menu' },
-    { command: 'website', description: 'Open FriendsHUB website' },
-    { command: 'post', description: 'Post text to website live chat' },
-    { command: 'announce', description: 'Broadcast announcement to site' },
-    { command: 'messages', description: 'View latest messages from site' },
-    { command: 'savings', description: 'Check savings & investments overview' },
-    { command: 'finance', description: 'Detailed financial summary & categories' },
-    { command: 'usernames', description: 'Browse community & admin usernames' },
-    { command: 'track', description: 'Track your Telegram username live' },
-    { command: 'trackusers', description: 'View all platform user identities' },
-    { command: 'whoami', description: 'Check your access permissions' },
-    { command: 'requests', description: 'Super Admin: review access requests' },
-    { command: 'admins', description: 'Super Admin: manage admins & roles' },
-    { command: 'help', description: 'Show all bot commands and buttons' }
-  ]).catch(console.error);
+  // Remove the blue ☰ Menu button from beside the input field and reset menu button
+  bot.telegram.deleteMyCommands().catch(() => {});
+  bot.telegram.setChatMenuButton({ menu_button: { type: 'default' } }).catch(() => {});
 
   // START HANDLER: Detects Telegram username on start and sets up access
   bot.start(async (ctx) => {
@@ -1099,13 +1085,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       try {
         await ctx.answerCbQuery('Main Menu');
         await ctx.editMessageText(
-          `🏠 <b>Returned to Main Menu</b>\n\nUse the persistent menu buttons below to continue:`,
+          `🏠 <b>Returned to Main Menu</b>\n\nUse the menu buttons below to continue:`,
           { parse_mode: 'HTML' }
         );
       } catch (e) {}
     } else {
       await ctx.reply(
-        `🏠 <b>Returned to Main Menu</b>\n\nUse the persistent menu buttons below to continue:`,
+        `🏠 <b>Returned to Main Menu</b>\n\nUse the menu buttons below to continue:`,
         { parse_mode: 'HTML', ...getMainKeyboard(profile) }
       );
     }
@@ -2476,7 +2462,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
         `• <b>👤 My Identity</b> - Check your active permissions\n` +
         `• <b>🌐 Open Website</b> - Launch official FriendsHUB website\n` +
         (profile.isSuperAdmin ? `• <b>⚙️ Access Requests</b> - Review and approve new users\n• <b>🛡️ Manage Admins</b> - Manage admin roles and privileges\n` : '') +
-        `\nAll buttons are accessible directly from your persistent keyboard below.`,
+        `\nAll buttons are accessible directly from your menu keyboard below.`,
         {
           parse_mode: 'HTML',
           ...getAdminKeyboard(profile.isSuperAdmin)
