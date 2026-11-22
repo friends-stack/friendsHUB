@@ -745,7 +745,12 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const countSql = `
       SELECT COUNT(*) as total
       FROM messages m
-      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN users u ON (
+        m.sender_id = u.id 
+        OR (m.sender_id = 4 AND (u.id = 1 OR u.email = 'ermiasgesgis@gmail.com'))
+        OR (m.sender_id = 5 AND (u.id = 12 OR u.email = 'teshomeneri8@gmail.com'))
+        OR (m.sender_id = 6 AND (u.id = 10 OR u.email = 'dirshageb@gmail.com'))
+      )
       ${whereSql}
     `;
     const countRes = await db.prepare(countSql).get(...params);
@@ -755,10 +760,15 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     const offset = (validPage - 1) * pageSize;
 
     const selectSql = `
-      SELECT m.id, m.content, m.media_url, m.media_type, m.created_at,
+      SELECT m.id, m.content, m.media_url, m.media_type, m.created_at, m.sender_id,
              u.id as user_id, u.nickname, u.full_name, u.email
       FROM messages m
-      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN users u ON (
+        m.sender_id = u.id 
+        OR (m.sender_id = 4 AND (u.id = 1 OR u.email = 'ermiasgesgis@gmail.com'))
+        OR (m.sender_id = 5 AND (u.id = 12 OR u.email = 'teshomeneri8@gmail.com'))
+        OR (m.sender_id = 6 AND (u.id = 10 OR u.email = 'dirshageb@gmail.com'))
+      )
       ${whereSql}
       ORDER BY m.created_at ASC, m.id ASC
       LIMIT ? OFFSET ?
@@ -811,7 +821,21 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           hour12: true
         });
 
-        const senderName = m.nickname || m.full_name || (m.email ? m.email.split('@')[0] : '') || 'Member';
+        let senderName = '';
+        if (m.content && m.content.includes('[OFFICIAL ANNOUNCEMENT from ')) {
+          const match = m.content.match(/\[OFFICIAL ANNOUNCEMENT from ([^\]]+)\]/i);
+          if (match && match[1]) senderName = match[1].trim();
+        }
+        if (!senderName && (m.nickname || m.full_name || m.email)) {
+          senderName = m.nickname || m.full_name || (m.email ? m.email.split('@')[0] : '');
+        }
+        if (!senderName) {
+          const sid = Number(m.sender_id);
+          if (sid === 1 || sid === 4) senderName = 'Ermias Gesgis';
+          else if (sid === 10 || sid === 6) senderName = 'Dirshaye';
+          else if (sid === 12 || sid === 5) senderName = 'Teshome';
+          else senderName = 'Member';
+        }
         const actualContent = m.content ? escapeHtml(m.content) : (m.media_url ? '[Media attachment]' : '');
 
         return `${escapeHtml(senderName)}\n${msgDate} | ${msgTime}\n${actualContent}`;
