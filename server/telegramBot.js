@@ -56,7 +56,7 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     }
     buttons.push(['📊 Financial Summary', '👤 My Identity']);
     buttons.push([Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']);
-    return Markup.keyboard(buttons).resize();
+    return Markup.keyboard(buttons).resize().persistent(false);
   };
 
   const getMemberKeyboard = () => {
@@ -64,13 +64,13 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
       ['👥 View Messages', '💰 Check Savings'],
       ['🏷️ Usernames', '👤 My Identity'],
       [Markup.button.webApp('🌐 Open Website', WEBSITE_URL), 'ℹ️ Help']
-    ]).resize();
+    ]).resize().persistent(false);
   };
 
   const getCancelKeyboard = () => {
     return Markup.keyboard([
       ['❌ Cancel']
-    ]).resize();
+    ]).resize().persistent(false);
   };
 
   const getMainKeyboard = (profile) => {
@@ -631,9 +631,11 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
 
   bot.action('menu_post_cancel', async (ctx) => {
     userStates.delete(ctx.from.id.toString());
+    const profile = await getTelegramProfile(ctx);
     if (ctx.callbackQuery) {
       await ctx.answerCbQuery('Cancelled');
       await ctx.editMessageText('❌ Post cancelled.');
+      await ctx.reply('🏠 Main Menu restored.', getMainKeyboard(profile)).catch(() => {});
     }
   });
 
@@ -1125,6 +1127,10 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
           { parse_mode: 'HTML' }
         );
       } catch (e) { }
+      await ctx.reply(
+        `🏠 <b>Main Menu</b>\n\nUse the buttons below, or tap <b>⊞</b> in your message bar to minimize or show the menu.`,
+        { parse_mode: 'HTML', ...getMainKeyboard(profile) }
+      ).catch(() => { });
     } else {
       await ctx.reply(
         `🏠 <b>Returned to Main Menu</b>\n\nUse the menu buttons below to continue:`,
@@ -2475,6 +2481,15 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
     ctx.reply('🔓 You have unlinked your Telegram account from the platform.');
   });
 
+  // Menu command: /menu or /keyboard
+  bot.command(['menu', 'keyboard'], async (ctx) => {
+    const profile = await getTelegramProfile(ctx);
+    ctx.reply('🔘 <b>Menu refreshed.</b>\nTap <b>⊞</b> in your message bar anytime to minimize or show the buttons.', {
+      parse_mode: 'HTML',
+      ...getMainKeyboard(profile)
+    });
+  });
+
   // Help command & button handler
   const handleHelp = async (ctx) => {
     const profile = await getTelegramProfile(ctx);
@@ -2848,9 +2863,11 @@ module.exports = function setupTelegramBot({ bot, db, io, logAction, UPLOADS_DIR
   // Inline action: publish_dismiss
   bot.action('publish_dismiss', async (ctx) => {
     const tgId = ctx.from?.id?.toString();
+    const profile = await getTelegramProfile(ctx);
     pendingPosts.delete(tgId);
     ctx.editMessageText('❌ Post cancelled.');
     ctx.answerCbQuery('Cancelled');
+    await ctx.reply('🏠 Main Menu restored.', getMainKeyboard(profile)).catch(() => { });
   });
 
   // Inline action: view_sched (Payment Schedule preview)
