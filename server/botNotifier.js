@@ -358,7 +358,6 @@ const sendDocumentToAllAdmins = async (bot, db, docSource, filename, caption, ex
  * 👤 Visitor: Ermias Gesgis
  * 🛡️ Role: SUPER_ADMIN
  * 📱 Telegram: @Orthopia_EG
- * 📍 Page: /saving
  * 📅 Nov 20, 2026 | ⏰ 06:23 PM
  *
  * ADMIN:
@@ -397,7 +396,6 @@ const notifyWebsiteVisit = async ({ bot, db, user, ip, path: reqPath }) => {
       `👤 <b>Visitor:</b> ${escapeHtml(visitorName)}\n` +
       `🛡️ <b>Role:</b> ${escapeHtml(role)}\n` +
       `📱 <b>Telegram:</b> ${escapeHtml(telegram)}\n` +
-      `📍 <b>Page:</b> ${escapeHtml(cleanPath)}\n` +
       `📅 ${date} | ⏰ ${time}`;
 
     adminText =
@@ -411,7 +409,6 @@ const notifyWebsiteVisit = async ({ bot, db, user, ip, path: reqPath }) => {
       `👤 <b>Visitor:</b> Guest / External Visitor\n` +
       `🛡️ <b>Role:</b> GUEST\n` +
       `📱 <b>Telegram:</b> Not linked\n` +
-      `📍 <b>Page:</b> ${escapeHtml(cleanPath)}\n` +
       `📅 ${date} | ⏰ ${time}`;
 
     adminText =
