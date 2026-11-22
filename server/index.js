@@ -889,6 +889,12 @@ const logAction = (userId, action, details) => {
 
   // Broadcast to Telegram Super Admin and all approved Admins
   if (bot) {
+    if (action === 'LOGIN_FAILED') {
+      return; // Handled by notifyLoginAttempt with formatted card
+    }
+    if (action === 'LOGIN_SUCCESS') {
+      return; // Handled by notifyWebsiteVisit with formatted card
+    }
     botNotifier.sendToAllAdmins(bot, db, message).catch((e) => console.warn(`Could not deliver bot alert:`, e.message));
   }
 };
@@ -1110,6 +1116,9 @@ app.post('/api/auth/login', async (req, res) => {
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
     logAction(null, 'LOGIN_FAILED', `Attempted email: ${email}`);
+    if (bot && email) {
+      botNotifier.notifyLoginAttempt({ bot, db, email, ip: req.ip }).catch(console.error);
+    }
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 

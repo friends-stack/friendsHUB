@@ -321,7 +321,7 @@ const sendPhotoToAllAdmins = async (bot, db, photoSource, caption, extraOptions 
       } catch (err) {
         console.warn(`⚠️ [botNotifier] Failed to send photo to ${chatId}:`, err.message);
         // Fallback to text message
-        bot.telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' }).catch(() => {});
+        bot.telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' }).catch(() => { });
       }
     })
   );
@@ -345,7 +345,7 @@ const sendDocumentToAllAdmins = async (bot, db, docSource, filename, caption, ex
         });
       } catch (err) {
         console.warn(`⚠️ [botNotifier] Failed to send document to ${chatId}:`, err.message);
-        bot.telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' }).catch(() => {});
+        bot.telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' }).catch(() => { });
       }
     })
   );
@@ -369,7 +369,12 @@ const sendDocumentToAllAdmins = async (bot, db, docSource, filename, caption, ex
 const notifyWebsiteVisit = async ({ bot, db, user, ip, path: reqPath }) => {
   if (!bot) return;
 
-  const key = user ? `user_${user.id}` : `ip_${ip || 'anon'}`;
+  // Incomplete info: unauthenticated guest / external visitor notifications are suppressed
+  if (!user) {
+    return;
+  }
+
+  const key = `user_${user.id}`;
   const now = Date.now();
   if (visitCooldowns.has(key)) {
     const lastVisit = visitCooldowns.get(key);
@@ -379,55 +384,72 @@ const notifyWebsiteVisit = async ({ bot, db, user, ip, path: reqPath }) => {
   }
   visitCooldowns.set(key, now);
 
-  const cleanPath = reqPath || '/';
   const time = getAddisTime();
   const date = getAddisDate();
 
-  let superAdminText = '';
-  let adminText = '';
+  const visitorName = user.full_name || user.nickname || user.email || 'Member';
+  const role = (user.role || 'MEMBER').toUpperCase();
+  const telegram = user.telegram_username ? `@${user.telegram_username.replace(/^@/, '')}` : (user.telegram_id ? `ID: ${user.telegram_id}` : 'Not linked');
 
-  if (user) {
-    const visitorName = user.full_name || user.nickname || user.email || 'Member';
-    const role = (user.role || 'MEMBER').toUpperCase();
-    const telegram = user.telegram_username ? `@${user.telegram_username.replace(/^@/, '')}` : (user.telegram_id ? `ID: ${user.telegram_id}` : 'Not linked');
+  const superAdminText =
+    `🌐 <b>WEBSITE VISIT</b>\n\n` +
+    `👤 <b>Visitor:</b> ${escapeHtml(visitorName)}\n` +
+    `🛡️ <b>Role:</b> ${escapeHtml(role)}\n` +
+    `📱 <b>Telegram:</b> ${escapeHtml(telegram)}\n` +
+    `📅 ${date} | ⏰ ${time}`;
 
-    superAdminText =
-      `🌐 <b>WEBSITE VISIT</b>\n\n` +
-      `👤 <b>Visitor:</b> ${escapeHtml(visitorName)}\n` +
-      `🛡️ <b>Role:</b> ${escapeHtml(role)}\n` +
-      `📱 <b>Telegram:</b> ${escapeHtml(telegram)}\n` +
-      `📅 ${date} | ⏰ ${time}`;
-
-    adminText =
-      `🌐 <b>WEBSITE VISIT</b>\n\n` +
-      `👤 <b>Visitor:</b> ${escapeHtml(visitorName)}\n` +
-      `📱 <b>Telegram:</b> ${escapeHtml(telegram)}\n` +
-      `📅 ${date} | ⏰ ${time}`;
-  } else {
-    superAdminText =
-      `🌐 <b>WEBSITE VISIT</b>\n\n` +
-      `👤 <b>Visitor:</b> Guest / External Visitor\n` +
-      `🛡️ <b>Role:</b> GUEST\n` +
-      `📱 <b>Telegram:</b> Not linked\n` +
-      `📅 ${date} | ⏰ ${time}`;
-
-    adminText =
-      `🌐 <b>WEBSITE VISIT</b>\n\n` +
-      `👤 <b>Visitor:</b> Guest / External Visitor\n` +
-      `📱 <b>Telegram:</b> Not linked\n` +
-      `📅 ${date} | ⏰ ${time}`;
-  }
+  const adminText =
+    `🌐 <b>WEBSITE VISIT</b>\n\n` +
+    `👤 <b>Visitor:</b> ${escapeHtml(visitorName)}\n` +
+    `📱 <b>Telegram:</b> ${escapeHtml(telegram)}\n` +
+    `📅 ${date} | ⏰ ${time}`;
 
   const { superAdminRecipients, adminRecipients } = await getSeparatedRecipients(db);
 
   await Promise.allSettled([
     ...superAdminRecipients.map((chatId) =>
-      bot.telegram.sendMessage(chatId, superAdminText, { parse_mode: 'HTML' }).catch(() => {})
+      bot.telegram.sendMessage(chatId, superAdminText, { parse_mode: 'HTML' }).catch(() => { })
     ),
     ...adminRecipients.map((chatId) =>
-      bot.telegram.sendMessage(chatId, adminText, { parse_mode: 'HTML' }).catch(() => {})
+      bot.telegram.sendMessage(chatId, adminText, { parse_mode: 'HTML' }).catch(() => { })
     )
   ]);
+};
+
+/**
+ * LOGIN ATTEMPT NOTIFICATION (When an unauthenticated visitor attempts login with an email)
+ * 🔐 LOGIN ATTEMPT
+ * 📧 Attempted Email: ethio68@gmail.com
+ * 📅 Nov 22, 2026 | ⏰ 04:57 AM
+ */
+const notifyLoginAttempt = async ({ bot, db, email, ip }) => {
+  if (!bot || !email) return;
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  const key = `login_attempt_${cleanEmail}`;
+  const now = Date.now();
+  if (visitCooldowns.has(key)) {
+    const lastVisit = visitCooldowns.get(key);
+    if (now - lastVisit < 15000) {
+      return; // 15-second cooldown per email
+    }
+  }
+  visitCooldowns.set(key, now);
+
+  const time = getAddisTime();
+  const date = getAddisDate();
+
+  const text =
+    `🔐 <b>LOGIN ATTEMPT</b>\n\n` +
+    `📧 <b>Attempted Email:</b> ${escapeHtml(cleanEmail)}\n` +
+    `📅 ${date} | ⏰ ${time}`;
+
+  const recipients = await getAdminRecipients(db);
+  await Promise.allSettled(
+    recipients.map((chatId) =>
+      bot.telegram.sendMessage(chatId, text, { parse_mode: 'HTML' }).catch(() => { })
+    )
+  );
 };
 
 /**
@@ -501,7 +523,7 @@ const notifyMessageUpdate = async ({ bot, db, editorUser, newContent, oldContent
     if (clerkSetting && clerkSetting.value) {
       clerkId = parseInt(clerkSetting.value, 10);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const isClerk = (clerkId !== null && editorUser.id === clerkId) || editorUser.role === 'clerk';
   const role = (editorUser.role || '').toLowerCase();
@@ -546,13 +568,13 @@ const notifyMessageUpdate = async ({ bot, db, editorUser, newContent, oldContent
     const recipients = Array.from(new Set([...superAdminRecipients, ...adminRecipients]));
     await Promise.allSettled(
       recipients.map((chatId) =>
-        bot.telegram.sendMessage(chatId, text, { parse_mode: 'HTML' }).catch(() => {})
+        bot.telegram.sendMessage(chatId, text, { parse_mode: 'HTML' }).catch(() => { })
       )
     );
   } else if (targetAudience === 'super_only') {
     await Promise.allSettled(
       superAdminRecipients.map((chatId) =>
-        bot.telegram.sendMessage(chatId, text, { parse_mode: 'HTML' }).catch(() => {})
+        bot.telegram.sendMessage(chatId, text, { parse_mode: 'HTML' }).catch(() => { })
       )
     );
   }
@@ -630,7 +652,7 @@ const notifyNewPayment = async ({ bot, db, memberName, amount, type, clerkName, 
     if (cfg && cfg.weekly_amount) {
       weeklyAmount = parseFloat(cfg.weekly_amount) || 300;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const n = Math.max(1, Math.round(Number(amount || 0) / weeklyAmount));
   const saturdays = getConsecutiveSaturdays(Date.now(), n);
@@ -759,6 +781,7 @@ module.exports = {
   sendPhotoToAllAdmins,
   sendDocumentToAllAdmins,
   notifyWebsiteVisit,
+  notifyLoginAttempt,
   notifyNewChat,
   notifyMessageUpdate,
   notifyNewMedia,
