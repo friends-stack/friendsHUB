@@ -2133,11 +2133,462 @@ const SavingsTracker = ({ user }) => {
             const m = processedMembers.find(pm => String(pm.id) === String(selectedMember.id)) || selectedMember;
             const isOnTrack = (m.currentDebt || 0) === 0;
             const memberHistory = history.filter(h => String(h.member_id) === String(m.id));
+            const isAuthorizedAdmin = ['admin', 'super_admin'].includes(user?.role);
 
             return (
               <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-                {/* Member Header Card with Soft Pastel Wave Gradient */}
+                {/* Mobile-Only Member Contribution Details Layout (320px-767px) */}
+                <div className="mobile-dashboard-only" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {/* Member Profile Header Card */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #e0f2fe 0%, #ecfdf5 100%)',
+                    borderRadius: '20px',
+                    padding: '1rem',
+                    border: '1px solid rgba(226, 232, 240, 0.85)',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.04)'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveView('members')}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '999px',
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        fontWeight: 700,
+                        fontSize: '0.76rem',
+                        color: '#1e293b',
+                        cursor: 'pointer',
+                        marginBottom: '0.85rem'
+                      }}
+                    >
+                      ← Back to members
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                      <div style={{
+                        width: '54px',
+                        height: '54px',
+                        borderRadius: '50%',
+                        background: '#2563eb',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 800,
+                        fontSize: '1.45rem',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.28)',
+                        flexShrink: 0
+                      }}>
+                        {m.name?.[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#064e3b', lineHeight: 1.2 }}>
+                            {m.name}
+                          </h2>
+                          <VerifiedBadge size={16} />
+                        </div>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          background: isOnTrack ? '#fef9c3' : '#fee2e2',
+                          color: isOnTrack ? '#854d0e' : '#b91c1c',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '999px',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          marginTop: '0.28rem'
+                        }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnTrack ? '#ca8a04' : '#dc2626' }} />
+                          {isOnTrack ? 'On track' : 'In debt'}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#64748b', fontSize: '0.72rem', fontWeight: 500, marginTop: '0.28rem' }}>
+                          <Calendar size={12} color="#94a3b8" style={{ flexShrink: 0 }} />
+                          <span>Joined Since {new Date(m.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Responsive Financial Summary Cards (No Awkward ETB Wrapping) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '16px',
+                      padding: '0.85rem',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                    }}>
+                      <div style={{ width: '30px', height: '30px', borderRadius: '9px', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                        <Wallet size={16} color="#16a34a" />
+                      </div>
+                      <div style={{ fontSize: '0.64rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.03em' }}>TOTAL PAID</div>
+                      <div style={{ fontSize: 'clamp(0.95rem, 4.2vw, 1.15rem)', fontWeight: 900, color: '#16a34a', marginTop: '0.2rem', whiteSpace: 'nowrap' }}>
+                        {formatCurrency(m.total_paid)}
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: '#64748b', marginTop: '0.15rem' }}>Personal Contribution</div>
+                    </div>
+
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '16px',
+                      padding: '0.85rem',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                    }}>
+                      <div style={{ width: '30px', height: '30px', borderRadius: '9px', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                        <BarChart3 size={16} color="#2563eb" />
+                      </div>
+                      <div style={{ fontSize: '0.64rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.03em' }}>TOTAL EXPECTED</div>
+                      <div style={{ fontSize: 'clamp(0.95rem, 4.2vw, 1.15rem)', fontWeight: 900, color: isOnTrack ? '#2563eb' : '#dc2626', marginTop: '0.2rem', whiteSpace: 'nowrap' }}>
+                        {isOnTrack ? 'Fully Paid' : formatCurrency(m.currentDebt)}
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: '#64748b', marginTop: '0.15rem' }}>
+                        {isOnTrack ? 'Up to date ✓' : `Debt (ETB ${weeklyRate}/wk)`}
+                      </div>
+                    </div>
+
+                    <div
+                      onClick={isSuperAdmin ? () => handleEditAdvanceBalance(m) : undefined}
+                      style={{
+                        gridColumn: '1 / -1',
+                        background: 'white',
+                        borderRadius: '16px',
+                        padding: '0.85rem 0.95rem',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.75rem',
+                        cursor: isSuperAdmin ? 'pointer' : 'default'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                        <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Coins size={17} color="#7c3aed" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.66rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.03em' }}>
+                            {m.isOverridden || isSuperAdmin ? 'STORED ADVANCE SAVINGS ✏️' : 'STORED ADVANCE SAVINGS'}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.1rem' }}>
+                            {(m.advanceBalance || 0) > 0
+                              ? `Covers ${m.advanceWeeks || Math.floor((m.advanceBalance || 0) / weeklyRate)} next Sat(s)${isSuperAdmin ? ' (Tap to edit)' : ''}`
+                              : (isSuperAdmin ? '0 advance Saturdays (Tap to edit)' : '0 advance Saturdays')}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#2563eb', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {formatCurrency(m.advanceBalance || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons: Add payment & Mark missed */}
+                  {isPaymentManager && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCashEntry('Cash In', m.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.75rem 0.85rem',
+                          background: '#ecfdf5',
+                          border: '1px solid #bbf7d0',
+                          borderRadius: '14px',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', fontWeight: 800, fontSize: '1rem', flexShrink: 0 }}>+</div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '0.8rem', color: '#065f46', lineHeight: 1.15 }}>Add payment</div>
+                            <div style={{ fontSize: '0.66rem', color: '#059669', fontWeight: 600 }}>(Cash In)</div>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} color="#059669" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCashEntry('Cash Out', m.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.75rem 0.85rem',
+                          background: '#fef2f2',
+                          border: '1px solid #fecaca',
+                          borderRadius: '14px',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontWeight: 800, fontSize: '1rem', flexShrink: 0 }}>−</div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '0.8rem', color: '#991b1b', lineHeight: 1.15 }}>Mark missed</div>
+                            <div style={{ fontSize: '0.66rem', color: '#dc2626', fontWeight: 600 }}>(Cash Out)</div>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} color="#dc2626" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Mobile Contribution History */}
+                  <div style={{ background: 'white', padding: '0.9rem', borderRadius: '18px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Clock size={16} color="#1e293b" />
+                        <h3 style={{ margin: 0, fontSize: '0.78rem', color: '#1e293b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                          CONTRIBUTION HISTORY
+                        </h3>
+                      </div>
+                      {memberHistory.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveView('history')}
+                          style={{ background: 'none', border: 'none', color: '#16a34a', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.15rem' }}
+                        >
+                          View All <ChevronRight size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {memberHistory.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '1.75rem 0.75rem' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                          <FileText size={24} />
+                        </div>
+                        <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1e293b', marginBottom: '0.25rem' }}>
+                          No contribution records yet
+                        </div>
+                        <div style={{ fontSize: '0.74rem', color: '#64748b', maxWidth: '250px', margin: '0 auto', lineHeight: 1.45 }}>
+                          Your payment and history will appear here once available.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        {memberHistory.map((h) => {
+                          const isPayment = h.type === 'payment';
+                          const payerName = h.member_name || m.name || 'Member';
+                          const dateObj = h.created_at ? new Date(h.created_at) : null;
+                          const dateTimeStr = dateObj
+                            ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+                              ', ' +
+                              dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                            : '';
+                          const parsedNotes = parseTransactionNotes(h.notes);
+                          const hasDetails = Boolean(parsedNotes && (parsedNotes.dateRange || parsedNotes.noteText));
+                          const detailKey = `member-${h.id}`;
+                          const isExpanded = Boolean(expandedTxIds[detailKey]);
+
+                          return (
+                            <div
+                              key={h.id}
+                              style={{
+                                background: '#ffffff',
+                                borderRadius: '14px',
+                                border: '1px solid #e2e8f0',
+                                padding: '0.7rem',
+                                display: 'flex',
+                                flexDirection: 'column'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                {/* Left Arrow */}
+                                <div style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '50%',
+                                  background: isPayment ? '#dcfce7' : '#fee2e2',
+                                  color: isPayment ? '#16a34a' : '#dc2626',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {isPayment ? <ArrowUp size={17} /> : <AlertCircle size={17} />}
+                                </div>
+
+                                {/* Middle Info */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                    {isPayment ? 'Cash In (Saving Paid)' : 'Cash Out (Saving Unpaid)'}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', color: '#475569', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span>{isPayment ? 'payer:' : 'member:'}</span>
+                                    <strong style={{ color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis' }}>{payerName}</strong>
+                                    <VerifiedBadge size={12} />
+                                  </div>
+                                  <div style={{ fontSize: '0.64rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                    {dateTimeStr}
+                                    {h.signed_by ? ` • signed by ${h.signed_by}` : ''}
+                                  </div>
+                                </div>
+
+                                {/* Right Amount, Type/Details & Delete */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.86rem', fontWeight: 900, color: isPayment ? '#0b7a36' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                      {isPayment ? '+' : '-'}{formatCurrency(h.amount)}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem', marginTop: '0.22rem' }}>
+                                      {isAuthorizedAdmin && hasDetails ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setExpandedTxIds(prev => ({ ...prev, [detailKey]: !prev[detailKey] }))}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.2rem',
+                                            background: '#dcfce7',
+                                            color: '#15803d',
+                                            border: '1px solid #bbf7d0',
+                                            borderRadius: '999px',
+                                            padding: '0.16rem 0.5rem',
+                                            fontSize: '0.63rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap'
+                                          }}
+                                        >
+                                          <span>Payment Details</span>
+                                          {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                        </button>
+                                      ) : (
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.18rem',
+                                          background: isPayment ? '#dcfce7' : '#fee2e2',
+                                          color: isPayment ? '#15803d' : '#dc2626',
+                                          borderRadius: '999px',
+                                          padding: '0.12rem 0.45rem',
+                                          fontSize: '0.6rem',
+                                          fontWeight: 700
+                                        }}>
+                                          {isPayment ? 'Cash In' : 'Cash Out'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {isPaymentManager && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteModalState({ isOpen: true, step: 1, transaction: h });
+                                      }}
+                                      title="Delete transaction"
+                                      style={{
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '50%',
+                                        border: 'none',
+                                        background: '#fee2e2',
+                                        color: '#ef4444',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Admin-Only Expandable Payment Details (Notes & Consecutive Saturdays) */}
+                              {isAuthorizedAdmin && hasDetails && isExpanded && (
+                                <div style={{
+                                  marginTop: '0.6rem',
+                                  background: '#f0fdf4',
+                                  border: '1px solid #bbf7d0',
+                                  borderRadius: '12px',
+                                  padding: '0.6rem 0.7rem',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.5rem'
+                                }}>
+                                  {parsedNotes.dateRange && (
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', minWidth: 0 }}>
+                                        <Calendar size={14} color="#15803d" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                        <div style={{ minWidth: 0 }}>
+                                          <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0f172a' }}>
+                                            Consecutive Saturdays
+                                          </div>
+                                          <div style={{ fontSize: '0.69rem', color: '#475569', marginTop: '0.1rem' }}>
+                                            {parsedNotes.dateRange}
+                                          </div>
+                                          {parsedNotes.datesList && (
+                                            <div style={{ fontSize: '0.64rem', color: '#64748b', marginTop: '0.2rem', lineHeight: 1.35, wordBreak: 'break-word' }}>
+                                              {parsedNotes.datesList}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {parsedNotes.weeks && (
+                                        <span style={{
+                                          background: '#dcfce7',
+                                          border: '1px solid #86efac',
+                                          color: '#15803d',
+                                          borderRadius: '999px',
+                                          padding: '0.15rem 0.5rem',
+                                          fontSize: '0.64rem',
+                                          fontWeight: 700,
+                                          whiteSpace: 'nowrap',
+                                          flexShrink: 0
+                                        }}>
+                                          {parsedNotes.weeks} {parsedNotes.weeks === 1 ? 'week' : 'weeks'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {parsedNotes.dateRange && parsedNotes.noteText && (
+                                    <div style={{ height: '1px', background: '#bbf7d0', width: '100%' }} />
+                                  )}
+
+                                  {parsedNotes.noteText && (
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                                      <FileText size={14} color="#15803d" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0f172a' }}>Notes</div>
+                                        <div style={{ fontSize: '0.69rem', color: '#334155', marginTop: '0.1rem', lineHeight: 1.35, wordBreak: 'break-word' }}>
+                                          {parsedNotes.noteText}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tablet & Desktop Member Contribution Details Layout (768px+ UNCHANGED) */}
+                <div className="desktop-dashboard-only" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Member Header Card with Soft Pastel Wave Gradient */}
                 <div style={{
                   background: 'linear-gradient(135deg, #e0f2fe 0%, #ecfdf5 100%)',
                   borderRadius: '24px',
@@ -2341,6 +2792,8 @@ const SavingsTracker = ({ user }) => {
                       ))}
                     </div>
                   )}
+                </div>
+
                 </div>
 
               </motion.div>
