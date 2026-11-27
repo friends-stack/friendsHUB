@@ -1079,6 +1079,81 @@ const PrivateDashboard = ({ user, setUser }) => {
             max-width: 95% !important; 
           }
         }
+        @media (max-width: 767px) {
+          .dashboard-section {
+            padding: 0.65rem 0.65rem 84px 0.65rem !important;
+            background: #f1f5f9 !important;
+          }
+          .mobile-app-header {
+            background: linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #0f8e40 100%) !important;
+            border-bottom: none !important;
+            padding: 0.7rem 1rem !important;
+            box-shadow: 0 4px 12px rgba(6, 95, 42, 0.2) !important;
+          }
+          .mobile-hamburger-btn {
+            background: rgba(255, 255, 255, 0.14) !important;
+            border: none !important;
+            color: white !important;
+            border-radius: 10px !important;
+            width: 36px !important;
+            height: 36px !important;
+          }
+          .mobile-hamburger-btn svg {
+            color: white !important;
+          }
+          .mobile-brand-logo {
+            border-radius: 50% !important;
+            border: 2px solid rgba(255, 255, 255, 0.85) !important;
+            background: white !important;
+            padding: 1px !important;
+          }
+          .mobile-brand-title {
+            color: #ffffff !important;
+            font-size: 1.05rem !important;
+            letter-spacing: 1px !important;
+            line-height: 1.1 !important;
+          }
+          .mobile-brand-subtitle {
+            display: block !important;
+            font-size: 0.68rem !important;
+            color: rgba(255, 255, 255, 0.85) !important;
+            font-style: italic !important;
+            font-weight: 500 !important;
+          }
+          .mobile-bell-btn svg {
+            color: white !important;
+          }
+          .mobile-avatar-chevron {
+            color: white !important;
+          }
+          .mobile-bottom-nav {
+            height: 68px !important;
+            background: #ffffff !important;
+            border-top: 1px solid #e2e8f0 !important;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06) !important;
+            padding: 0.35rem 0.4rem !important;
+            border-radius: 18px 18px 0 0 !important;
+          }
+          .mobile-bottom-nav-btn {
+            flex: 1 !important;
+            padding: 0.4rem 0.25rem !important;
+            border-radius: 14px !important;
+            transition: all 0.2s !important;
+          }
+          .mobile-bottom-nav-btn.active {
+            background: #0b7a36 !important;
+            color: #ffffff !important;
+          }
+          .mobile-bottom-nav-btn.active svg {
+            color: #ffffff !important;
+          }
+          .mobile-bottom-nav-btn.active span {
+            color: #ffffff !important;
+          }
+          .mobile-bottom-nav-indicator {
+            display: none !important;
+          }
+        }
         .chat-input-field-container:focus-within {
           border-color: var(--primary) !important;
           box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15) !important;
@@ -1970,22 +2045,28 @@ const PrivateDashboard = ({ user, setUser }) => {
             </button>
             <div 
               onClick={() => { setActiveTab('logs'); }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}
             >
               <img 
                 src="/logo.png" 
                 alt="Friends Logo" 
-                style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+                className="mobile-brand-logo"
+                style={{ width: '34px', height: '34px', objectFit: 'contain' }} 
               />
-              <span style={{ 
-                fontWeight: 900, 
-                fontSize: '1.2rem', 
-                letterSpacing: '1.5px', 
-                color: '#16a34a',
-                fontFamily: "'Outfit', 'Inter', sans-serif"
-              }}>
-                F.R.I.E.N.D.S
-              </span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span className="mobile-brand-title" style={{ 
+                  fontWeight: 900, 
+                  fontSize: '1.2rem', 
+                  letterSpacing: '1.5px', 
+                  color: '#16a34a',
+                  fontFamily: "'Outfit', 'Inter', sans-serif"
+                }}>
+                  F.R.I.E.N.D.S
+                </span>
+                <span className="mobile-brand-subtitle" style={{ display: 'none' }}>
+                  Together, We Grow
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1993,6 +2074,7 @@ const PrivateDashboard = ({ user, setUser }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', position: 'relative' }}>
             <button 
               type="button"
+              className="mobile-bell-btn"
               onClick={() => {
                 setShowNotificationsModal(true);
                 fetchNotifications();
@@ -2049,11 +2131,12 @@ const PrivateDashboard = ({ user, setUser }) => {
                 justifyContent: 'center', 
                 fontWeight: 800, 
                 fontSize: '0.95rem',
+                border: '2px solid rgba(255,255,255,0.65)',
                 boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)'
               }}>
                 {(user?.nickname || user?.name || user?.email || 'E').charAt(0).toUpperCase()}
               </div>
-              <ChevronDown size={18} color="#64748b" />
+              <ChevronDown className="mobile-avatar-chevron" size={18} color="#64748b" />
             </div>
 
             {showMobileUserMenu && (
@@ -4218,6 +4301,7 @@ const PrivateDashboard = ({ user, setUser }) => {
       <div className="mobile-bottom-nav">
         {/* 1. Dashboard */}
         <button 
+          className={`mobile-bottom-nav-btn ${activeTab === 'logs' ? 'active' : ''}`}
           onClick={() => setActiveTab('logs')} 
           style={{ 
             display: 'flex', 
@@ -4233,14 +4317,15 @@ const PrivateDashboard = ({ user, setUser }) => {
           }}
         >
           {activeTab === 'logs' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            <div className="mobile-bottom-nav-indicator" style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
           )}
-          <Home size={22} color={activeTab === 'logs' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'logs' ? 700 : 500 }}>Dashboard</span>
+          <Home size={20} color={activeTab === 'logs' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.68rem', fontWeight: activeTab === 'logs' ? 700 : 500 }}>Dashboard</span>
         </button>
 
         {/* 2. Friends Chat */}
         <button 
+          className={`mobile-bottom-nav-btn ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')} 
           style={{ 
             display: 'flex', 
@@ -4256,14 +4341,15 @@ const PrivateDashboard = ({ user, setUser }) => {
           }}
         >
           {activeTab === 'messages' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            <div className="mobile-bottom-nav-indicator" style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
           )}
-          <MessageCircle size={22} color={activeTab === 'messages' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'messages' ? 700 : 500 }}>Friends Chat</span>
+          <MessageCircle size={20} color={activeTab === 'messages' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.68rem', fontWeight: activeTab === 'messages' ? 700 : 500 }}>Friends Chat</span>
         </button>
 
         {/* 3. Members Directory */}
         <button 
+          className={`mobile-bottom-nav-btn ${activeTab === 'members' ? 'active' : ''}`}
           onClick={() => setActiveTab('members')} 
           style={{ 
             display: 'flex', 
@@ -4279,61 +4365,39 @@ const PrivateDashboard = ({ user, setUser }) => {
           }}
         >
           {activeTab === 'members' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            <div className="mobile-bottom-nav-indicator" style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
           )}
-          <Users size={22} color={activeTab === 'members' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'members' ? 700 : 500 }}>Members</span>
+          <Users size={20} color={activeTab === 'members' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.68rem', fontWeight: activeTab === 'members' ? 700 : 500 }}>Members</span>
         </button>
 
-        {/* 4. Matrix (Super Admin only) / Gallery (Admins & Members) */}
-        {user.role === 'super_admin' ? (
-          <button 
-            onClick={() => setActiveTab('users')} 
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: '3px', 
-              background: 'none', 
-              border: 'none', 
-              color: activeTab === 'users' ? '#16a34a' : '#64748b',
-              cursor: 'pointer',
-              position: 'relative',
-              padding: '6px 8px'
-            }}
-          >
-            {activeTab === 'users' && (
-              <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
-            )}
-            <LayoutGrid size={22} color={activeTab === 'users' ? '#16a34a' : '#64748b'} />
-            <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'users' ? 700 : 500 }}>Matrix</span>
-          </button>
-        ) : (
-          <button 
-            onClick={() => setActiveTab('gallery')} 
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: '3px', 
-              background: 'none', 
-              border: 'none', 
-              color: activeTab === 'gallery' ? '#16a34a' : '#64748b',
-              cursor: 'pointer',
-              position: 'relative',
-              padding: '6px 8px'
-            }}
-          >
-            {activeTab === 'gallery' && (
-              <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
-            )}
-            <ImageIcon size={22} color={activeTab === 'gallery' ? '#16a34a' : '#64748b'} />
-            <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'gallery' ? 700 : 500 }}>Gallery</span>
-          </button>
-        )}
+        {/* 4. More (Opens drawer with Matrix, Gallery, Vault, Settings) */}
+        <button 
+          className={`mobile-bottom-nav-btn ${['users', 'gallery', 'vault', 'admin'].includes(activeTab) ? 'active' : ''}`}
+          onClick={() => setMobileMenuOpen(true)} 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '3px', 
+            background: 'none', 
+            border: 'none', 
+            color: ['users', 'gallery', 'vault', 'admin'].includes(activeTab) ? '#16a34a' : '#64748b',
+            cursor: 'pointer',
+            position: 'relative',
+            padding: '6px 8px'
+          }}
+        >
+          {['users', 'gallery', 'vault', 'admin'].includes(activeTab) && (
+            <div className="mobile-bottom-nav-indicator" style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+          )}
+          <LayoutGrid size={20} color={['users', 'gallery', 'vault', 'admin'].includes(activeTab) ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.68rem', fontWeight: ['users', 'gallery', 'vault', 'admin'].includes(activeTab) ? 700 : 500 }}>More</span>
+        </button>
 
         {/* 5. Me */}
         <button 
+          className={`mobile-bottom-nav-btn ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => {
             setViewingProfileUserId(null);
             setActiveTab('profile');
@@ -4352,10 +4416,10 @@ const PrivateDashboard = ({ user, setUser }) => {
           }}
         >
           {activeTab === 'profile' && (
-            <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
+            <div className="mobile-bottom-nav-indicator" style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: '3px', background: '#16a34a', borderRadius: '0 0 3px 3px' }} />
           )}
-          <User size={22} color={activeTab === 'profile' ? '#16a34a' : '#64748b'} />
-          <span style={{ fontSize: '0.7rem', fontWeight: activeTab === 'profile' ? 700 : 500 }}>Me</span>
+          <User size={20} color={activeTab === 'profile' ? '#16a34a' : '#64748b'} />
+          <span style={{ fontSize: '0.68rem', fontWeight: activeTab === 'profile' ? 700 : 500 }}>Me</span>
         </button>
       </div>
     </div>
