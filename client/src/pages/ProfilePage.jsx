@@ -18,9 +18,15 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
   const location = useLocation();
 
   const isSelf = currentUser?.id && Number(id) === Number(currentUser.id);
+  const getCachedProfile = (targetId) => {
+    try {
+      const raw = localStorage.getItem(`cached_profile_${targetId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  };
   const initialProfile = isSelf && currentUser 
     ? currentUser 
-    : (previewUser && Number(previewUser.id) === Number(id) ? previewUser : null);
+    : (previewUser && Number(previewUser.id) === Number(id) ? previewUser : getCachedProfile(id));
 
   const [profile, setProfile] = useState(initialProfile);
   const [isEditing, setIsEditing] = useState(false);
@@ -79,6 +85,14 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
       });
       if (data) {
         setProfile(data);
+        try { localStorage.setItem(`cached_profile_${id}`, JSON.stringify(data)); } catch {}
+        [data.profile_picture, data.cover_photo].forEach(src => {
+          if (src) {
+            const img = new Image();
+            img.decoding = 'async';
+            img.src = src;
+          }
+        });
         // Only initialize editData from fetched data if user is not currently actively editing
         setEditData(prev => (isEditing ? prev : data));
         if (onProfileUpdate && Number(currentUser?.id) === Number(data.id)) {

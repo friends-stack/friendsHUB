@@ -61,6 +61,28 @@ const getOriginalFileName = (url) => {
   return filenameWithTimestamp;
 };
 
+const getCachedJson = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const preloadedImageSet = new Set();
+const preloadImageUrls = (urls = []) => {
+  if (typeof window === 'undefined') return;
+  urls.forEach((raw) => {
+    const resolved = resolveImageUrl(raw);
+    if (!resolved || resolved.startsWith('data:') || preloadedImageSet.has(resolved)) return;
+    preloadedImageSet.add(resolved);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = resolved;
+  });
+};
+
 const compressImage = (file, maxWidth = 1600, quality = 0.82) => {
   return new Promise((resolve) => {
     if (!file || !file.type || !file.type.startsWith('image/')) return resolve(file);
@@ -125,7 +147,7 @@ const PrivateDashboard = ({ user, setUser }) => {
   };
   const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState(() => getCachedJson('cached_notifications', []));
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [notifFilter, setNotifFilter] = useState('all');
   const [readNotifIds, setReadNotifIds] = useState(() => {
@@ -146,7 +168,7 @@ const PrivateDashboard = ({ user, setUser }) => {
       contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => getCachedJson('cached_messages', []));
   const [newMessage, setNewMessage] = useState('');
   const [pendingMedia, setPendingMedia] = useState({ url: '', type: 'text' });
   const [replyTarget, setReplyTarget] = useState(null);
@@ -154,11 +176,11 @@ const PrivateDashboard = ({ user, setUser }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState('');
-  const [users, setUsers] = useState([]);
-  const [logs, setLogs] = useState([]);
+  const [users, setUsers] = useState(() => getCachedJson('cached_users', []));
+  const [logs, setLogs] = useState(() => getCachedJson('cached_logs', []));
   const [systemSettings, setSystemSettings] = useState([]);
-  const [gallery, setGallery] = useState([]);
-  const [personalAssets, setPersonalAssets] = useState([]);
+  const [gallery, setGallery] = useState(() => getCachedJson('cached_gallery', []));
+  const [personalAssets, setPersonalAssets] = useState(() => getCachedJson('cached_personal_assets', []));
   const [editingItem, setEditingItem] = useState(null);
   const [vaultSubTab, setVaultSubTab] = useState('photo'); // photo or video
   const [uploadingVault, setUploadingVault] = useState(false);
@@ -239,6 +261,13 @@ const PrivateDashboard = ({ user, setUser }) => {
   }, [activeTab]);
 
   useEffect(() => {
+    preloadImageUrls([
+      user?.profile_picture,
+      user?.cover_photo,
+      ...users.flatMap(u => [u?.profile_picture, u?.cover_photo]),
+      ...messages.flatMap(m => [m?.sender_profile_picture, m?.media_type === 'image' ? m?.media_url : '']),
+      ...gallery.filter(g => g?.type === 'photo' || g?.type === 'image').map(g => g?.url)
+    ]);
     const token = localStorage.getItem('token');
     socket.auth = { token };
     socket.connect();
@@ -367,6 +396,10 @@ const PrivateDashboard = ({ user, setUser }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       if (Array.isArray(data)) {
+        try {
+          localStorage.setItem('cached_messages', JSON.stringify(data.slice(-80)));
+        } catch {}
+        preloadImageUrls(data.flatMap(m => [m.sender_profile_picture, m.media_type === 'image' ? m.media_url : '']));
         setMessages(prev => {
           const map = new Map();
           for (const m of prev) {
@@ -388,6 +421,9 @@ const PrivateDashboard = ({ user, setUser }) => {
       });
       if (data && data.notifications) {
         setNotifications(data.notifications);
+        try {
+          localStorage.setItem('cached_notifications', JSON.stringify(data.notifications.slice(0, 50)));
+        } catch {}
       }
     } catch (err) {
       console.warn('Could not fetch notifications:', err.message);
@@ -421,12 +457,20 @@ const PrivateDashboard = ({ user, setUser }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setUsers(data);
+      if (Array.isArray(data)) {
+        try { localStorage.setItem('cached_users', JSON.stringify(data)); } catch {}
+        preloadImageUrls(data.flatMap(u => [u.profile_picture, u.cover_photo]));
+      }
     } catch (err) {
       try {
         const { data } = await axios.get('/api/users', {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
         setUsers(data);
+        if (Array.isArray(data)) {
+          try { localStorage.setItem('cached_users', JSON.stringify(data)); } catch {}
+          preloadImageUrls(data.flatMap(u => [u.profile_picture, u.cover_photo]));
+        }
       } catch (e) {
         console.error(e);
       }
@@ -439,6 +483,9 @@ const PrivateDashboard = ({ user, setUser }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setLogs(data);
+      if (Array.isArray(data)) {
+        try { localStorage.setItem('cached_logs', JSON.stringify(data.slice(0, 60))); } catch {}
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -457,6 +504,10 @@ const PrivateDashboard = ({ user, setUser }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setGallery(data);
+      if (Array.isArray(data)) {
+        try { localStorage.setItem('cached_gallery', JSON.stringify(data.slice(0, 60))); } catch {}
+        preloadImageUrls(data.filter(g => g.type === 'photo' || g.type === 'image').map(g => g.url));
+      }
     } catch (err) { console.error(err); }
   };
  
@@ -466,6 +517,10 @@ const PrivateDashboard = ({ user, setUser }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setPersonalAssets(data);
+      if (Array.isArray(data)) {
+        try { localStorage.setItem('cached_personal_assets', JSON.stringify(data.slice(0, 60))); } catch {}
+        preloadImageUrls(data.filter(a => a.type === 'photo' || a.type === 'image').map(a => a.url));
+      }
     } catch (err) { console.error(err); }
   };
 

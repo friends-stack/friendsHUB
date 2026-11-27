@@ -11,7 +11,12 @@ import ShareModal from '../components/ShareModal';
 
 const MemoriesPage = ({ user }) => {
   const navigate = useNavigate();
-  const [memories, setMemories] = useState([]);
+  const [memories, setMemories] = useState(() => {
+    try {
+      const raw = localStorage.getItem('cached_memories');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
   const [showAdd, setShowAdd] = useState(false);
   const [newMemory, setNewMemory] = useState({ title: '', content: '' });
   const [mediaFile, setMediaFile] = useState(null);
@@ -63,6 +68,18 @@ const MemoriesPage = ({ user }) => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setMemories(data);
+      try {
+        localStorage.setItem('cached_memories', JSON.stringify(data));
+      } catch {}
+      if (Array.isArray(data)) {
+        data.forEach(m => {
+          if (m?.media_url && m.media_type !== 'video') {
+            const img = new Image();
+            img.decoding = 'async';
+            img.src = m.media_url;
+          }
+        });
+      }
     } catch (err) { console.error(err); }
   };
 

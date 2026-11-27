@@ -258,6 +258,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
   const fileName = req.params.filename;
   const localFile = path.join(UPLOADS_DIR, fileName);
   if (fs.existsSync(localFile)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     return res.sendFile(localFile);
   }
   try {
@@ -296,7 +297,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
   next();
 });
 
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '365d', immutable: true }));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
