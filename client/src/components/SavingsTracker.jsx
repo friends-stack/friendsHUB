@@ -309,6 +309,7 @@ const SavingsTracker = ({ user }) => {
   const [memberSearch, setMemberSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState('all');
   const [showMemberFilterMenu, setShowMemberFilterMenu] = useState(false);
+  const [historySort, setHistorySort] = useState('latest');
 
   const getTodayDateString = () => {
     const d = new Date();
@@ -2321,8 +2322,371 @@ const SavingsTracker = ({ user }) => {
             const tPaid = filtered.reduce((s, h) => s + (h.type === 'payment' ? h.amount : 0), 0);
             const tMissed = filtered.reduce((s, h) => s + (h.type === 'missed' ? h.amount : 0), 0);
 
+            const sortedHistory = [...filtered].sort((a, b) => {
+              if (historySort === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
+              if (historySort === 'highest') return (Number(b.amount) || 0) - (Number(a.amount) || 0);
+              return new Date(b.created_at) - new Date(a.created_at);
+            });
+
             return (
-              <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {/* Mobile-Only History Layout (320px-767px) */}
+                <div className="mobile-dashboard-only">
+                  {/* Green History Banner */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
+                    borderRadius: '18px',
+                    padding: '0.9rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    color: 'white',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 6px 18px rgba(11, 122, 54, 0.22)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 2 }}>
+                      <div style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.14)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <HistoryIcon size={24} color="#fde047" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.18rem', fontWeight: 900, lineHeight: 1.15 }}>History</div>
+                        <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.2rem', lineHeight: 1.3 }}>
+                          View your past transactions and filter easily.
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ opacity: 0.24, flexShrink: 0, zIndex: 1 }}>
+                      <Calendar size={38} color="white" />
+                    </div>
+                  </div>
+
+                  {/* Quick Filter & Transaction Type Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.8rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem' }}>
+                        <Filter size={14} color="#0f172a" />
+                        <span>Quick Filter</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {[
+                          { id: 'all', label: 'All time' },
+                          { id: 'week', label: 'This week' },
+                          { id: 'month', label: 'This month' },
+                          { id: 'custom', label: 'Custom range' }
+                        ].map(opt => {
+                          const active = dateFilter === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => setDateFilter(opt.id)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.3rem',
+                                padding: '0.38rem 0.65rem',
+                                borderRadius: '999px',
+                                border: active ? 'none' : '1px solid #e2e8f0',
+                                background: active ? '#0b7a36' : '#f8fafc',
+                                color: active ? 'white' : '#334155',
+                                fontSize: '0.7rem',
+                                fontWeight: active ? 700 : 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Calendar size={12} />
+                              <span>{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {dateFilter === 'custom' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginTop: '0.7rem' }}>
+                          <div>
+                            <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Start date</label>
+                            <input type="date" value={customRange.start} onChange={e => setCustomRange({ ...customRange, start: e.target.value })} style={{ width: '100%', padding: '0.5rem', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>End date</label>
+                            <input type="date" value={customRange.end} onChange={e => setCustomRange({ ...customRange, end: e.target.value })} style={{ width: '100%', padding: '0.5rem', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.75rem' }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.5rem' }}>
+                        <LayoutGrid size={14} color="#0b7a36" />
+                        <span>Transaction Type</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => setTypeFilter('all')}
+                          style={{
+                            padding: '0.38rem 0.9rem',
+                            borderRadius: '999px',
+                            border: typeFilter === 'all' ? 'none' : '1px solid #e2e8f0',
+                            background: typeFilter === 'all' ? '#0b7a36' : '#f8fafc',
+                            color: typeFilter === 'all' ? 'white' : '#334155',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTypeFilter('payment')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.38rem 0.8rem',
+                            borderRadius: '999px',
+                            border: typeFilter === 'payment' ? 'none' : '1px solid #e2e8f0',
+                            background: typeFilter === 'payment' ? '#0b7a36' : '#f8fafc',
+                            color: typeFilter === 'payment' ? 'white' : '#334155',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Wallet size={12} />
+                          <span>Payments</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTypeFilter('missed')}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.38rem 0.8rem',
+                            borderRadius: '999px',
+                            border: typeFilter === 'missed' ? 'none' : '1px solid #e2e8f0',
+                            background: typeFilter === 'missed' ? '#dc2626' : '#f8fafc',
+                            color: typeFilter === 'missed' ? 'white' : '#334155',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <AlertCircle size={12} color={typeFilter === 'missed' ? 'white' : '#dc2626'} />
+                          <span>Missed</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transactions Header & Sort */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%)',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '14px',
+                    padding: '0.55rem 0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.5rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>
+                      <RefreshCw size={15} color="#0b7a36" />
+                      <span>Transactions ({sortedHistory.length})</span>
+                    </div>
+                    <select
+                      value={historySort}
+                      onChange={(e) => setHistorySort(e.target.value)}
+                      style={{
+                        background: 'white',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '999px',
+                        padding: '0.3rem 0.65rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        color: '#065f2a',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="latest">Latest First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="highest">Highest Amount</option>
+                    </select>
+                  </div>
+
+                  {/* Transaction Cards */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', position: 'relative' }}>
+                    {sortedHistory.length === 0 ? (
+                      <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', fontSize: '0.82rem', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                        No transactions match the selected filters.
+                      </div>
+                    ) : (
+                      sortedHistory.map((h) => {
+                        const isPayment = h.type === 'payment';
+                        const member = members.find(m => String(m.id) === String(h.member_id));
+                        const memberName = h.member_name || (member ? member.name : null) || 'Member';
+                        const dateStr = h.created_at
+                          ? new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '';
+
+                        return (
+                          <div
+                            key={h.id}
+                            style={{
+                              background: 'white',
+                              borderRadius: '18px',
+                              border: '1px solid #e2e8f0',
+                              padding: '0.7rem 0.65rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.55rem',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                            }}
+                          >
+                            {/* Left Circle Icon */}
+                            <div style={{
+                              width: '42px',
+                              height: '42px',
+                              borderRadius: '50%',
+                              background: isPayment ? '#dcfce7' : '#fee2e2',
+                              color: isPayment ? '#16a34a' : '#dc2626',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              {isPayment ? <ArrowUp size={20} /> : <AlertCircle size={20} />}
+                            </div>
+
+                            {/* Middle Info */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                {isPayment ? 'Cash In' : 'Cash Out'}
+                                <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#1e293b' }}>
+                                  {isPayment ? '(Saving Paid)' : '(Saving Unpaid)'}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '0.15rem' }}>
+                                {isPayment ? 'payer:' : 'member:'} <strong style={{ color: '#0f172a' }}>{memberName}</strong>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.25rem', fontSize: '0.64rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                <Calendar size={11} color="#64748b" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <span style={{ lineHeight: 1.25 }}>
+                                  {h.notes ? h.notes.replace(/🗓️\s*/g, '') : dateStr}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Right Amount & Delete */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: isPayment ? '#0b7a36' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                  {isPayment ? '+' : '-'}{formatCurrency(h.amount)}
+                                </div>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  marginTop: '0.2rem',
+                                  background: isPayment ? '#dcfce7' : '#fee2e2',
+                                  color: isPayment ? '#15803d' : '#dc2626',
+                                  borderRadius: '999px',
+                                  padding: '0.12rem 0.45rem',
+                                  fontSize: '0.6rem',
+                                  fontWeight: 700
+                                }}>
+                                  {isPayment ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
+                                  <span>{isPayment ? 'Cash In' : 'Cash Out'}</span>
+                                </div>
+                              </div>
+
+                              {isPaymentManager && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteModalState({ isOpen: true, step: 1, transaction: h });
+                                  }}
+                                  title="Delete transaction"
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    border: 'none',
+                                    background: '#fee2e2',
+                                    color: '#ef4444',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Floating Scroll-to-Top Up Arrow */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const mainEl = document.querySelector('.main-content');
+                        if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      title="Back to top"
+                      style={{
+                        position: 'fixed',
+                        right: '1rem',
+                        bottom: '78px',
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: '#0b7a36',
+                        color: 'white',
+                        border: 'none',
+                        boxShadow: '0 4px 14px rgba(11, 122, 54, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 40
+                      }}
+                    >
+                      <ArrowUp size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tablet & Desktop History Layout (768px+ UNCHANGED) */}
+                <div className="desktop-dashboard-only">
                 <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'inherit' }}>History</h1>
                 <div style={{ background: 'white', padding: '1.5rem', borderRadius: '24px', border: '1px solid #E5E7EB', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                   <div>
@@ -2367,6 +2731,7 @@ const SavingsTracker = ({ user }) => {
                     />
                   ))}
                 </Section>
+                </div>
               </motion.div>
             );
           })()}
