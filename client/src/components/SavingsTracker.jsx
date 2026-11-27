@@ -7,7 +7,7 @@ import {
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
   PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp,
-  Search, Filter, ChevronDown, Eye
+  Search, Filter, ChevronDown, Eye, UserPlus, Shield, Star
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -310,6 +310,10 @@ const SavingsTracker = ({ user }) => {
   const [memberFilter, setMemberFilter] = useState('all');
   const [showMemberFilterMenu, setShowMemberFilterMenu] = useState(false);
   const [historySort, setHistorySort] = useState('latest');
+  const [mobileNewMemberName, setMobileNewMemberName] = useState('');
+  const [showMobileWeekSection, setShowMobileWeekSection] = useState(false);
+  const [mobileWeeklyAmount, setMobileWeeklyAmount] = useState('');
+  const [mobileClerkId, setMobileClerkId] = useState('');
 
   const getTodayDateString = () => {
     const d = new Date();
@@ -3209,7 +3213,399 @@ const SavingsTracker = ({ user }) => {
 
           {activeView === 'settings' && (
             isSuperAdmin ? (
-              <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {/* Mobile-Only Settings Layout (320px-767px) */}
+                <div className="mobile-dashboard-only">
+                  {/* Settings Header Banner */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                    borderRadius: '18px',
+                    padding: '0.8rem 0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.65rem',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '1px solid #bbf7d0'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', zIndex: 2 }}>
+                      <div style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: '#bbf7d0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <SettingsIcon size={24} color="#0b7a36" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#065f2a', lineHeight: 1.1 }}>Settings</div>
+                        <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '0.15rem', fontWeight: 500 }}>
+                          Manage your group preferences and members.
+                        </div>
+                      </div>
+                    </div>
+                    <SettingsIcon size={46} color="#16a34a" style={{ opacity: 0.16, flexShrink: 0 }} />
+                  </div>
+
+                  {/* Add Member Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                        <UserPlus size={18} color="#0b7a36" />
+                        <span>Add Member</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('mobile-new-member-input')?.focus()}
+                        style={{
+                          background: '#dcfce7',
+                          color: '#065f2a',
+                          border: '1px solid #bbf7d0',
+                          borderRadius: '999px',
+                          padding: '0.25rem 0.65rem',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        + New Member
+                      </button>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '0.35rem' }}>
+                        Full name
+                      </label>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '999px',
+                        padding: '0.5rem 0.85rem'
+                      }}>
+                        <User size={16} color="#64748b" style={{ flexShrink: 0 }} />
+                        <input
+                          id="mobile-new-member-input"
+                          type="text"
+                          value={mobileNewMemberName}
+                          onChange={(e) => setMobileNewMemberName(e.target.value)}
+                          placeholder="e.g. Ermias Gesgis"
+                          style={{
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            width: '100%',
+                            fontSize: '0.84rem',
+                            color: '#0f172a'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (mobileNewMemberName.trim()) {
+                          handleAddMember(mobileNewMemberName.trim());
+                          setMobileNewMemberName('');
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.72rem',
+                        borderRadius: '999px',
+                        background: '#0b7a36',
+                        color: 'white',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.45rem',
+                        boxShadow: '0 4px 12px rgba(11, 122, 54, 0.22)'
+                      }}
+                    >
+                      <UserPlus size={17} />
+                      <span>Add member</span>
+                    </button>
+                  </div>
+
+                  {/* Current Members Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                        <Users size={18} color="#0b7a36" />
+                        <span>Current Members ({members.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveView('members')}
+                        style={{
+                          background: '#f0fdf4',
+                          border: '1px solid #86efac',
+                          color: '#065f2a',
+                          borderRadius: '999px',
+                          padding: '0.28rem 0.65rem',
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        View All →
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {members.map((m, i) => {
+                        const isSuper = m.role === 'super_admin';
+                        const isAdm = m.role === 'admin';
+                        const roleLabel = isSuper ? 'Super Admin' : isAdm ? 'Admin' : 'Member';
+
+                        return (
+                          <div
+                            key={m.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.45rem',
+                              padding: '0.55rem 0',
+                              borderTop: i === 0 ? 'none' : '1px solid #f1f5f9'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
+                              <Avatar name={m.name} size="36px" fontSize="0.88rem" index={i} />
+                              <span style={{ fontWeight: 800, fontSize: '0.84rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {m.name}
+                              </span>
+                            </div>
+
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.22rem',
+                              background: '#dbeafe',
+                              color: '#2563eb',
+                              borderRadius: '999px',
+                              padding: '0.2rem 0.55rem',
+                              fontSize: '0.66rem',
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0
+                            }}>
+                              {isSuper ? <Star size={11} fill="#2563eb" color="#2563eb" /> : <Shield size={11} fill="#2563eb" color="#2563eb" />}
+                              <span>{roleLabel}</span>
+                            </span>
+
+                            {isSuperAdmin && m.role !== 'super_admin' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMember(m.id, m.name)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.22rem',
+                                  background: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: '1px solid #fecdd3',
+                                  borderRadius: '999px',
+                                  padding: '0.22rem 0.6rem',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  flexShrink: 0
+                                }}
+                              >
+                                <Trash2 size={11} />
+                                <span>Remove</span>
+                              </button>
+                            ) : (
+                              <div style={{ width: '68px', flexShrink: 0 }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Add New Week & Clerk Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.75rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0 }}>
+                        <div style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '10px',
+                          background: '#dcfce7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Calendar size={18} color="#0b7a36" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>Add New Week</div>
+                          <div style={{ fontSize: '0.66rem', color: '#64748b' }}>
+                            Sets a new weekly contribution amount.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMobileWeekSection(prev => !prev)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          background: showMobileWeekSection ? '#0b7a36' : '#f0fdf4',
+                          border: '1px solid #86efac',
+                          color: showMobileWeekSection ? 'white' : '#065f2a',
+                          borderRadius: '999px',
+                          padding: '0.35rem 0.65rem',
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Calendar size={12} />
+                        <span>{showMobileWeekSection ? 'Close' : 'Set New Week →'}</span>
+                      </button>
+                    </div>
+
+                    {showMobileWeekSection && (
+                      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                            Weekly amount (ETB)
+                          </label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                              type="number"
+                              placeholder={String(config.weekly_amount || 100)}
+                              value={mobileWeeklyAmount}
+                              onChange={(e) => setMobileWeeklyAmount(e.target.value)}
+                              style={{ flex: 1, padding: '0.55rem 0.75rem', borderRadius: '12px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.85rem' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = mobileWeeklyAmount || String(config.weekly_amount || '');
+                                if (val) {
+                                  handleAddWeek(val);
+                                  setMobileWeeklyAmount('');
+                                }
+                              }}
+                              style={{ padding: '0.55rem 1rem', borderRadius: '12px', background: '#0b7a36', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                            >
+                              Add week
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                            Week History ({configHistory.length})
+                          </div>
+                          {configHistory.map((c, i) => {
+                            const isLatest = c.id === configHistory[0]?.id;
+                            const weekNum = c.week_number || (configHistory.length - i);
+                            return (
+                              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.78rem' }}>
+                                <span style={{ fontWeight: 600, color: '#334155' }}>Week {weekNum}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{ fontWeight: 800, color: '#0f172a' }}>{formatCurrency(c.weekly_amount)}</span>
+                                  {isLatest ? (
+                                    <span style={{ background: '#dcfce7', color: '#166534', padding: '0.15rem 0.45rem', borderRadius: '999px', fontSize: '0.64rem', fontWeight: 700 }}>Active</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteWeekConfig(c.id, weekNum, c.weekly_amount)}
+                                      style={{ background: '#fee2e2', border: 'none', color: '#dc2626', borderRadius: '8px', padding: '0.2rem 0.45rem', fontSize: '0.66rem', fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                            Assign Clerk
+                          </label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <select
+                              value={mobileClerkId || config.clerk_id || ''}
+                              onChange={(e) => setMobileClerkId(e.target.value)}
+                              style={{ flex: 1, padding: '0.55rem 0.65rem', borderRadius: '12px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.8rem' }}
+                            >
+                              <option value="">-- No Clerk Assigned --</option>
+                              {systemUsers.map(u => (
+                                <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.role})</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleSetClerk(mobileClerkId || config.clerk_id || '')}
+                              style={{ padding: '0.55rem 0.9rem', borderRadius: '12px', background: '#2563eb', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
+                            >
+                              Set Clerk
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtle Green Wave Footer Accent */}
+                  <div style={{ height: '24px', width: '100%', overflow: 'hidden', borderRadius: '12px', pointerEvents: 'none' }}>
+                    <svg viewBox="0 0 400 32" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+                      <path d="M0,18 C80,2 160,30 240,14 C310,0 360,22 400,10 L400,32 L0,32 Z" fill="rgba(22, 163, 74, 0.16)" />
+                      <path d="M0,24 C100,8 200,32 300,18 C350,12 380,22 400,16 L400,32 L0,32 Z" fill="rgba(11, 122, 54, 0.25)" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Tablet & Desktop Settings Layout (768px+ UNCHANGED) */}
+                <div className="desktop-dashboard-only">
                 <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'inherit' }}>Settings</h1>
 
                 <div style={{ background: 'white', padding: '2rem', borderRadius: '24px', border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -3410,6 +3806,7 @@ const SavingsTracker = ({ user }) => {
                     </select>
                   </div>
                   <button onClick={() => handleSetClerk(document.getElementById('clerk-select').value)} style={{ width: '100%', padding: '1.1rem', borderRadius: '12px', background: '#3B82F6', color: 'white', border: 'none', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>Set Clerk</button>
+                </div>
                 </div>
               </motion.div>
             ) : (
