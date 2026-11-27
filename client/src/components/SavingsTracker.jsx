@@ -6,7 +6,7 @@ import {
   Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
-  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home
+  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -1349,6 +1349,255 @@ const SavingsTracker = ({ user }) => {
                       })
                     )}
                   </div>
+                </div>
+
+                {/* Recent Payments Card (Continuation) */}
+                {(() => {
+                  const recentList = history.slice(0, 6);
+                  const recentTotal = recentList
+                    .filter(tx => tx.type === 'payment')
+                    .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+                  return (
+                    <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '0.75rem', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      {/* Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#0b7a36', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <HistoryIcon size={15} color="white" />
+                          </div>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>Recent Payments</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveView('history')}
+                          style={{ background: 'none', border: 'none', color: '#16a34a', fontWeight: 700, fontSize: '0.76rem', cursor: 'pointer', padding: 0 }}
+                        >
+                          Full history →
+                        </button>
+                      </div>
+
+                      {/* Payment Rows */}
+                      {recentList.length === 0 ? (
+                        <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748b', background: '#f8fafc', borderRadius: '12px' }}>
+                          No recent payments recorded yet.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {recentList.map((h) => {
+                            const isPayment = h.type === 'payment';
+                            const member = members.find(m => String(m.id) === String(h.member_id));
+                            const memberName = h.member_name || (member ? member.name : null) || 'Member';
+                            const txDate = new Date(h.created_at);
+                            const validDate = !isNaN(txDate.getTime());
+                            const monthStr = validDate ? txDate.toLocaleDateString('en-US', { month: 'short' }) : '';
+                            const dayStr = validDate ? txDate.getDate() : '';
+                            const yearStr = validDate ? txDate.getFullYear() : '';
+                            const timeLabel = validDate
+                              ? txDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                              : '';
+
+                            return (
+                              <div
+                                key={h.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '0.55rem',
+                                  padding: '0.55rem',
+                                  borderRadius: '14px',
+                                  border: '1px solid #f1f5f9',
+                                  background: '#ffffff',
+                                  boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
+                                }}
+                              >
+                                {/* Left Date Badge */}
+                                <div style={{
+                                  minWidth: '48px',
+                                  padding: '0.35rem 0.25rem',
+                                  borderRadius: '12px',
+                                  background: isPayment ? '#dcfce7' : '#fee2e2',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  textAlign: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  <span style={{ fontSize: '0.65rem', fontWeight: 700, color: isPayment ? '#15803d' : '#b91c1c', lineHeight: 1.1 }}>{monthStr}</span>
+                                  <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>{dayStr}</span>
+                                  <span style={{ fontSize: '0.6rem', fontWeight: 600, color: '#475569', lineHeight: 1.1 }}>{yearStr}</span>
+                                </div>
+
+                                {/* Middle Details */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                    {isPayment ? 'Cash In (Saving Paid)' : 'Cash Out (Saving Unpaid)'}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', color: '#475569', marginTop: '0.15rem' }}>
+                                    <User size={11} color="#1e3a8a" style={{ flexShrink: 0 }} />
+                                    <span style={{ color: '#64748b' }}>{isPayment ? 'payer' : 'member'}</span>
+                                    <span style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{memberName}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.66rem', color: '#475569', marginTop: '0.15rem', flexWrap: 'wrap' }}>
+                                    <Calendar size={11} color="#64748b" style={{ flexShrink: 0 }} />
+                                    {h.notes && (
+                                      <span style={{ color: '#475569', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {h.notes.replace(/🗓️\s*/g, '')}
+                                      </span>
+                                    )}
+                                    <span style={{ fontWeight: 800, color: isPayment ? '#0b7a36' : '#dc2626' }}>
+                                      Net: {formatCurrency(h.amount)}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.62rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                    <Clock size={10} color="#64748b" style={{ flexShrink: 0 }} />
+                                    <span>{timeLabel}</span>
+                                  </div>
+                                </div>
+
+                                {/* Right Action Buttons */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                                  <div style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    background: isPayment ? '#dcfce7' : '#fee2e2',
+                                    color: isPayment ? '#16a34a' : '#dc2626',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}>
+                                    {isPayment ? <ArrowUp size={15} /> : <AlertCircle size={15} />}
+                                  </div>
+                                  {isPaymentManager && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteModalState({ isOpen: true, step: 1, transaction: h });
+                                      }}
+                                      title="Delete transaction"
+                                      style={{
+                                        width: '28px',
+                                        height: '28px',
+                                        borderRadius: '50%',
+                                        border: 'none',
+                                        background: '#fee2e2',
+                                        color: '#ef4444',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Total Recent Payments Summary Strip */}
+                      <div style={{
+                        background: 'linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%)',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '14px',
+                        padding: '0.65rem 0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.6rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            background: '#0b7a36',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <Wallet size={19} color="white" />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155' }}>Total Recent Payments</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0b7a36', lineHeight: 1.15 }}>
+                              {formatCurrency(recentTotal)}
+                            </div>
+                          </div>
+                        </div>
+                        <BarChart3 size={28} color="#16a34a" style={{ opacity: 0.75, flexShrink: 0 }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Your Financial Journey Card */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #fef9c3 0%, #fef3c7 100%)',
+                  border: '1px solid #fde68a',
+                  borderRadius: '16px',
+                  padding: '0.7rem 0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.6rem',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
+                    <div style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: '#fef08a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Coins size={18} color="#ca8a04" />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>Your Financial Journey</div>
+                      <div style={{ fontSize: '0.65rem', color: '#475569', fontWeight: 500 }}>
+                        Keep contributing and achieve more together!
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowWealthModal(true)}
+                    style={{
+                      background: '#0b7a36',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '999px',
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 6px rgba(11, 122, 54, 0.2)'
+                    }}
+                  >
+                    View Details →
+                  </button>
+                </div>
+
+                {/* Subtle Green Wave Footer Accent */}
+                <div style={{ height: '24px', width: '100%', overflow: 'hidden', borderRadius: '12px', marginTop: '-0.2rem', pointerEvents: 'none' }}>
+                  <svg viewBox="0 0 400 32" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+                    <path d="M0,18 C80,2 160,30 240,14 C310,0 360,22 400,10 L400,32 L0,32 Z" fill="rgba(22, 163, 74, 0.16)" />
+                    <path d="M0,24 C100,8 200,32 300,18 C350,12 380,22 400,16 L400,32 L0,32 Z" fill="rgba(11, 122, 54, 0.25)" />
+                  </svg>
                 </div>
               </div>
 
