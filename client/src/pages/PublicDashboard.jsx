@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Home, Building, Layout, User, Search, Heart, MapPin,
   TrendingUp, Star, ArrowRight, Menu, Bell, LogIn, CheckCircle, LogOut,
-  Phone, Mail, MessageCircle, FileText, ShieldCheck, Sparkles
+  Phone, Mail, MessageCircle, FileText, ShieldCheck, Sparkles, Eye, EyeOff
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -660,6 +660,7 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
   const [showHiddenLogin, setShowHiddenLogin] = React.useState(false);
   const [hiddenEmail, setHiddenEmail] = React.useState('');
   const [hiddenPassword, setHiddenPassword] = React.useState('');
+  const [showHiddenPassword, setShowHiddenPassword] = React.useState(false);
   const [hiddenError, setHiddenError] = React.useState('');
   const [hiddenLoading, setHiddenLoading] = React.useState(false);
   const searchTapRef = React.useRef(0);
@@ -2256,16 +2257,40 @@ const PublicDashboard = ({ user: propUser, setUser: propSetUser }) => {
                 onFocus={e => e.target.style.borderColor = '#0f172a'}
                 onBlur={e => e.target.style.borderColor = '#e2e8f0'}
               />
-              <input
-                type="password"
-                placeholder="Password"
-                value={hiddenPassword}
-                onChange={e => setHiddenPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleHiddenLogin()}
-                style={{ padding: '1rem 1.25rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', outline: 'none', fontSize: '0.95rem', background: '#f8fafc', transition: 'border-color 0.2s' }}
-                onFocus={e => e.target.style.borderColor = '#0f172a'}
-                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showHiddenPassword ? 'text' : 'password'}
+                  placeholder="Password"
+                  value={hiddenPassword}
+                  onChange={e => setHiddenPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleHiddenLogin()}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '1rem 3rem 1rem 1.25rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', outline: 'none', fontSize: '0.95rem', background: '#f8fafc', transition: 'border-color 0.2s' }}
+                  onFocus={e => e.target.style.borderColor = '#0f172a'}
+                  onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowHiddenPassword(prev => !prev)}
+                  aria-label={showHiddenPassword ? 'Hide password' : 'Show password'}
+                  title={showHiddenPassword ? 'Hide password' : 'Show password'}
+                  style={{
+                    position: 'absolute',
+                    right: '0.85rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0.25rem'
+                  }}
+                >
+                  {showHiddenPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
