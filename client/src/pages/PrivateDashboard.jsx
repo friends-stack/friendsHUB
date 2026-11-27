@@ -10,7 +10,7 @@ import {
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
   MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
   Home, LayoutGrid, Bell, ChevronDown, ExternalLink,
-  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing, Search, Calendar
+  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing, Search, Calendar, Mail
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
@@ -117,6 +117,7 @@ const PrivateDashboard = ({ user, setUser }) => {
   const [activeTab, setActiveTabState] = useState(() => {
     return localStorage.getItem('private_active_tab') || 'logs';
   });
+  const [expandedMatrixUserId, setExpandedMatrixUserId] = useState(null);
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
     localStorage.setItem('private_active_tab', tab);
@@ -1153,7 +1154,17 @@ const PrivateDashboard = ({ user, setUser }) => {
           .mobile-bottom-nav-indicator {
             display: none !important;
           }
+          .mobile-matrix-only {
+            display: flex !important;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          .desktop-matrix-only {
+            display: none !important;
+          }
         }
+        .mobile-matrix-only { display: none; }
+        .desktop-matrix-only { display: flex; flex-direction: column; gap: 2rem; }
         .chat-input-field-container:focus-within {
           border-color: var(--primary) !important;
           box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15) !important;
@@ -3224,7 +3235,384 @@ const PrivateDashboard = ({ user, setUser }) => {
 
             {/* Authority Matrix Tab — strictly restricted to Super Admin */}
             {activeTab === 'users' && user.role === 'super_admin' && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {/* Mobile-Only Authority Matrix Layout (320px-767px) */}
+                <div className="mobile-matrix-only">
+                  {/* Green Enroll New Identity Banner */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
+                    borderRadius: '18px',
+                    padding: '0.85rem 1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    color: 'white',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 6px 18px rgba(11, 122, 54, 0.22)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 2 }}>
+                      <div style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '14px',
+                        background: 'rgba(255,255,255,0.14)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <UserPlus size={24} color="white" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1.15 }}>Enroll New Identity</div>
+                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.18rem', lineHeight: 1.3 }}>
+                          Get permission to access all areas and enjoy the full features of our community.
+                        </div>
+                      </div>
+                    </div>
+                    <ShieldCheck size={34} color="rgba(255,255,255,0.45)" style={{ flexShrink: 0, zIndex: 1 }} />
+                  </div>
+
+                  {/* Granted Full Dashboard & Admin Permissions Callout */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '16px',
+                    padding: '0.65rem 0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.65rem'
+                  }}>
+                    <span style={{ fontSize: '1.35rem', flexShrink: 0 }}>⭐</span>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#065f2a' }}>
+                        Granted Full Dashboard &amp; Admin Permissions
+                      </div>
+                      <div style={{ fontSize: '0.66rem', color: '#334155', lineHeight: 1.3, marginTop: '0.1rem' }}>
+                        With this identity, you can manage members, view details, and enjoy admin features.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enroll Identity Form Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.7rem'
+                  }}>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const formData = new FormData(e.target);
+                        const newUser = Object.fromEntries(formData);
+                        try {
+                          await axios.post('/api/admin/users', newUser, {
+                            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                          });
+                          e.target.reset();
+                          fetchUsers();
+                          showToast('New identity enrolled with full admin permissions!');
+                        } catch (err) { showToast(err.response?.data?.error || 'System rejection'); }
+                      }}
+                      style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}
+                    >
+                      {[
+                        { name: 'nickname', label: 'Name / Nickname', placeholder: 'e.g. Ermi or Alex', type: 'text', icon: User, required: true },
+                        { name: 'full_name', label: 'Full Name', placeholder: 'e.g. Ermias Gesgis', type: 'text', icon: User, required: true },
+                        { name: 'email', label: 'Email Address', placeholder: 'name@domain.com', type: 'email', icon: Mail, required: true },
+                        { name: 'password', label: 'Secured Password', placeholder: '••••••••••••', type: 'password', icon: Lock, required: true },
+                        { name: 'telegram_username', label: 'Telegram @Username (Optional)', placeholder: 'e.g. @username', type: 'text', icon: Send, required: false }
+                      ].map((field) => {
+                        const FieldIcon = field.icon;
+                        return (
+                          <div key={field.name} style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.28fr', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <FieldIcon size={14} color="#0b7a36" />
+                              </div>
+                              <label style={{ fontSize: '0.73rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                                {field.label}
+                              </label>
+                            </div>
+                            <input
+                              name={field.name}
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              required={field.required}
+                              style={{
+                                width: '100%',
+                                padding: '0.45rem 0.75rem',
+                                borderRadius: '999px',
+                                border: '1px solid #cbd5e1',
+                                background: '#f8fafc',
+                                fontSize: '0.76rem',
+                                color: '#0f172a',
+                                outline: 'none'
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+
+                      {/* Authority Role Row */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.28fr', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Shield size={14} color="#0b7a36" />
+                          </div>
+                          <label style={{ fontSize: '0.73rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                            Authority Role
+                          </label>
+                        </div>
+                        <select
+                          name="role"
+                          defaultValue="admin"
+                          style={{
+                            width: '100%',
+                            padding: '0.45rem 0.75rem',
+                            borderRadius: '999px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            fontSize: '0.76rem',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="admin">Admin (Full Access)</option>
+                          {user.role === 'super_admin' && <option value="super_admin">Super Admin</option>}
+                          <option value="authorized">Authorized</option>
+                          <option value="user">Guest / User</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="submit"
+                        style={{
+                          width: '100%',
+                          marginTop: '0.35rem',
+                          padding: '0.7rem',
+                          borderRadius: '999px',
+                          background: '#0b7a36',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 800,
+                          fontSize: '0.88rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.45rem',
+                          boxShadow: '0 4px 12px rgba(11, 122, 54, 0.25)'
+                        }}
+                      >
+                        <UserPlus size={16} />
+                        <span>Enroll Identity</span>
+                      </button>
+                    </form>
+
+                    {/* Security Rule Footer */}
+                    <div style={{
+                      background: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '12px',
+                      padding: '0.5rem 0.7rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      fontSize: '0.65rem',
+                      color: '#334155',
+                      lineHeight: 1.35
+                    }}>
+                      <ShieldCheck size={16} color="#0b7a36" style={{ flexShrink: 0 }} />
+                      <span>
+                        <strong>Security Rule:</strong> Only the active Super Admin can designate others, modify their own role, or manage superuser privileges.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Existing Identities Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.92rem', fontWeight: 800, color: '#065f2a' }}>
+                        <Users size={18} color="#0b7a36" />
+                        <span>Existing Identities</span>
+                      </div>
+                      <span style={{
+                        background: '#dcfce7',
+                        color: '#065f2a',
+                        borderRadius: '999px',
+                        padding: '0.2rem 0.65rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 800
+                      }}>
+                        Total: {users.length}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {users.map((u, idx) => {
+                        const isExpanded = expandedMatrixUserId === u.id;
+                        const isSuper = u.role === 'super_admin';
+                        const isAdminRole = u.role === 'admin';
+                        const displayName = u.full_name || u.nickname || u.email.split('@')[0];
+
+                        return (
+                          <div key={u.id} style={{ borderTop: idx === 0 ? 'none' : '1px solid #f1f5f9', padding: '0.55rem 0' }}>
+                            <div
+                              onClick={() => setExpandedMatrixUserId(isExpanded ? null : u.id)}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.55rem', cursor: 'pointer' }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
+                                <div style={{ position: 'relative', flexShrink: 0 }}>
+                                  {u.profile_picture ? (
+                                    <img
+                                      src={resolveImageUrl(u.profile_picture)}
+                                      alt={displayName}
+                                      style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #e2e8f0' }}
+                                    />
+                                  ) : (
+                                    <div style={{
+                                      width: '38px',
+                                      height: '38px',
+                                      borderRadius: '50%',
+                                      background: isSuper ? '#2563eb' : '#16a34a',
+                                      color: 'white',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontWeight: 800,
+                                      fontSize: '0.9rem'
+                                    }}>
+                                      {displayName.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    right: 0,
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    background: u.status === 'active' ? '#16a34a' : '#ef4444',
+                                    border: '2px solid white'
+                                  }} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {displayName}
+                                  </div>
+                                  <div style={{ fontSize: '0.7rem', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {u.email}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <span style={{
+                                background: isSuper ? '#dbeafe' : isAdminRole ? '#dcfce7' : '#f1f5f9',
+                                color: isSuper ? '#1d4ed8' : isAdminRole ? '#15803d' : '#475569',
+                                borderRadius: '999px',
+                                padding: '0.2rem 0.65rem',
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0
+                              }}>
+                                {isSuper ? 'Super Admin' : isAdminRole ? 'Admin' : u.role}
+                              </span>
+
+                              <ChevronRight
+                                size={16}
+                                color="#475569"
+                                style={{ flexShrink: 0, transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
+                              />
+                            </div>
+
+                            {isExpanded && (
+                              <div style={{ marginTop: '0.55rem', padding: '0.6rem', background: '#f8fafc', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>Role:</span>
+                                  <select
+                                    value={u.role}
+                                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                    disabled={u.role === 'super_admin' ? u.email !== user.email : (u.email === user.email)}
+                                    style={{ padding: '0.3rem 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.75rem', background: 'white' }}
+                                  >
+                                    {(user.role === 'super_admin' || u.role === 'super_admin') && <option value="super_admin">Super Admin</option>}
+                                    <option value="admin">Admin</option>
+                                    <option value="authorized">Authorized</option>
+                                    <option value="user">User</option>
+                                  </select>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setViewingProfileUserId(u.id); setActiveTab('profile'); }}
+                                    style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid #16a34a', background: '#f0fdf4', color: '#065f2a', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                                  >
+                                    View Profile
+                                  </button>
+                                  {u.telegram_username && (
+                                    <a
+                                      href={`https://t.me/${u.telegram_username.replace(/^@/, '')}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0284c7', textDecoration: 'none' }}
+                                    >
+                                      ✈️ @{u.telegram_username.replace(/^@/, '')}
+                                    </a>
+                                  )}
+                                  {u.email !== user.email && u.role !== 'super_admin' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setVisualConfirm({
+                                          isOpen: true,
+                                          title: 'Remove Identity',
+                                          message: `Are you sure you want to permanently remove ${u.nickname || u.email}? This cannot be undone.`,
+                                          onConfirm: async () => {
+                                            try {
+                                              await axios.delete(`/api/admin/users/${u.id}`, {
+                                                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                                              });
+                                              fetchUsers();
+                                              showToast('Identity redacted');
+                                              setVisualConfirm(prev => ({ ...prev, isOpen: false }));
+                                            } catch (err) { showToast('Deletion rejected'); }
+                                          }
+                                        });
+                                      }}
+                                      style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                      Terminate
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tablet & Desktop Authority Matrix Layout (768px+ UNCHANGED) */}
+                <div className="desktop-matrix-only">
                 <div className="glass-card" style={{ padding: '2rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.25rem', fontWeight: 800 }}>
@@ -3472,6 +3860,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                       </tbody>
                     </table>
                   </div>
+                </div>
                 </div>
               </motion.div>
             )}
