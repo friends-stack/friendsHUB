@@ -7,7 +7,7 @@ import {
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
   PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp,
-  Search, Filter, ChevronDown, Eye, UserPlus, Shield, Star, Check
+  Search, Filter, ChevronDown, ChevronUp, Eye, UserPlus, Shield, Star, Check
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -15,6 +15,40 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
   : window.location.origin;
 
 const formatCurrency = (val) => new Intl.NumberFormat('en-ET', { style: 'currency', currency: 'ETB' }).format(val || 0);
+
+const parseTransactionNotes = (notes) => {
+  if (!notes || typeof notes !== 'string') return null;
+  const cleaned = notes.replace(/🗓️\s*/g, '').trim();
+  if (!cleaned) return null;
+
+  const satMatch = cleaned.match(/Consecutive Saturdays\s*\((\d+)\s*wks?\):\s*(.+)$/i);
+  if (satMatch) {
+    const weeks = parseInt(satMatch[1], 10);
+    const datesRaw = satMatch[2].trim();
+    const beforeSat = cleaned.slice(0, satMatch.index).replace(/[•|·\-–\s]+$/, '').trim();
+    const entries = datesRaw.split(/,\s*(?=[A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/);
+    const cleanDate = (s) => s.replace(/\s*\([^)]*\)/g, '').trim();
+    const firstDate = entries.length > 0 ? cleanDate(entries[0]) : '';
+    const lastDate = entries.length > 1 ? cleanDate(entries[entries.length - 1]) : '';
+    const dateRange = firstDate && lastDate && firstDate !== lastDate
+      ? `${firstDate} – ${lastDate}`
+      : (firstDate || datesRaw);
+
+    return {
+      weeks,
+      dateRange,
+      datesList: datesRaw,
+      noteText: beforeSat
+    };
+  }
+
+  return {
+    weeks: null,
+    dateRange: null,
+    datesList: null,
+    noteText: cleaned
+  };
+};
 
 const getActualProfit = (inv) => inv.projected_profit || 0;
 
@@ -310,6 +344,7 @@ const SavingsTracker = ({ user }) => {
   const [memberFilter, setMemberFilter] = useState('all');
   const [showMemberFilterMenu, setShowMemberFilterMenu] = useState(false);
   const [historySort, setHistorySort] = useState('latest');
+  const [expandedTxIds, setExpandedTxIds] = useState({});
   const [mobileNewMemberName, setMobileNewMemberName] = useState('');
   const [showMobileWeekSection, setShowMobileWeekSection] = useState(false);
   const [mobileWeeklyAmount, setMobileWeeklyAmount] = useState('');
@@ -2551,9 +2586,26 @@ const SavingsTracker = ({ user }) => {
                         const isPayment = h.type === 'payment';
                         const member = members.find(m => String(m.id) === String(h.member_id));
                         const memberName = h.member_name || (member ? member.name : null) || 'Member';
-                        const dateStr = h.created_at
-                          ? new Date(h.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        const dateObj = h.created_at ? new Date(h.created_at) : null;
+                        const dateStr = dateObj
+                          ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                           : '';
+                        const timeStr = dateObj
+                          ? dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                          : '';
+                        const parsedNotes = parseTransactionNotes(h.notes);
+                        const hasDetails = Boolean(parsedNotes && (parsedNotes.dateRange || parsedNotes.noteText));
+                        const isExpanded = Boolean(expandedTxIds[h.id]);
+                        const matchedSysUser = (typeof systemUsers !== 'undefined' && Array.isArray(systemUsers))
+                          ? systemUsers.find(u =>
+                              (h.member_id && u.member_id && String(u.member_id) === String(h.member_id)) ||
+                              (memberName && (
+                                u.full_name?.toLowerCase() === memberName.toLowerCase() ||
+                                u.nickname?.toLowerCase() === memberName.toLowerCase() ||
+                                u.username?.toLowerCase() === memberName.toLowerCase()
+                              ))
+                            )
+                          : null;
 
                         return (
                           <div
@@ -2564,94 +2616,221 @@ const SavingsTracker = ({ user }) => {
                               border: '1px solid #e2e8f0',
                               padding: '0.7rem 0.65rem',
                               display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: '0.55rem',
+                              flexDirection: 'column',
                               boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                             }}
                           >
-                            {/* Left Circle Icon */}
+                            {/* Top Compact Row */}
                             <div style={{
-                              width: '42px',
-                              height: '42px',
-                              borderRadius: '50%',
-                              background: isPayment ? '#dcfce7' : '#fee2e2',
-                              color: isPayment ? '#16a34a' : '#dc2626',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
+                              justifyContent: 'space-between',
+                              gap: '0.5rem'
                             }}>
-                              {isPayment ? <ArrowUp size={20} /> : <AlertCircle size={20} />}
-                            </div>
-
-                            {/* Middle Info */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                                {isPayment ? 'Cash In' : 'Cash Out'}
-                                <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#1e293b' }}>
-                                  {isPayment ? '(Saving Paid)' : '(Saving Unpaid)'}
+                              {/* Left Icon + Optional Avatar */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                                <div style={{
+                                  width: '38px',
+                                  height: '38px',
+                                  borderRadius: '50%',
+                                  background: isPayment ? '#dcfce7' : '#fee2e2',
+                                  color: isPayment ? '#16a34a' : '#dc2626',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  {isPayment ? <ArrowUp size={18} /> : <AlertCircle size={18} />}
                                 </div>
+                                {matchedSysUser?.profile_picture && (
+                                  <div style={{ position: 'relative', width: '38px', height: '38px', flexShrink: 0 }}>
+                                    <img
+                                      src={matchedSysUser.profile_picture}
+                                      alt={memberName}
+                                      style={{
+                                        width: '38px',
+                                        height: '38px',
+                                        borderRadius: '50%',
+                                        objectFit: 'cover',
+                                        border: '1.5px solid #e2e8f0'
+                                      }}
+                                    />
+                                    <span style={{
+                                      position: 'absolute',
+                                      right: '0px',
+                                      bottom: '0px',
+                                      width: '10px',
+                                      height: '10px',
+                                      borderRadius: '50%',
+                                      background: '#16a34a',
+                                      border: '2px solid white'
+                                    }} />
+                                  </div>
+                                )}
                               </div>
-                              <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: '0.15rem' }}>
-                                {isPayment ? 'payer:' : 'member:'} <strong style={{ color: '#0f172a' }}>{memberName}</strong>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.25rem', fontSize: '0.64rem', color: '#64748b', marginTop: '0.15rem' }}>
-                                <Calendar size={11} color="#64748b" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                <span style={{ lineHeight: 1.25 }}>
-                                  {h.notes ? h.notes.replace(/🗓️\s*/g, '') : dateStr}
-                                </span>
-                              </div>
-                            </div>
 
-                            {/* Right Amount & Delete */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexShrink: 0 }}>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.9rem', fontWeight: 900, color: isPayment ? '#0b7a36' : '#dc2626', whiteSpace: 'nowrap' }}>
-                                  {isPayment ? '+' : '-'}{formatCurrency(h.amount)}
+                              {/* Middle Info */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                  {isPayment ? 'Cash In' : 'Cash Out'}
+                                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#1e293b' }}>
+                                    {isPayment ? '(Saving Paid)' : '(Saving Unpaid)'}
+                                  </div>
                                 </div>
                                 <div style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.2rem',
-                                  marginTop: '0.2rem',
-                                  background: isPayment ? '#dcfce7' : '#fee2e2',
-                                  color: isPayment ? '#15803d' : '#dc2626',
-                                  borderRadius: '999px',
-                                  padding: '0.12rem 0.45rem',
-                                  fontSize: '0.6rem',
-                                  fontWeight: 700
+                                  fontSize: '0.72rem',
+                                  color: '#475569',
+                                  marginTop: '0.15rem',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
                                 }}>
-                                  {isPayment ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
-                                  <span>{isPayment ? 'Cash In' : 'Cash Out'}</span>
+                                  {isPayment ? 'payer:' : 'member:'} <strong style={{ color: '#0f172a' }}>{memberName}</strong>
                                 </div>
                               </div>
 
-                              {isPaymentManager && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteModalState({ isOpen: true, step: 1, transaction: h });
-                                  }}
-                                  title="Delete transaction"
-                                  style={{
-                                    width: '28px',
-                                    height: '28px',
-                                    borderRadius: '50%',
-                                    border: 'none',
-                                    background: '#fee2e2',
-                                    color: '#ef4444',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
+                              {/* Right Time, Amount, Details & Delete */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                                <div style={{ textAlign: 'right' }}>
+                                  {(timeStr || dateStr) && (
+                                    <div style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 600, marginBottom: '0.08rem' }}>
+                                      {timeStr || dateStr}
+                                    </div>
+                                  )}
+                                  <div style={{ fontSize: '0.88rem', fontWeight: 900, color: isPayment ? '#0b7a36' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                    {isPayment ? '+' : '-'}{formatCurrency(h.amount)}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem', marginTop: '0.22rem' }}>
+                                    {hasDetails ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedTxIds(prev => ({ ...prev, [h.id]: !prev[h.id] }))}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.2rem',
+                                          background: '#dcfce7',
+                                          color: '#15803d',
+                                          border: '1px solid #bbf7d0',
+                                          borderRadius: '999px',
+                                          padding: '0.18rem 0.52rem',
+                                          fontSize: '0.66rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <span>Details</span>
+                                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                      </button>
+                                    ) : (
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                        background: isPayment ? '#dcfce7' : '#fee2e2',
+                                        color: isPayment ? '#15803d' : '#dc2626',
+                                        borderRadius: '999px',
+                                        padding: '0.12rem 0.45rem',
+                                        fontSize: '0.6rem',
+                                        fontWeight: 700
+                                      }}>
+                                        {isPayment ? <CheckCircle size={10} /> : <AlertCircle size={10} />}
+                                        <span>{isPayment ? 'Cash In' : 'Cash Out'}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isPaymentManager && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteModalState({ isOpen: true, step: 1, transaction: h });
+                                    }}
+                                    title="Delete transaction"
+                                    style={{
+                                      width: '28px',
+                                      height: '28px',
+                                      borderRadius: '50%',
+                                      border: 'none',
+                                      background: '#fee2e2',
+                                      color: '#ef4444',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
+
+                            {/* Collapsible Details Panel (Consecutive Saturdays & Notes) */}
+                            {hasDetails && isExpanded && (
+                              <div style={{
+                                marginTop: '0.6rem',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: '14px',
+                                padding: '0.6rem 0.7rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.5rem'
+                              }}>
+                                {parsedNotes.dateRange && (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem', minWidth: 0 }}>
+                                      <Calendar size={15} color="#15803d" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                      <div style={{ minWidth: 0 }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                          Consecutive Saturdays
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: '0.1rem' }}>
+                                          {parsedNotes.dateRange}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {parsedNotes.weeks && (
+                                      <span style={{
+                                        background: '#dcfce7',
+                                        border: '1px solid #86efac',
+                                        color: '#15803d',
+                                        borderRadius: '999px',
+                                        padding: '0.18rem 0.55rem',
+                                        fontSize: '0.66rem',
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0
+                                      }}>
+                                        {parsedNotes.weeks} {parsedNotes.weeks === 1 ? 'week' : 'weeks'}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {parsedNotes.dateRange && parsedNotes.noteText && (
+                                  <div style={{ height: '1px', background: '#bbf7d0', width: '100%' }} />
+                                )}
+
+                                {parsedNotes.noteText && (
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.45rem' }}>
+                                    <FileText size={15} color="#15803d" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                        Notes
+                                      </div>
+                                      <div style={{ fontSize: '0.7rem', color: '#334155', marginTop: '0.12rem', lineHeight: 1.35, wordBreak: 'break-word' }}>
+                                        {parsedNotes.noteText}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })
