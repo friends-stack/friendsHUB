@@ -7,7 +7,7 @@ import {
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
   PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp,
-  Search, Filter, ChevronDown, Eye, UserPlus, Shield, Star
+  Search, Filter, ChevronDown, Eye, UserPlus, Shield, Star, Check
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -3452,7 +3452,7 @@ const SavingsTracker = ({ user }) => {
                     </div>
                   </div>
 
-                  {/* Add New Week & Clerk Card */}
+                  {/* 1. Add New Week Card */}
                   <div style={{
                     background: 'white',
                     borderRadius: '18px',
@@ -3461,138 +3461,316 @@ const SavingsTracker = ({ user }) => {
                     boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.75rem'
+                    gap: '0.65rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        background: '#dcfce7',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <Calendar size={20} color="#0b7a36" />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>Add New Week</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.3, marginTop: '0.1rem' }}>
+                          Sets a new weekly contribution amount. Previous weeks remain unchanged.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '0.35rem' }}>
+                        Weekly amount (ETB)
+                      </label>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '999px',
+                        padding: '0.5rem 0.9rem'
+                      }}>
+                        <input
+                          type="number"
+                          placeholder={String(config.weekly_amount || 200)}
+                          value={mobileWeeklyAmount}
+                          onChange={(e) => setMobileWeeklyAmount(e.target.value)}
+                          style={{
+                            border: 'none',
+                            outline: 'none',
+                            background: 'transparent',
+                            width: '100%',
+                            fontSize: '0.9rem',
+                            fontWeight: 600,
+                            color: '#0f172a'
+                          }}
+                        />
+                        <Coins size={18} color="#eab308" style={{ flexShrink: 0 }} />
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = mobileWeeklyAmount || String(config.weekly_amount || '');
+                        if (val) {
+                          handleAddWeek(val);
+                          setMobileWeeklyAmount('');
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '0.72rem',
+                        borderRadius: '999px',
+                        background: '#0b7a36',
+                        color: 'white',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        boxShadow: '0 4px 12px rgba(11, 122, 54, 0.22)'
+                      }}
+                    >
+                      <Plus size={18} />
+                      <span>Add Week</span>
+                    </button>
+                  </div>
+
+                  {/* 2. Week History Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <div style={{
-                          width: '34px',
-                          height: '34px',
-                          borderRadius: '10px',
+                          width: '30px',
+                          height: '30px',
+                          borderRadius: '50%',
                           background: '#dcfce7',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexShrink: 0
                         }}>
-                          <Calendar size={18} color="#0b7a36" />
+                          <Clock size={16} color="#0b7a36" />
                         </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a' }}>Add New Week</div>
-                          <div style={{ fontSize: '0.66rem', color: '#64748b' }}>
-                            Sets a new weekly contribution amount.
-                          </div>
-                        </div>
+                        <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                          Week History ({configHistory.length})
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowMobileWeekSection(prev => !prev)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.3rem',
-                          background: showMobileWeekSection ? '#0b7a36' : '#f0fdf4',
-                          border: '1px solid #86efac',
-                          color: showMobileWeekSection ? 'white' : '#065f2a',
-                          borderRadius: '999px',
-                          padding: '0.35rem 0.65rem',
-                          fontSize: '0.7rem',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0
-                        }}
-                      >
-                        <Calendar size={12} />
-                        <span>{showMobileWeekSection ? 'Close' : 'Set New Week →'}</span>
-                      </button>
+                      {configHistory.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowMobileWeekSection(prev => !prev)}
+                          style={{
+                            background: '#dcfce7',
+                            border: '1px solid #bbf7d0',
+                            color: '#065f2a',
+                            borderRadius: '999px',
+                            padding: '0.28rem 0.7rem',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {showMobileWeekSection ? 'Show Less' : 'View All →'}
+                        </button>
+                      )}
                     </div>
 
-                    {showMobileWeekSection && (
-                      <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                        <div>
-                          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
-                            Weekly amount (ETB)
-                          </label>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <input
-                              type="number"
-                              placeholder={String(config.weekly_amount || 100)}
-                              value={mobileWeeklyAmount}
-                              onChange={(e) => setMobileWeeklyAmount(e.target.value)}
-                              style={{ flex: 1, padding: '0.55rem 0.75rem', borderRadius: '12px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.85rem' }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const val = mobileWeeklyAmount || String(config.weekly_amount || '');
-                                if (val) {
-                                  handleAddWeek(val);
-                                  setMobileWeeklyAmount('');
-                                }
+                    {configHistory.length === 0 ? (
+                      <div style={{ color: '#64748b', fontSize: '0.8rem', fontStyle: 'italic', padding: '0.5rem 0' }}>
+                        No week history configurations saved.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {(showMobileWeekSection ? configHistory : configHistory.slice(0, 3)).map((c, i) => {
+                          const isLatest = c.id === configHistory[0]?.id;
+                          const weekNum = c.week_number || (configHistory.length - i);
+
+                          return (
+                            <div
+                              key={c.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.5rem',
+                                padding: '0.45rem',
+                                borderRadius: '14px',
+                                border: '1px solid #f1f5f9',
+                                background: '#ffffff'
                               }}
-                              style={{ padding: '0.55rem 1rem', borderRadius: '12px', background: '#0b7a36', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
                             >
-                              Add week
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
-                            Week History ({configHistory.length})
-                          </div>
-                          {configHistory.map((c, i) => {
-                            const isLatest = c.id === configHistory[0]?.id;
-                            const weekNum = c.week_number || (configHistory.length - i);
-                            return (
-                              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.78rem' }}>
-                                <span style={{ fontWeight: 600, color: '#334155' }}>Week {weekNum}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                  <span style={{ fontWeight: 800, color: '#0f172a' }}>{formatCurrency(c.weekly_amount)}</span>
-                                  {isLatest ? (
-                                    <span style={{ background: '#dcfce7', color: '#166534', padding: '0.15rem 0.45rem', borderRadius: '999px', fontSize: '0.64rem', fontWeight: 700 }}>Active</span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteWeekConfig(c.id, weekNum, c.weekly_amount)}
-                                      style={{ background: '#fee2e2', border: 'none', color: '#dc2626', borderRadius: '8px', padding: '0.2rem 0.45rem', fontSize: '0.66rem', fontWeight: 700, cursor: 'pointer' }}
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
+                              <div style={{
+                                minWidth: '58px',
+                                padding: '0.35rem 0.45rem',
+                                borderRadius: '12px',
+                                background: '#dcfce7',
+                                textAlign: 'center',
+                                flexShrink: 0
+                              }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#1e293b', lineHeight: 1.1 }}>Week</div>
+                                <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', lineHeight: 1.15 }}>{weekNum}</div>
                               </div>
-                            );
-                          })}
-                        </div>
 
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '0.75rem' }}>
-                          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
-                            Assign Clerk
-                          </label>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <select
-                              value={mobileClerkId || config.clerk_id || ''}
-                              onChange={(e) => setMobileClerkId(e.target.value)}
-                              style={{ flex: 1, padding: '0.55rem 0.65rem', borderRadius: '12px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.8rem' }}
-                            >
-                              <option value="">-- No Clerk Assigned --</option>
-                              {systemUsers.map(u => (
-                                <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.role})</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => handleSetClerk(mobileClerkId || config.clerk_id || '')}
-                              style={{ padding: '0.55rem 0.9rem', borderRadius: '12px', background: '#2563eb', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
-                            >
-                              Set Clerk
-                            </button>
-                          </div>
-                        </div>
+                              <div style={{ fontSize: '1rem', fontWeight: 900, color: '#0f172a', flex: 1, textAlign: 'center' }}>
+                                {formatCurrency(c.weekly_amount)}
+                              </div>
+
+                              {isLatest ? (
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  background: '#dcfce7',
+                                  color: '#065f2a',
+                                  borderRadius: '999px',
+                                  padding: '0.35rem 0.65rem',
+                                  fontSize: '0.66rem',
+                                  fontWeight: 800,
+                                  lineHeight: 1.15,
+                                  textAlign: 'left',
+                                  flexShrink: 0
+                                }}>
+                                  <Shield size={13} fill="#16a34a" color="#16a34a" />
+                                  <span>Active Week<br />(Protected)</span>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteWeekConfig(c.id, weekNum, c.weekly_amount)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    background: '#fee2e2',
+                                    border: '1px solid #fecdd3',
+                                    color: '#dc2626',
+                                    borderRadius: '999px',
+                                    padding: '0.32rem 0.65rem',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Delete</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
+                  </div>
+
+                  {/* 3. Assign Clerk Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.85rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        background: '#dcfce7',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <Shield size={20} color="#0b7a36" />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>Assign Clerk</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.3, marginTop: '0.1rem' }}>
+                          Only the assigned Clerk and Super Admin can manage members and payments.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      background: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '999px',
+                      padding: '0.45rem 0.85rem'
+                    }}>
+                      <User size={16} color="#475569" style={{ flexShrink: 0 }} />
+                      <select
+                        value={mobileClerkId || config.clerk_id || ''}
+                        onChange={(e) => setMobileClerkId(e.target.value)}
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          width: '100%',
+                          fontSize: '0.84rem',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="">-- No Clerk Assigned --</option>
+                        {systemUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.role})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSetClerk(mobileClerkId || config.clerk_id || '')}
+                      style={{
+                        width: '100%',
+                        padding: '0.72rem',
+                        borderRadius: '999px',
+                        background: '#2563eb',
+                        color: 'white',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '0.9rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                      }}
+                    >
+                      <Check size={17} />
+                      <span>Set Clerk</span>
+                    </button>
                   </div>
 
                   {/* Subtle Green Wave Footer Accent */}
