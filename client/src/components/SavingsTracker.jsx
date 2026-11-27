@@ -6,7 +6,7 @@ import {
   Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
-  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User
+  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -947,7 +947,8 @@ const SavingsTracker = ({ user }) => {
         }
       `}</style>
 
-      {/* Mobile Welcome Banner (320px-767px only) */}
+      {/* Mobile Welcome Banner (320px-767px only, Dashboard view) */}
+      {activeView === 'dashboard' && (
       <div className="mobile-welcome-banner" style={{
         background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
         borderRadius: '18px',
@@ -997,6 +998,7 @@ const SavingsTracker = ({ user }) => {
           pointerEvents: 'none'
         }} />
       </div>
+      )}
 
       <nav className="savings-nav" style={{ position: 'sticky', top: 0, background: 'white', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0.6rem 0.5rem', border: '1px solid #E2E8F0', zIndex: 100, margin: '-1.5rem -1.5rem 1.5rem -1.5rem', borderRadius: '24px 24px 0 0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
         <NavItem id="dashboard" icon={Home} label="Dashboard" active={activeView === 'member-detail' ? 'dashboard' : activeView} onClick={setActiveView} />
@@ -2013,7 +2015,369 @@ const SavingsTracker = ({ user }) => {
           })()}
 
           {activeView === 'investments' && (
-            <motion.div key="investments" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <motion.div key="investments" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {/* Mobile-Only Working Capital Layout (320px-767px) */}
+              <div className="mobile-dashboard-only">
+                {/* Green Working Capital Banner */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
+                  borderRadius: '18px',
+                  padding: '0.9rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: '0 6px 18px rgba(11, 122, 54, 0.22)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 2 }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '14px',
+                      background: 'rgba(255, 255, 255, 0.14)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      position: 'relative'
+                    }}>
+                      <Coins size={24} color="#fde047" />
+                      <TrendingUp size={15} color="#86efac" style={{ position: 'absolute', top: '5px', right: '5px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '1.18rem', fontWeight: 900, lineHeight: 1.15 }}>Working Capital</div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.2rem', lineHeight: 1.3 }}>
+                        Track the businesses and projects our savings are invested in.
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ opacity: 0.22, flexShrink: 0, zIndex: 1 }}>
+                    <Landmark size={42} color="white" />
+                  </div>
+                </div>
+
+                {/* 1. REMAINING MONEY Card */}
+                <div
+                  onClick={() => setShowWealthModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    border: '1px solid #fde68a',
+                    borderRadius: '16px',
+                    padding: '0.85rem 0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: '#fde68a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Landmark size={22} color="#d97706" />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        REMAINING MONEY
+                      </div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#ea580c', lineHeight: 1.15, margin: '0.15rem 0' }}>
+                        {formatCurrency(remainingMoney)}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 500 }}>
+                        Available in cash/bank to invest
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{
+                    background: 'rgba(255,255,255,0.88)',
+                    border: '1px solid #fde68a',
+                    borderRadius: '999px',
+                    padding: '0.25rem 0.6rem',
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                    color: '#92400e',
+                    whiteSpace: 'nowrap',
+                    alignSelf: 'flex-start'
+                  }}>
+                    🟡 Cash &amp; Bank
+                  </span>
+                </div>
+
+                {/* 2. MONEY AT WORK Card */}
+                <div
+                  onClick={() => setShowActiveInvestmentsModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #f0f9ff 0%, #dbeafe 100%)',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '16px',
+                    padding: '0.85rem 0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.08)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, zIndex: 2 }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: '#dbeafe',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <TrendingUp size={22} color="#1d4ed8" />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        MONEY AT WORK
+                      </div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#1d4ed8', lineHeight: 1.15, margin: '0.15rem 0' }}>
+                        {formatCurrency(moneyAtWork)}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 500 }}>
+                        Tied up in active investments
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch', zIndex: 2 }}>
+                    <span style={{
+                      background: 'rgba(255,255,255,0.88)',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '999px',
+                      padding: '0.25rem 0.6rem',
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      color: '#1e40af',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🔵 Active Projects
+                    </span>
+                    <BarChart3 size={26} color="#3b82f6" style={{ opacity: 0.35 }} />
+                  </div>
+                </div>
+
+                {/* 3. TOTAL PROFIT Card */}
+                <div
+                  onClick={() => setShowProfitModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '16px',
+                    padding: '0.85rem 0.95rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.75rem',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(22, 163, 74, 0.08)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, zIndex: 2 }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '50%',
+                      background: '#bbf7d0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Award size={22} color="#16a34a" />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        TOTAL PROFIT
+                      </div>
+                      <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0b7a36', lineHeight: 1.15, margin: '0.15rem 0' }}>
+                        {formatCurrency(completedProfits)}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 500 }}>
+                        Earned from completed investments
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch', zIndex: 2 }}>
+                    <span style={{
+                      background: 'rgba(255,255,255,0.88)',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '999px',
+                      padding: '0.25rem 0.6rem',
+                      fontSize: '0.66rem',
+                      fontWeight: 700,
+                      color: '#166534',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      🟢 Earned Profit
+                    </span>
+                    <TrendingUp size={26} color="#16a34a" style={{ opacity: 0.35 }} />
+                  </div>
+                </div>
+
+                {/* Investments List or Empty State Card */}
+                {investments.length === 0 ? (
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    textAlign: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    padding: '1.4rem 1rem 1.75rem',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+                  }}>
+                    <Briefcase size={42} color="#94a3b8" style={{ margin: '0 auto 0.6rem' }} />
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.3rem' }}>
+                      No active investments
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: canTrackInvestments ? '1.1rem' : '0.4rem' }}>
+                      Start investing your savings in projects and businesses.
+                    </div>
+                    {canTrackInvestments && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInvestmentModal(true)}
+                        style={{
+                          position: 'relative',
+                          zIndex: 2,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: '#0b7a36',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '999px',
+                          padding: '0.65rem 1.4rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(11, 122, 54, 0.3)'
+                        }}
+                      >
+                        <Plus size={18} /> Add Investment
+                      </button>
+                    )}
+                    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '48px', pointerEvents: 'none', zIndex: 1 }}>
+                      <svg viewBox="0 0 400 50" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+                        <path d="M0,25 C100,5 200,45 300,20 C350,8 380,25 400,15 L400,50 L0,50 Z" fill="rgba(22, 163, 74, 0.18)" />
+                        <path d="M0,36 C120,16 240,48 400,24 L400,50 L0,50 Z" fill="rgba(11, 122, 54, 0.28)" />
+                      </svg>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    {investments.map(inv => (
+                      <div
+                        key={inv.id}
+                        onClick={() => { setSelectedInvestment(inv); setShowInvestmentDetailModal(true); }}
+                        style={{
+                          background: 'white',
+                          padding: '0.85rem',
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          cursor: 'pointer',
+                          opacity: inv.status === 'completed' ? 0.78 : 1,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', minWidth: 0 }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            background: inv.status === 'active' ? '#ede9fe' : '#dcfce7',
+                            color: inv.status === 'active' ? '#7c3aed' : '#16a34a',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <Briefcase size={20} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', textDecoration: inv.status === 'completed' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {inv.project_name}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '0.2rem' }}>
+                              {inv.status === 'active' ? 'Started' : 'Finished'} {new Date(inv.created_at).toLocaleDateString()}
+                            </div>
+                            <Badge
+                              label={inv.status === 'active' ? 'Active & Working' : 'Mission Completed'}
+                              type={inv.status === 'active' ? 'info' : 'success'}
+                              size="small"
+                            />
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '0.65rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+                            {inv.status === 'active' ? 'Expense' : 'Invested'}
+                          </div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: inv.status === 'active' ? '#7c3aed' : '#16a34a' }}>
+                            {formatCurrency(inv.allocated_amount)}
+                          </div>
+                          {inv.projected_profit > 0 && (
+                            <div style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>
+                              {inv.status === 'active' ? '+' : 'Earned +'}{formatCurrency(inv.projected_profit)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {canTrackInvestments && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInvestmentModal(true)}
+                        style={{
+                          alignSelf: 'center',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: '#0b7a36',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '999px',
+                          padding: '0.65rem 1.4rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          marginTop: '0.35rem',
+                          boxShadow: '0 4px 12px rgba(11, 122, 54, 0.3)'
+                        }}
+                      >
+                        <Plus size={18} /> Add Investment
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Tablet & Desktop Working Capital Layout (768px+ UNCHANGED) */}
+              <div className="desktop-dashboard-only">
               <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'inherit' }}>Working Capital</h1>
               <p style={{ color: '#6B7280', marginTop: '-1rem' }}>Track the businesses and projects our savings are invested in.</p>
 
@@ -2117,6 +2481,7 @@ const SavingsTracker = ({ user }) => {
               </div>
 
               {canTrackInvestments && <FloatingAddButton onClick={() => setShowInvestmentModal(true)} />}
+              </div>
             </motion.div>
           )}
 
