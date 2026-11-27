@@ -2275,7 +2275,7 @@ app.get('/api/messages', checkAuth, async (req, res) => {
   }
 
   const messages = await db.prepare(`
-    SELECT m.*, u.email as sender_email,
+    SELECT m.*, u.email as sender_email, u.profile_picture as sender_profile_picture, u.full_name as sender_full_name, u.nickname as sender_nickname,
            r.content as reply_content, ru.email as reply_sender_email
     FROM messages m 
     JOIN users u ON m.sender_id = u.id 
@@ -2292,7 +2292,7 @@ app.put('/api/messages/:id', checkAuth, async (req, res) => {
   const { content } = req.body;
   const msg = await db.prepare('SELECT sender_id, content FROM messages WHERE id = ?').get(id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
-  if (msg.sender_id !== req.user.id && !['admin', 'super_admin'].includes(req.user.role)) {
+  if (Number(msg.sender_id) !== Number(req.user.id) && !['admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Unauthorized to edit this message' });
   }
   const oldContent = msg.content;

@@ -10,7 +10,7 @@ import {
   Lock, Video, Image as ImageIcon, Play, FileVideo, UserPlus, Paperclip, Phone, ArrowUp, ArrowDown,
   MoreVertical, Edit3, MoreHorizontal, Reply, X, Menu,
   Home, LayoutGrid, Bell, ChevronDown, ExternalLink,
-  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing, Search, Calendar, Mail
+  CheckCircle, AlertTriangle, TrendingUp, Check, BellRing, Search, Calendar, Mail, Smile
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
@@ -224,7 +224,7 @@ const PrivateDashboard = ({ user, setUser }) => {
         fetchMessages();
       }, 2500);
     }
-    if (activeTab === 'users' || activeTab === 'members') fetchUsers();
+    if (activeTab === 'users' || activeTab === 'members' || activeTab === 'messages') fetchUsers();
     if (activeTab === 'logs') fetchLogs();
     if (activeTab === 'admin') fetchSettings();
     if (activeTab === 'gallery') fetchGallery();
@@ -1073,17 +1073,52 @@ const PrivateDashboard = ({ user, setUser }) => {
           .tab-buttons-container { overflow-x: auto; white-space: nowrap; padding-bottom: 0.5rem; }
           .glass-card { padding: 1rem !important; }
           .dashboard-section { padding: 0.75rem 0.75rem 80px 0.75rem !important; }
-          .chat-input-form { margin-bottom: 70px !important; }
-          .chat-messages-container { padding: 1rem 0.5rem !important; }
+          .chat-input-form { margin-bottom: 4px !important; }
+          .chat-messages-container { padding: 0.5rem 0.25rem !important; gap: 0.6rem !important; }
           .chat-message-bubble-wrapper { 
-            width: auto !important;
-            max-width: 95% !important; 
+            width: 100% !important;
+            max-width: 100% !important; 
           }
         }
         @media (max-width: 767px) {
           .dashboard-section {
             padding: 0.65rem 0.65rem 84px 0.65rem !important;
             background: #f1f5f9 !important;
+          }
+          .dashboard-section.chat-active-section {
+            padding: 0.45rem 0.5rem 68px 0.5rem !important;
+          }
+          .chat-banner-desktop {
+            display: none !important;
+          }
+          .chat-desktop-bubble {
+            display: none !important;
+          }
+          .chat-mobile-card {
+            display: flex !important;
+          }
+          .chat-input-form {
+            margin-bottom: 2px !important;
+            padding: 0.4rem 0.35rem !important;
+            background: transparent !important;
+            border-top: none !important;
+            box-shadow: none !important;
+            gap: 0.45rem !important;
+          }
+          .chat-input-left-tools {
+            background: white !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 999px !important;
+            padding: 0.35rem 0.55rem !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+          }
+          .chat-send-btn {
+            background: linear-gradient(135deg, #16a34a 0%, #0b7a36 100%) !important;
+            width: 40px !important;
+            height: 40px !important;
+            box-shadow: 0 3px 10px rgba(11, 122, 54, 0.3) !important;
           }
           .mobile-app-header {
             background: linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #0f8e40 100%) !important;
@@ -2413,7 +2448,7 @@ const PrivateDashboard = ({ user, setUser }) => {
           </div>
         </header>
 
-        <section className="dashboard-section" style={{ 
+        <section className={`dashboard-section ${activeTab === 'messages' ? 'chat-active-section' : ''}`} style={{ 
           flex: 1, 
           padding: '2rem 3rem', 
           display: 'flex', 
@@ -2430,8 +2465,8 @@ const PrivateDashboard = ({ user, setUser }) => {
                 exit={{ opacity: 0, y: -10 }}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}
               >
-                {/* Visual Graphic Banner Card representing focal point */}
-                <div style={{
+                {/* Visual Graphic Banner Card representing focal point (Desktop/Tablet) */}
+                <div className="chat-banner-desktop" style={{
                   height: '130px',
                   margin: '0.75rem 1rem 0',
                   borderRadius: '16px',
@@ -2470,24 +2505,276 @@ const PrivateDashboard = ({ user, setUser }) => {
                     const rId = msg.receiver_id || msg.receiverId === undefined ? null : Number(msg.receiver_id || msg.receiverId);
                     const myId = Number(user.id);
                     return sId === myId || rId === myId || rId === null;
-                  }).map((msg, i) => (
+                  }).map((msg, i) => {
+                    const sId = Number(msg.sender_id || msg.senderId);
+                    const isOwnMsg = sId === Number(user.id);
+                    const senderUser = users.find(u => Number(u.id) === sId);
+                    const senderName = msg.sender_full_name || msg.sender_nickname || senderUser?.full_name || senderUser?.nickname || (msg.sender_email ? (msg.sender_email.split('@')[0].charAt(0).toUpperCase() + msg.sender_email.split('@')[0].slice(1)) : 'Friend');
+                    const senderAvatar = msg.sender_profile_picture || senderUser?.profile_picture || (isOwnMsg ? user.profile_picture : '');
+                    const timeStr = msg.created_at ? (() => {
+                      try {
+                        const d = new Date(msg.created_at);
+                        return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { timeZone: 'Africa/Addis_Ababa', hour: '2-digit', minute: '2-digit', hour12: true });
+                      } catch (e) { return ''; }
+                    })() : '';
+
+                    return (
                     <div 
-                      key={i} 
+                      key={msg.id || i} 
                       id={`msg-${msg.id}`}
                       className="chat-message-bubble-wrapper"
                       style={{ 
-                        alignSelf: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'flex-end' : 'flex-start',
+                        alignSelf: isOwnMsg ? 'flex-end' : 'flex-start',
                         maxWidth: '75%',
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'flex-end' : 'flex-start',
+                        alignItems: isOwnMsg ? 'flex-end' : 'flex-start',
                         transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
                         transform: highlightedMsgId === msg.id ? 'scale(1.05)' : 'scale(1)',
                         zIndex: highlightedMsgId === msg.id ? 10 : 1,
                         filter: highlightedMsgId === msg.id ? 'drop-shadow(0 4px 12px rgba(59,130,246,0.35))' : 'none'
                       }}
                     >
-                      <div style={{ 
+                      {/* Mobile-Only Chat Card (320px-767px) */}
+                      <div
+                        className="chat-mobile-card"
+                        style={{
+                          display: 'none',
+                          width: '100%',
+                          background: isOwnMsg ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : '#ffffff',
+                          border: isOwnMsg ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                          borderRadius: '18px',
+                          padding: '0.65rem 0.7rem',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '0.6rem',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        {/* Left Avatar (Eager + Instant Fallback) */}
+                        <div
+                          onClick={() => {
+                            if (sId) {
+                              setViewingProfileUserId(sId);
+                              setActiveTab('profile');
+                            }
+                          }}
+                          style={{ position: 'relative', flexShrink: 0, cursor: 'pointer' }}
+                        >
+                          {senderAvatar ? (
+                            <img
+                              src={resolveImageUrl(senderAvatar)}
+                              alt={senderName}
+                              loading="eager"
+                              decoding="async"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                if (e.currentTarget.nextElementSibling) e.currentTarget.nextElementSibling.style.display = 'flex';
+                              }}
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: '2px solid #e2e8f0',
+                                display: 'block'
+                              }}
+                            />
+                          ) : null}
+                          <div style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '50%',
+                            background: isOwnMsg ? '#0b7a36' : '#2563eb',
+                            color: 'white',
+                            display: senderAvatar ? 'none' : 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            fontSize: '1.1rem',
+                            textTransform: 'uppercase'
+                          }}>
+                            {senderName[0]}
+                          </div>
+                          <span style={{
+                            position: 'absolute',
+                            bottom: '1px',
+                            right: '1px',
+                            width: '11px',
+                            height: '11px',
+                            borderRadius: '50%',
+                            background: '#16a34a',
+                            border: '2px solid white'
+                          }} />
+                        </div>
+
+                        {/* Middle Content */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
+                            <span
+                              onClick={() => {
+                                if (sId) {
+                                  setViewingProfileUserId(sId);
+                                  setActiveTab('profile');
+                                }
+                              }}
+                              style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                            >
+                              {senderName}
+                            </span>
+                            <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {timeStr}
+                            </span>
+                          </div>
+
+                          {msg.reply_content && (
+                            <div
+                              onClick={() => scrollToMessage(msg.reply_to_id || msg.replyToId)}
+                              style={{
+                                background: 'rgba(22, 163, 74, 0.08)',
+                                borderLeft: '3px solid #16a34a',
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '6px',
+                                fontSize: '0.7rem',
+                                color: '#334155',
+                                marginTop: '0.25rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}
+                            >
+                              ↩ {msg.reply_content}
+                            </div>
+                          )}
+
+                          {msg.media_url && (
+                            msg.media_type === 'image' ? (
+                              <img
+                                src={resolveImageUrl(msg.media_url)}
+                                alt="Attachment"
+                                onClick={() => setLightBox({ isOpen: true, url: msg.media_url, type: 'image', item: { ...msg, type: 'chat' } })}
+                                style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '10px', marginTop: '0.35rem', cursor: 'zoom-in' }}
+                              />
+                            ) : msg.media_type === 'video' ? (
+                              <video src={resolveImageUrl(msg.media_url)} controls style={{ width: '100%', maxHeight: '160px', borderRadius: '10px', marginTop: '0.35rem' }} />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDownloadFile(e, msg.media_url, getOriginalFileName(msg.media_url) || 'file')}
+                                style={{ marginTop: '0.3rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '0.72rem', fontWeight: 600, color: '#0f172a', cursor: 'pointer' }}
+                              >
+                                <Download size={12} /> {getOriginalFileName(msg.media_url) || 'Attachment'}
+                              </button>
+                            )
+                          )}
+
+                          {editingMessageId === msg.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.3rem' }}>
+                              <input
+                                type="text"
+                                value={editingText}
+                                onChange={(e) => setEditingText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveEdit(msg.id);
+                                  if (e.key === 'Escape') { setEditingMessageId(null); setEditingText(''); }
+                                }}
+                                autoFocus
+                                style={{
+                                  width: '100%',
+                                  padding: '0.35rem 0.6rem',
+                                  borderRadius: '8px',
+                                  border: '1px solid #16a34a',
+                                  background: 'white',
+                                  fontSize: '0.82rem',
+                                  color: '#0f172a',
+                                  outline: 'none'
+                                }}
+                              />
+                              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                <button type="button" onClick={() => handleSaveEdit(msg.id)} style={{ background: '#0b7a36', color: 'white', border: 'none', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                                <button type="button" onClick={() => { setEditingMessageId(null); setEditingText(''); }} style={{ background: '#e2e8f0', color: '#334155', border: 'none', borderRadius: '6px', padding: '0.2rem 0.6rem', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            msg.content && (
+                              <div style={{ fontSize: '0.84rem', color: '#1e293b', lineHeight: 1.35, marginTop: '0.15rem', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                                {msg.content}
+                              </div>
+                            )
+                          )}
+                        </div>
+
+                        {/* Right Action Buttons: Reply, Edit (own message), Delete */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => setReplyTarget(msg)}
+                            title="Reply"
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '50%',
+                              border: '1px solid #cbd5e1',
+                              background: 'white',
+                              color: '#2563eb',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Reply size={13} />
+                          </button>
+
+                          {isOwnMsg && (
+                            <button
+                              type="button"
+                              onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content || ''); }}
+                              title="Edit your message"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                border: '1px solid #bbf7d0',
+                                background: '#f0fdf4',
+                                color: '#0b7a36',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                          )}
+
+                          {(isOwnMsg || ['admin', 'super_admin'].includes(user.role)) && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMessage(msg.id)}
+                              title="Delete"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                border: '1px solid #fecdd3',
+                                background: 'white',
+                                color: '#ef4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Desktop/Tablet Bubble (768px+ UNCHANGED) */}
+                      <div className="chat-desktop-bubble" style={{ 
                         background: Number(msg.sender_id || msg.senderId) === Number(user.id) ? '#3b82f6' : '#ffffff',
                           color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'white' : '#1e293b',
                           padding: '1rem',
@@ -2766,8 +3053,9 @@ const PrivateDashboard = ({ user, setUser }) => {
                         </div>
                       </div>
                     </div>
-                  ))}
-                  <div style={{ height: '40px', flexShrink: 0 }} />
+                    );
+                  })}
+                  <div style={{ height: '16px', flexShrink: 0 }} />
                   <div ref={messagesEndRef} />
                 </div>
                 
@@ -2820,36 +3108,40 @@ const PrivateDashboard = ({ user, setUser }) => {
                     flexShrink: 0
                   }}
                 >
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()} 
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }} 
-                    title="Attach file from storage"
-                  >
-                    <Paperclip size={22} />
-                  </button>
-                  
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    style={{ display: 'none' }} 
-                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" 
-                    onChange={handleChatFileUpload} 
-                  />
-                  
-                  <button 
-                    type="button" 
-                    onClick={() => fileInputRef.current?.click()} 
-                    style={{ 
-                      background: 'none', 
-                      border: 'none', 
-                      cursor: 'pointer', 
-                      color: pendingMedia.url ? '#3b82f6' : '#64748b' 
-                    }}
-                    title="Upload media from storage"
-                  >
-                    <ImageIcon size={22} />
-                  </button>
+                  <div className="chat-input-left-tools" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => fileInputRef.current?.click()} 
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }} 
+                      title="Attach file from storage"
+                    >
+                      <Paperclip size={20} />
+                    </button>
+                    
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      style={{ display: 'none' }} 
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" 
+                      onChange={handleChatFileUpload} 
+                    />
+                    
+                    <button 
+                      type="button" 
+                      onClick={() => fileInputRef.current?.click()} 
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        color: pendingMedia.url ? '#3b82f6' : '#64748b',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Upload media from storage"
+                    >
+                      <ImageIcon size={20} />
+                    </button>
+                  </div>
                   
                   <div style={{
                     flex: 1,
@@ -2858,7 +3150,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                     background: '#ffffff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '24px',
-                    padding: '3px 6px 3px 16px',
+                    padding: '3px 6px 3px 14px',
                     transition: 'all 0.2s',
                   }}
                   className="chat-input-field-container"
@@ -2871,35 +3163,51 @@ const PrivateDashboard = ({ user, setUser }) => {
                         background: 'transparent',
                         border: 'none',
                         outline: 'none',
-                        fontSize: '0.95rem',
+                        fontSize: '0.92rem',
                         color: '#1e293b',
-                        padding: '0.65rem 0',
+                        padding: '0.55rem 0',
                         marginBottom: 0
                       }}
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                     />
-                    <button type="submit" style={{ 
-                      background: 'var(--primary)', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '50%',
-                      width: '38px',
-                      height: '38px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      flexShrink: 0,
-                      marginLeft: '8px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    <button
+                      type="button"
+                      onClick={() => setNewMessage(prev => prev + '😊')}
+                      title="Insert emoji"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#1e3a8a',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 4px'
+                      }}
                     >
-                      <Send size={16} />
+                      <Smile size={20} />
                     </button>
                   </div>
+
+                  <button type="submit" className="chat-send-btn" style={{ 
+                    background: 'var(--primary)', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '50%',
+                    width: '38px',
+                    height: '38px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.2s',
+                    flexShrink: 0
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <Send size={16} />
+                  </button>
                 </form>
               </motion.div>
             )}
