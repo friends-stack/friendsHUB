@@ -6,7 +6,8 @@ import {
   Plus, AlertCircle, RefreshCw, ArrowUp, Briefcase, CheckCircle,
   Calendar, Clock, Calculator, ArrowLeft, FileText,
   Wallet, BarChart3, Coins, ChevronRight, Settings as SettingsIcon, LayoutGrid, Trash2,
-  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp
+  PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp,
+  Search, Filter, ChevronDown, Eye
 } from 'lucide-react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -305,6 +306,9 @@ const SavingsTracker = ({ user }) => {
   const [dateFilter, setDateFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberFilter, setMemberFilter] = useState('all');
+  const [showMemberFilterMenu, setShowMemberFilterMenu] = useState(false);
 
   const getTodayDateString = () => {
     const d = new Date();
@@ -1722,10 +1726,363 @@ const SavingsTracker = ({ user }) => {
           )}
 
           {activeView === 'members' && (
-            <motion.div key="members" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'inherit' }}>Members</h1>
-              {processedMembers.map(m => <MemberCard key={m.id} member={m} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
-              {(isPaymentManager || isMemberManager) && <FloatingAddButton onClick={() => handleOpenCashEntry('Cash In')} />}
+            <motion.div key="members" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              {/* Mobile-Only Members Layout (320px-767px) */}
+              <div className="mobile-dashboard-only">
+                {/* Green Members Banner */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
+                  borderRadius: '18px',
+                  padding: '0.9rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: '0 6px 18px rgba(11, 122, 54, 0.22)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 2 }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '14px',
+                      background: 'rgba(255, 255, 255, 0.14)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Users size={26} color="#a3e635" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '1.18rem', fontWeight: 900, lineHeight: 1.15 }}>Members</div>
+                      <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.2rem', lineHeight: 1.3 }}>
+                        Manage your group members and their contributions.
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ opacity: 0.22, flexShrink: 0, zIndex: 1 }}>
+                    <Users size={42} color="white" />
+                  </div>
+                </div>
+
+                {/* Search & Filter Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                  <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '999px',
+                    padding: '0.45rem 0.8rem',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
+                  }}>
+                    <Search size={16} color="#64748b" style={{ flexShrink: 0 }} />
+                    <input
+                      type="text"
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      placeholder="Search members by name..."
+                      style={{
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        width: '100%',
+                        fontSize: '0.78rem',
+                        color: '#0f172a'
+                      }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowMemberFilterMenu(prev => !prev)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        background: memberFilter === 'all' ? '#dcfce7' : '#0b7a36',
+                        color: memberFilter === 'all' ? '#065f2a' : 'white',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '14px',
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.76rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Filter size={14} />
+                      <span>{memberFilter === 'all' ? 'Filter' : memberFilter === 'on_track' ? 'Up to date' : memberFilter === 'debt' ? 'In Debt' : 'Prepaid'}</span>
+                      <ChevronDown size={14} />
+                    </button>
+                    {showMemberFilterMenu && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '110%',
+                        right: 0,
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '14px',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                        padding: '0.35rem',
+                        zIndex: 50,
+                        minWidth: '130px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.2rem'
+                      }}>
+                        {[
+                          { id: 'all', label: 'All Members' },
+                          { id: 'on_track', label: 'Up to date' },
+                          { id: 'debt', label: 'In Debt' },
+                          { id: 'prepaid', label: 'Prepaid' }
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setMemberFilter(opt.id);
+                              setShowMemberFilterMenu(false);
+                            }}
+                            style={{
+                              textAlign: 'left',
+                              padding: '0.45rem 0.65rem',
+                              borderRadius: '10px',
+                              border: 'none',
+                              background: memberFilter === opt.id ? '#dcfce7' : 'transparent',
+                              color: memberFilter === opt.id ? '#065f2a' : '#334155',
+                              fontWeight: memberFilter === opt.id ? 700 : 500,
+                              fontSize: '0.75rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Member List Cards */}
+                {(() => {
+                  const filteredMembers = processedMembers.filter(m => {
+                    const matchesSearch = !memberSearch.trim() || (m.name || '').toLowerCase().includes(memberSearch.trim().toLowerCase());
+                    if (!matchesSearch) return false;
+                    if (memberFilter === 'debt') return (m.currentDebt || 0) > 0;
+                    if (memberFilter === 'prepaid') return (m.advanceBalance || 0) > 0;
+                    if (memberFilter === 'on_track') return (m.currentDebt || 0) === 0;
+                    return true;
+                  });
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                      {filteredMembers.length === 0 ? (
+                        <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', fontSize: '0.82rem', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                          No members match your search or filter.
+                        </div>
+                      ) : (
+                        filteredMembers.map((m, i) => {
+                          const isDebt = (m.currentDebt || 0) > 0;
+                          const pct = totalSaving > 0 ? Math.round(((Number(m.total_paid) || 0) / totalSaving) * 100) : 0;
+                          const joinedLabel = m.created_at
+                            ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : 'Active';
+
+                          return (
+                            <div
+                              key={m.id}
+                              onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }}
+                              style={{
+                                background: 'white',
+                                borderRadius: '18px',
+                                border: '1px solid #e2e8f0',
+                                padding: '0.7rem 0.6rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.45rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                              }}
+                            >
+                              {/* Left: Avatar + Name + Joined + Active Pill */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: '1.35 1 0' }}>
+                                <Avatar name={m.name} size="40px" fontSize="0.95rem" index={i} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {m.name}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.6rem', color: '#64748b', marginTop: '0.1rem' }}>
+                                    <Calendar size={10} color="#64748b" style={{ flexShrink: 0 }} />
+                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Joined: {joinedLabel}</span>
+                                  </div>
+                                  <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                    marginTop: '0.22rem',
+                                    background: '#dbeafe',
+                                    color: '#1d4ed8',
+                                    borderRadius: '999px',
+                                    padding: '0.12rem 0.45rem',
+                                    fontSize: '0.6rem',
+                                    fontWeight: 700
+                                  }}>
+                                    <Users size={10} />
+                                    <span>{m.status === 'inactive' ? 'Inactive' : 'Active'}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Middle: Total Paid */}
+                              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                                <div style={{ fontSize: '0.62rem', color: '#475569', fontWeight: 600 }}>Total Paid</div>
+                                <div style={{ fontSize: '0.78rem', fontWeight: 900, color: '#15803d', lineHeight: 1.15, whiteSpace: 'nowrap' }}>
+                                  {formatCurrency(m.total_paid)}
+                                </div>
+                                <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '0.1rem' }}>
+                                  ({pct}% of total)
+                                </div>
+                              </div>
+
+                              {/* Right: Current Balance + Status Pill */}
+                              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                                <div style={{ fontSize: '0.62rem', color: '#475569', fontWeight: 600 }}>Current Balance</div>
+                                <div style={{ fontSize: '0.78rem', fontWeight: 900, color: isDebt ? '#dc2626' : '#15803d', lineHeight: 1.15, whiteSpace: 'nowrap' }}>
+                                  {isDebt ? formatCurrency(m.currentDebt) : formatCurrency(0)}
+                                </div>
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem',
+                                  marginTop: '0.2rem',
+                                  background: isDebt ? '#fee2e2' : '#dcfce7',
+                                  color: isDebt ? '#dc2626' : '#15803d',
+                                  borderRadius: '999px',
+                                  padding: '0.12rem 0.45rem',
+                                  fontSize: '0.58rem',
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {isDebt ? <AlertCircle size={10} /> : <CheckCircle size={10} />}
+                                  <span>{isDebt ? 'In Debt' : 'Up to date'}</span>
+                                </div>
+                              </div>
+
+                              {/* Far Right Chevron */}
+                              <div style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#475569',
+                                flexShrink: 0
+                              }}>
+                                <ChevronRight size={14} />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Total Members Summary Banner */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '16px',
+                  padding: '0.65rem 0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.5rem',
+                  boxShadow: '0 2px 8px rgba(22, 163, 74, 0.08)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <Users size={26} color="#16a34a" />
+                    <div style={{ width: '1px', height: '28px', background: '#bbf7d0' }} />
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155' }}>Total Members</div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#065f2a', lineHeight: 1.05 }}>{members.length}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setMemberSearch(''); setMemberFilter('all'); setShowMemberFilterMenu(false); }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: 'white',
+                      border: '1px solid #86efac',
+                      color: '#065f2a',
+                      borderRadius: '999px',
+                      padding: '0.45rem 0.8rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    <Eye size={14} /> View All Members →
+                  </button>
+                </div>
+
+                {/* Floating + Add Button & Subtle Green Wave */}
+                <div style={{ position: 'relative', minHeight: '42px', marginTop: '0.15rem' }}>
+                  {(isPaymentManager || isMemberManager) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCashEntry('Cash In')}
+                      title="Record Payment / Cash Entry"
+                      style={{
+                        position: 'absolute',
+                        right: '0.25rem',
+                        bottom: '0.35rem',
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: '#0b7a36',
+                        color: 'white',
+                        border: 'none',
+                        boxShadow: '0 6px 16px rgba(11, 122, 54, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 5
+                      }}
+                    >
+                      <Plus size={24} />
+                    </button>
+                  )}
+                  <div style={{ height: '30px', width: '100%', overflow: 'hidden', borderRadius: '12px', marginTop: '0.75rem', pointerEvents: 'none' }}>
+                    <svg viewBox="0 0 400 32" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+                      <path d="M0,18 C80,2 160,30 240,14 C310,0 360,22 400,10 L400,32 L0,32 Z" fill="rgba(22, 163, 74, 0.16)" />
+                      <path d="M0,24 C100,8 200,32 300,18 C350,12 380,22 400,16 L400,32 L0,32 Z" fill="rgba(11, 122, 54, 0.25)" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tablet & Desktop Members Layout (768px+ UNCHANGED) */}
+              <div className="desktop-dashboard-only">
+                <h1 style={{ fontSize: '2rem', fontWeight: 700, fontFamily: 'inherit' }}>Members</h1>
+                {processedMembers.map(m => <MemberCard key={m.id} member={m} onClick={() => { setSelectedMember(m); setActiveView('member-detail'); }} formatCurrency={formatCurrency} />)}
+                {(isPaymentManager || isMemberManager) && <FloatingAddButton onClick={() => handleOpenCashEntry('Cash In')} />}
+              </div>
             </motion.div>
           )}
 
