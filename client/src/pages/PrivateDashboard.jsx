@@ -2906,7 +2906,410 @@ const PrivateDashboard = ({ user, setUser }) => {
 
             {/* Community Members Directory Tab — accessible to all members, admins & superadmins */}
             {activeTab === 'members' && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                {/* Mobile-Only Community Members Layout (320px-767px) */}
+                <div className="mobile-matrix-only">
+                  {/* Top Header Card */}
+                  <div style={{
+                    background: 'white',
+                    borderRadius: '18px',
+                    border: '1px solid #e2e8f0',
+                    padding: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '0.6rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0 }}>
+                      <div style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #16a34a 0%, #0b7a36 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        boxShadow: '0 3px 10px rgba(22, 163, 74, 0.25)'
+                      }}>
+                        <Users size={22} color="white" />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.96rem', fontWeight: 900, color: '#0f172a', lineHeight: 1.15 }}>
+                          Community Members &amp; Admins
+                        </div>
+                        <div style={{ fontSize: '0.66rem', color: '#64748b', marginTop: '0.15rem', lineHeight: 1.25 }}>
+                          Browse mutual profiles of all group members, view details, and connect directly.
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{
+                      background: '#dcfce7',
+                      color: '#065f2a',
+                      borderRadius: '14px',
+                      padding: '0.35rem 0.55rem',
+                      fontSize: '0.66rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      flexShrink: 0,
+                      textAlign: 'left',
+                      lineHeight: 1.15
+                    }}>
+                      <Users size={13} color="#065f2a" style={{ flexShrink: 0 }} />
+                      <span>{users.filter(u => u.status !== 'deleted').length} Active<br />Members</span>
+                    </div>
+                  </div>
+
+                  {/* Search + Filter Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      background: 'white',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '999px',
+                      padding: '0.48rem 0.85rem',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.03)'
+                    }}>
+                      <Search size={16} color="#64748b" style={{ flexShrink: 0 }} />
+                      <input
+                        type="text"
+                        placeholder="Search by name, nickname, email, tele..."
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          width: '100%',
+                          fontSize: '0.76rem',
+                          color: '#0f172a'
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const order = ['all', 'super_admin', 'admin', 'member'];
+                        const nextIdx = (order.indexOf(memberRoleFilter) + 1) % order.length;
+                        setMemberRoleFilter(order[nextIdx]);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        background: 'white',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '999px',
+                        padding: '0.48rem 0.75rem',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <span>Filter</span>
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+
+                  {/* 4 Role Filter Pills */}
+                  <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', paddingBottom: '2px' }}>
+                    {[
+                      { id: 'all', label: 'All', icon: Users },
+                      { id: 'super_admin', label: 'Super Admins', icon: Shield },
+                      { id: 'admin', label: 'Admins', icon: ShieldCheck },
+                      { id: 'member', label: 'Members', icon: User }
+                    ].map(tab => {
+                      const TabIcon = tab.icon;
+                      const active = memberRoleFilter === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setMemberRoleFilter(tab.id)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.28rem',
+                            padding: '0.36rem 0.7rem',
+                            borderRadius: '999px',
+                            border: active ? 'none' : '1px solid #e2e8f0',
+                            background: active ? '#0b7a36' : 'white',
+                            color: active ? 'white' : '#334155',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            boxShadow: active ? '0 2px 6px rgba(11, 122, 54, 0.25)' : 'none'
+                          }}
+                        >
+                          <TabIcon size={12} color={active ? 'white' : (tab.id === 'super_admin' || tab.id === 'admin' || tab.id === 'member' ? '#2563eb' : '#475569')} />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Mobile Directory Member Cards */}
+                  {(() => {
+                    const filtered = users.filter(u => {
+                      if (u.status === 'deleted') return false;
+                      const query = memberSearch.toLowerCase().trim();
+                      const matchSearch = !query ||
+                        (u.full_name && u.full_name.toLowerCase().includes(query)) ||
+                        (u.nickname && u.nickname.toLowerCase().includes(query)) ||
+                        (u.email && u.email.toLowerCase().includes(query)) ||
+                        (u.telegram_username && u.telegram_username.toLowerCase().includes(query)) ||
+                        (u.mobile && u.mobile.includes(query)) ||
+                        (u.role && u.role.toLowerCase().includes(query));
+
+                      const isSuper = u.role === 'super_admin' || u.email?.toLowerCase() === 'ermiasgesgis@gmail.com';
+                      const isAdm = !isSuper && u.role === 'admin';
+                      if (memberRoleFilter === 'super_admin') return matchSearch && isSuper;
+                      if (memberRoleFilter === 'admin') return matchSearch && isAdm;
+                      if (memberRoleFilter === 'member') return matchSearch && !isSuper && !isAdm;
+                      return matchSearch;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '2rem 1rem', background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.82rem' }}>
+                          No members match your search or filter.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', position: 'relative' }}>
+                        {filtered.map(u => {
+                          const isSelfCard = Number(u.id) === Number(user.id);
+                          const isSuperAdmin = u.role === 'super_admin' || u.email?.toLowerCase() === 'ermiasgesgis@gmail.com';
+                          const isAdmin = !isSuperAdmin && u.role === 'admin';
+                          const displayName = u.full_name || u.nickname || u.email.split('@')[0];
+
+                          return (
+                            <div
+                              key={u.id}
+                              style={{
+                                background: 'white',
+                                borderRadius: '18px',
+                                border: isSelfCard ? '1.5px solid #22c55e' : '1px solid #e2e8f0',
+                                padding: '0.7rem 0.65rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.55rem',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                              }}
+                            >
+                              {/* Left Circular Avatar + Online Dot */}
+                              <div style={{ position: 'relative', flexShrink: 0 }}>
+                                {u.profile_picture ? (
+                                  <img
+                                    src={resolveImageUrl(u.profile_picture)}
+                                    alt={displayName}
+                                    onError={(e) => handleImageError(e, u.profile_picture)}
+                                    style={{
+                                      width: '54px',
+                                      height: '54px',
+                                      borderRadius: '50%',
+                                      objectFit: 'cover',
+                                      border: '2px solid #e2e8f0'
+                                    }}
+                                  />
+                                ) : (
+                                  <div style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '50%',
+                                    background: isSuperAdmin ? '#2563eb' : isAdmin ? '#16a34a' : '#475569',
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.35rem',
+                                    fontWeight: 800,
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    {displayName[0]}
+                                  </div>
+                                )}
+                                <span style={{
+                                  position: 'absolute',
+                                  bottom: '2px',
+                                  right: '2px',
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '50%',
+                                  background: '#16a34a',
+                                  border: '2px solid white'
+                                }} />
+                              </div>
+
+                              {/* Middle Details */}
+                              <div style={{ flex: 1, minWidth: 0, borderLeft: '2px solid #dcfce7', paddingLeft: '0.55rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>{displayName}</span>
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                    background: isSuperAdmin ? '#f3e8ff' : isAdmin ? '#dbeafe' : '#f1f5f9',
+                                    color: isSuperAdmin ? '#7e22ce' : isAdmin ? '#1d4ed8' : '#475569',
+                                    borderRadius: '999px',
+                                    padding: '0.12rem 0.45rem',
+                                    fontSize: '0.62rem',
+                                    fontWeight: 800
+                                  }}>
+                                    {isSuperAdmin ? '👑 Super Admin' : isAdmin ? '🛡️ Admin' : '👤 Member'}
+                                  </span>
+                                  {isSelfCard && (
+                                    <span style={{
+                                      background: '#dcfce7',
+                                      color: '#15803d',
+                                      borderRadius: '999px',
+                                      padding: '0.1rem 0.4rem',
+                                      fontSize: '0.6rem',
+                                      fontWeight: 800
+                                    }}>
+                                      (You)
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.68rem', color: '#475569', marginTop: '0.15rem' }}>
+                                  <Mail size={11} color="#64748b" style={{ flexShrink: 0 }} />
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</span>
+                                </div>
+
+                                {u.bio && (
+                                  <div style={{ fontSize: '0.68rem', color: '#334155', marginTop: '0.15rem', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                    {u.bio}
+                                  </div>
+                                )}
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem', fontSize: '0.62rem', color: '#475569' }}>
+                                  {u.mobile && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                      <Phone size={10} color="#475569" /> {u.mobile}
+                                    </span>
+                                  )}
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                    <Calendar size={10} color="#475569" /> Joined {new Date(u.created_at).toLocaleDateString('en-GB')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Right Actions */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', alignItems: 'stretch', flexShrink: 0 }}>
+                                {u.telegram_username ? (
+                                  <a
+                                    href={`https://t.me/${u.telegram_username.replace(/^@/, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Message ${displayName} on Telegram`}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      padding: '0.32rem 0.65rem',
+                                      borderRadius: '999px',
+                                      border: '1px solid #cbd5e1',
+                                      background: '#f8fafc',
+                                      color: '#0284c7',
+                                      textDecoration: 'none'
+                                    }}
+                                  >
+                                    <Send size={14} />
+                                  </a>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTab('messages')}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      padding: '0.32rem 0.65rem',
+                                      borderRadius: '999px',
+                                      border: '1px solid #cbd5e1',
+                                      background: '#f8fafc',
+                                      color: '#0284c7',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Send size={14} />
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewProfile(u.id)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.38rem 0.65rem',
+                                    borderRadius: '999px',
+                                    border: 'none',
+                                    background: '#0f172a',
+                                    color: 'white',
+                                    fontSize: '0.66rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  <User size={11} /> View Profile
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Floating Green +Users Button for Super Admin */}
+                        {user.role === 'super_admin' && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('users')}
+                            title="Enroll New Identity"
+                            style={{
+                              position: 'fixed',
+                              right: '1rem',
+                              bottom: '78px',
+                              width: '46px',
+                              height: '46px',
+                              borderRadius: '50%',
+                              background: '#0b7a36',
+                              color: 'white',
+                              border: 'none',
+                              boxShadow: '0 4px 14px rgba(11, 122, 54, 0.35)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              zIndex: 40
+                            }}
+                          >
+                            <UserPlus size={20} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Tablet & Desktop Community Members Layout (768px+ UNCHANGED) */}
+                <div className="desktop-matrix-only">
                 {/* Header card with Search and Filter */}
                 <div className="glass-card" style={{ padding: '1.75rem', background: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -3230,6 +3633,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                     </div>
                   );
                 })()}
+                </div>
               </motion.div>
             )}
 
