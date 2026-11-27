@@ -15,6 +15,7 @@ import {
 import ShareModal from '../components/ShareModal';
 import ProfilePage from './ProfilePage';
 import SavingsTracker from '../components/SavingsTracker';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5000' : window.location.origin;
 const socket = io(socketUrl, { autoConnect: false });
@@ -2618,9 +2619,10 @@ const PrivateDashboard = ({ user, setUser }) => {
                                   setActiveTab('profile');
                                 }
                               }}
-                              style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', minWidth: 0 }}
                             >
-                              {senderName}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{senderName}</span>
+                              <VerifiedBadge size={14} />
                             </span>
                             <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>
                               {timeStr}
@@ -2749,7 +2751,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                             </button>
                           )}
 
-                          {(isOwnMsg || ['admin', 'super_admin'].includes(user.role)) && (
+                          {isOwnMsg && (
                             <button
                               type="button"
                               onClick={() => handleDeleteMessage(msg.id)}
@@ -2809,6 +2811,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                                 title="Click to view profile"
                               >
                                 👤 {msg.sender_email ? (msg.sender_email.split('@')[0].charAt(0).toUpperCase() + msg.sender_email.split('@')[0].slice(1)) : 'User'}
+                                <VerifiedBadge size={13} />
                               </div>
                             ) : (
                               <div />
@@ -2843,7 +2846,7 @@ const PrivateDashboard = ({ user, setUser }) => {
                                   <Edit3 size={12} />
                                 </button>
                               )}
-                              {(Number(msg.sender_id || msg.senderId) === Number(user.id) || ['admin', 'super_admin'].includes(user.role)) && (
+                              {Number(msg.sender_id || msg.senderId) === Number(user.id) && (
                                 <button 
                                   onClick={() => handleDeleteMessage(msg.id)}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: Number(msg.sender_id || msg.senderId) === Number(user.id) ? 'rgba(255, 255, 255, 0.8)' : '#ef4444', opacity: 0.6, padding: '2px', display: 'flex', alignItems: 'center' }}
@@ -3465,7 +3468,10 @@ const PrivateDashboard = ({ user, setUser }) => {
                               {/* Middle Details */}
                               <div style={{ flex: 1, minWidth: 0, borderLeft: '2px solid #dcfce7', paddingLeft: '0.55rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>{displayName}</span>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>
+                                    <span>{displayName}</span>
+                                    <VerifiedBadge size={15} />
+                                  </span>
                                   <span style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -3837,8 +3843,9 @@ const PrivateDashboard = ({ user, setUser }) => {
 
                               {/* Names */}
                               <div style={{ marginBottom: '0.75rem' }}>
-                                <h4 style={{ margin: '0 0 0.15rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {u.full_name || u.nickname || u.email.split('@')[0]}
+                                <h4 style={{ margin: '0 0 0.15rem', fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.full_name || u.nickname || u.email.split('@')[0]}</span>
+                                  <VerifiedBadge size={15} />
                                 </h4>
                                 <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                   {u.nickname && u.nickname !== u.full_name && (
@@ -4224,8 +4231,9 @@ const PrivateDashboard = ({ user, setUser }) => {
                                   }} />
                                 </div>
                                 <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {displayName}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.84rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</span>
+                                    <VerifiedBadge size={14} />
                                   </div>
                                   <div style={{ fontSize: '0.7rem', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {u.email}

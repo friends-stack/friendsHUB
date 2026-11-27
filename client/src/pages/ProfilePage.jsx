@@ -8,6 +8,7 @@ import {
   Globe, Send as SendIcon, CheckCircle, Star, Utensils, Coffee, Users, Home
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 
 const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBackToSelf, onOpenDirectory }) => {
@@ -562,7 +563,7 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
               <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
                 {activeProfile.full_name || activeProfile.nickname || 'Unknown Identity'}
               </span>
-              <CheckCircle size={18} fill="#16a34a" color="white" />
+              <VerifiedBadge size={18} />
             </div>
 
             {activeProfile.email && (

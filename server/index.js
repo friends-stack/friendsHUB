@@ -128,7 +128,7 @@ const uploadToSupabase = async (file) => {
   if (ext === '.quicktime') ext = '.mov';
   const baseName = file.originalname.replace(ext, '').replace(/[^a-zA-Z0-9]/g, '');
   const fileName = Date.now() + '-' + baseName + ext;
-  
+
   // Persist backup in database table so Render container restarts never lose files
   await saveFileToStorageBackup(fileName, file.buffer, file.mimetype);
 
@@ -138,7 +138,7 @@ const uploadToSupabase = async (file) => {
         contentType: file.mimetype,
         upsert: true
       });
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Supabase upload timeout')), 4500)
       );
       const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
@@ -271,7 +271,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
         const buffer = Buffer.from(record.data, 'base64');
         try {
           fs.writeFileSync(localFile, buffer);
-        } catch (e) {}
+        } catch (e) { }
         if (record.mime_type) res.setHeader('Content-Type', record.mime_type);
         res.setHeader('Cache-Control', 'public, max-age=31536000');
         return res.send(buffer);
@@ -377,7 +377,7 @@ const db = {
         cleanSql = cleanSql.replace(/ADD COLUMN IF NOT EXISTS/gi, 'ADD COLUMN');
       }
       return sqliteDb.exec(cleanSql);
-    } catch(e) {
+    } catch (e) {
       if (e.message.includes('duplicate column name') || e.message.includes('already exists')) return;
       console.error(`⚠️ DB Exec Error/Warning:\nQuery: ${sql.substring(0, 100)}...\nError:`, e.message);
     }
@@ -547,7 +547,7 @@ const db = {
   `);
   try {
     await db.exec(`ALTER TABLE savings_members ADD COLUMN custom_advance_balance NUMERIC DEFAULT NULL`);
-  } catch (e) {}
+  } catch (e) { }
   await db.exec(`
     CREATE TABLE IF NOT EXISTS savings_transactions (
       id BIGSERIAL PRIMARY KEY,
@@ -569,7 +569,7 @@ const db = {
   `);
   try {
     await db.exec(`ALTER TABLE savings_config ADD COLUMN week_number INTEGER`);
-  } catch (e) {}
+  } catch (e) { }
 
   try {
     const existingConfigs = await db.prepare('SELECT id, week_number FROM savings_config ORDER BY id ASC').all();
@@ -580,7 +580,7 @@ const db = {
       }
       counter++;
     }
-  } catch (e) {}
+  } catch (e) { }
   await db.exec(`
     CREATE TABLE IF NOT EXISTS savings_investments (
       id BIGSERIAL PRIMARY KEY,
@@ -673,7 +673,7 @@ const db = {
   `);
   try {
     await db.exec(`ALTER TABLE users ADD COLUMN telegram_id TEXT`);
-  } catch (e) {}
+  } catch (e) { }
   await db.exec(`
     CREATE TABLE IF NOT EXISTS file_storage (
       path TEXT PRIMARY KEY,
@@ -704,7 +704,7 @@ const db = {
     try {
       await db.exec(`UPDATE roles SET permissions = '${adminPerms}' WHERE name = 'admin'`);
       await db.exec(`UPDATE roles SET permissions = '${superAdminPerms}' WHERE name = 'super_admin'`);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Insert default config if empty
@@ -780,8 +780,8 @@ const checkAuth = async (req, res, next) => {
       return res.status(401).json({ error: 'Identity not found or account terminated' });
     }
 
-    req.user = user 
-      ? { ...user, id: parseInt(user.id) } 
+    req.user = user
+      ? { ...user, id: parseInt(user.id) }
       : { ...decoded, id: parseInt(decoded.id) };
     next();
   } catch (err) {
@@ -825,7 +825,7 @@ const checkPaymentClerk = async (req, res, next) => {
   const user = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
   const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
   const isSuperAdmin = (user && user.role === 'super_admin' && user.email && user.email.toLowerCase() === superAdminEmail);
-  
+
   if (req.user.id === clerkId || user?.role === 'clerk' || isSuperAdmin) {
     next();
   } else {
@@ -871,7 +871,7 @@ const logAction = (userId, action, details) => {
 
   const alertPrefix = action.includes('ALERT') ? '⚠️ SECURITY ALERT' : '🔔';
   const cleanDetails = details ? String(details).replace(/^🔔\s*/, '') : '';
-  const message = action.includes('ALERT') 
+  const message = action.includes('ALERT')
     ? `${alertPrefix}: ${cleanDetails}`
     : `${alertPrefix} ${cleanDetails}`;
 
@@ -885,7 +885,7 @@ const logAction = (userId, action, details) => {
       description: cleanDetails,
       created_at: new Date().toISOString()
     });
-  } catch (err) {}
+  } catch (err) { }
 
   // Broadcast to Telegram Super Admin and all approved Admins
   if (bot) {
@@ -1201,7 +1201,7 @@ app.post('/api/track-visit', async (req, res) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       user = await db.prepare('SELECT id, email, role, nickname, full_name, telegram_username FROM users WHERE id = ?').get(decoded.id);
-    } catch (e) {}
+    } catch (e) { }
   }
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
   const pagePath = req.body?.path || '/';
@@ -1260,7 +1260,7 @@ app.post('/api/admin/users/role', checkAuth, checkPermission('canManageAdmins'),
 
   const targetName = targetUser.nickname || targetUser.email;
   const promoterName = actingUser ? (actingUser.nickname || actingUser.email) : `Admin #${req.user.id}`;
-  
+
   const formatRole = (r) => {
     if (r === 'super_admin') return 'Super Admin';
     if (r === 'admin') return 'Admin';
@@ -1297,7 +1297,7 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
   const requestedRole = role || 'admin';
   // Ermias Gesgis is the ONLY Super Admin. Force role to admin if super_admin is requested for anyone else.
   const assignedRole = (requestedRole === 'super_admin' && (email || '').toLowerCase() !== 'ermiasgesgis@gmail.com') ? 'admin' : requestedRole;
-  
+
   const displayName = nickname || full_name || email.split('@')[0];
   const userFullName = full_name || nickname || displayName;
   const cleanTg = telegram_username ? ('@' + telegram_username.trim().replace(/^@/, '')) : null;
@@ -1307,7 +1307,7 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
       INSERT INTO users (email, password, nickname, full_name, telegram_username, role, created_by_admin) 
       VALUES (?, ?, ?, ?, ?, ?, 1)
     `).run(email, hashedPassword, displayName, userFullName, cleanTg, assignedRole);
-    
+
     // Auto-enroll into savings_members so they are immediately part of Friends Sharing / Savings
     try {
       const existingMember = await db.prepare('SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)').get(userFullName);
@@ -1317,9 +1317,9 @@ app.post('/api/admin/users', checkAuth, checkPermission('canManageAdmins'), asyn
     } catch (savingsErr) {
       console.error('Failed to auto-enroll in savings:', savingsErr);
     }
-    
+
     const adminName = actingAdmin ? (actingAdmin.full_name || actingAdmin.nickname || actingAdmin.email) : `Admin #${req.user.id}`;
-    
+
     logAction(req.user.id, 'ADMIN_CREATED_USER', `👤 ${adminName} enrolled user "${userFullName}" (${email}) with role ${assignedRole}${cleanTg ? ` [TG: ${cleanTg}]` : ''}`);
 
     res.json({ success: true, id: resInsert.lastInsertRowid });
@@ -1346,7 +1346,7 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
     for (const admin of admins) {
       const adminName = admin.full_name || admin.nickname || admin.email;
       if (!adminName) continue;
-      
+
       const existing = await db.prepare("SELECT id FROM savings_members WHERE LOWER(name) = LOWER(?)").get(adminName);
       if (!existing) {
         await db.prepare("INSERT INTO savings_members (name) VALUES (?)").run(adminName);
@@ -1359,10 +1359,10 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
   const members = await db.prepare('SELECT * FROM savings_members ORDER BY name ASC').all();
   const users = await db.prepare('SELECT nickname, full_name, email, role FROM users').all();
   const filteredMembers = [];
-  
+
   for (const m of members) {
     // Try to match savings member to a user to find their role
-    const matchedUser = users.find(u => 
+    const matchedUser = users.find(u =>
       (u.full_name && m.name.toLowerCase().replace(/\s+/g, '') === u.full_name.toLowerCase().replace(/\s+/g, '')) ||
       (u.nickname && m.name.toLowerCase().replace(/\s+/g, '') === u.nickname.toLowerCase().replace(/\s+/g, '')) ||
       (u.full_name && m.name.toLowerCase().includes(u.full_name.toLowerCase())) ||
@@ -1387,7 +1387,7 @@ app.get('/api/savings/members', checkAuth, async (req, res) => {
     m.total_expected = totals?.total_expected ? parseFloat(totals.total_expected) : 0;
     m.balance = m.total_paid - m.total_expected;
     m.custom_advance_balance = m.custom_advance_balance !== null && m.custom_advance_balance !== undefined ? parseFloat(m.custom_advance_balance) : null;
-    
+
     // Add to filtered response
     filteredMembers.push(m);
   }
@@ -1399,12 +1399,12 @@ app.put('/api/savings/members/:id/advance', checkAuth, checkSavingsManager, asyn
   const val = (custom_advance_balance === null || custom_advance_balance === '' || isNaN(custom_advance_balance)) ? null : parseFloat(custom_advance_balance);
   await db.prepare('UPDATE savings_members SET custom_advance_balance = ? WHERE id = ?').run(val, req.params.id);
   const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(req.params.id);
-  
+
   const userNickname = req.user.nickname || 'Super Admin';
-  const msg = val === null 
+  const msg = val === null
     ? `Super Admin ${userNickname} reset stored advance savings to automatic calculation for ${member ? member.name : 'Member'}`
     : `Super Admin ${userNickname} manually updated stored advance savings to ${val} ETB for ${member ? member.name : 'Member'}`;
-  
+
   logAction(req.user.id, 'SAVINGS_UPDATE', msg);
   res.json({ success: true, custom_advance_balance: val });
 });
@@ -1497,7 +1497,7 @@ app.post('/api/savings/transactions', checkAuth, checkPaymentClerk, async (req, 
   const clerk = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(req.user.id);
   const clerkName = clerk ? (clerk.nickname || clerk.email.split('@')[0]) : 'Admin';
   const member = await db.prepare('SELECT name FROM savings_members WHERE id = ?').get(member_id);
-  
+
   const totalSaved = (await db.prepare("SELECT SUM(amount) as total FROM savings_transactions WHERE type = 'payment'").get()).total || 0;
   const completedCapital = (await db.prepare("SELECT SUM(allocated_amount) as total FROM savings_investments WHERE status = 'completed'").get()).total || 0;
   const completedProfits = (await db.prepare("SELECT SUM(projected_profit) as total FROM savings_investments WHERE status = 'completed'").get()).total || 0;
@@ -1561,9 +1561,9 @@ app.delete('/api/savings/transactions/:id', checkAuth, checkPaymentClerk, async 
 
     logAction(req.user.id, 'SAVINGS_TRANSACTION_DELETED', `🗑️ ${clerkName} deleted ${txType} of ${formattedAmount} for ${memberName}`);
 
-    res.json({ 
-      success: true, 
-      message: `${txType} of ${formattedAmount} for ${memberName} was successfully deleted.` 
+    res.json({
+      success: true,
+      message: `${txType} of ${formattedAmount} for ${memberName} was successfully deleted.`
     });
   } catch (err) {
     console.error('Error deleting savings transaction:', err);
@@ -1636,7 +1636,7 @@ app.post('/api/savings/config/bulk-delete', checkAuth, checkSavingsManager, asyn
       logAction(req.user.id, 'SETTING_CHANGE', `Super Admin ${userNickname} deleted ${filteredIds.length} week configuration(s)`);
     }
   }
-  
+
   res.json({ success: true });
 });
 
@@ -1716,7 +1716,7 @@ app.get('/api/savings/cycles', checkAuth, async (req, res) => {
     const cycles = await db.prepare('SELECT * FROM savings_cycles ORDER BY created_at DESC').all();
     cycles.forEach(c => {
       if (c.snapshot_data) {
-        try { 
+        try {
           c.snapshot = JSON.parse(c.snapshot_data);
           // Fallback calculation for older archived snapshots missing calculated member totals
           if (c.snapshot && c.snapshot.members && c.snapshot.history) {
@@ -1729,7 +1729,7 @@ app.get('/api/savings/cycles', checkAuth, async (req, res) => {
               }
             });
           }
-        } catch(e) {}
+        } catch (e) { }
       }
     });
     res.json(cycles);
@@ -1776,7 +1776,7 @@ app.delete('/api/savings/cycles', checkAuth, async (req, res) => {
 app.post('/api/savings/clerk', checkAuth, checkSavingsManager, async (req, res) => {
   const { clerk_id } = req.body;
   await db.prepare("UPDATE system_settings SET value = ? WHERE key = 'clerk_id'").run(clerk_id || '');
-  
+
   const actingAdmin = await db.prepare('SELECT role FROM users WHERE id = ?').get(req.user.id);
   const roleText = actingAdmin && actingAdmin.role === 'super_admin' ? 'superadmin' : 'admin';
 
@@ -1806,7 +1806,7 @@ app.post('/api/savings/investments', checkAuth, checkPaymentClerk, async (req, r
   const { project_name, allocated_amount, projected_profit, challenges, expected_days } = req.body;
   const result = await db.prepare('INSERT INTO savings_investments (project_name, allocated_amount, projected_profit, challenges, expected_days) VALUES (?, ?, ?, ?, ?)')
     .run(project_name, allocated_amount, projected_profit || 0, challenges || '', expected_days || null);
-  
+
   const actor = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(req.user.id);
   const actorName = actor ? (actor.nickname || actor.email.split('@')[0]) : 'Clerk';
   logAction(req.user.id, 'NEW_INVESTMENT', `💼 ${actorName} deployed ETB ${allocated_amount} into investment "${project_name}"`);
@@ -1920,7 +1920,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: msg.created_at
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. Someone shares an image (Gallery or Chat photo)
     try {
@@ -1942,7 +1942,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: g.created_at
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. New member registered
     try {
@@ -1965,7 +1965,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: mem.created_at
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 4. Someone has changed his profile
     try {
@@ -1990,7 +1990,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: p.timestamp
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 5. Someone has missed to pay the saving
     try {
@@ -2011,7 +2011,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           });
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 6. The clerk signed someone that pays his saving
     try {
@@ -2035,7 +2035,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: pay.created_at
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 7. New business investments
     try {
@@ -2056,7 +2056,7 @@ app.get('/api/notifications', checkAuth, async (req, res) => {
           created_at: inv.created_at
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Sort by created_at DESC
     notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -2239,18 +2239,18 @@ app.get('/api/admin/settings', checkAuth, checkPermission('canToggleFeatures'), 
 
 app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeatures'), async (req, res) => {
   const { key, value } = req.body;
-  
+
   if (key === 'clerk_id') {
     const actingAdmin = await db.prepare('SELECT role, email FROM users WHERE id = ?').get(req.user.id);
     const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || 'ermiasgesgis@gmail.com').toLowerCase();
     if (!actingAdmin || actingAdmin.role !== 'super_admin' || !actingAdmin.email || actingAdmin.email.toLowerCase() !== superAdminEmail) {
       return res.status(403).json({ error: 'Setting clerk is the role of the Super Admin (ermiasgesgis@gmail.com)' });
     }
-    
+
     await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
     const roleText = 'superadmin';
     const clerkId = parseInt(value);
-    
+
     if (clerkId) {
       const clerkUser = await db.prepare('SELECT nickname, email FROM users WHERE id = ?').get(clerkId);
       const clerkName = clerkUser ? (clerkUser.nickname || clerkUser.email.split('@')[0]) : 'Nobody';
@@ -2262,7 +2262,7 @@ app.post('/api/admin/settings/toggle', checkAuth, checkPermission('canToggleFeat
     await db.prepare('UPDATE system_settings SET value = ? WHERE key = ?').run(value.toString(), key);
     logAction(req.user.id, 'SETTING_CHANGE', `${key} set to ${value}`);
   }
-  
+
   res.json({ success: true });
 });
 
@@ -2292,7 +2292,7 @@ app.put('/api/messages/:id', checkAuth, async (req, res) => {
   const { content } = req.body;
   const msg = await db.prepare('SELECT sender_id, content FROM messages WHERE id = ?').get(id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
-  if (Number(msg.sender_id) !== Number(req.user.id) && !['admin', 'super_admin'].includes(req.user.role)) {
+  if (Number(msg.sender_id) !== Number(req.user.id)) {
     return res.status(403).json({ error: 'Unauthorized to edit this message' });
   }
   const oldContent = msg.content;
@@ -2315,7 +2315,7 @@ app.delete('/api/messages/:id', checkAuth, async (req, res) => {
   const { id } = req.params;
   const msg = await db.prepare('SELECT sender_id FROM messages WHERE id = ?').get(id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
-  if (msg.sender_id !== req.user.id && !['admin', 'super_admin'].includes(req.user.role)) {
+  if (Number(msg.sender_id) !== Number(req.user.id)) {
     return res.status(403).json({ error: 'Unauthorized to delete this message' });
   }
   await db.prepare('DELETE FROM messages WHERE id = ?').run(id);
@@ -2573,8 +2573,8 @@ app.post('/api/admin/gallery', checkAuth, upload.single('image'), async (req, re
     }).catch(console.error);
   }
 
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     url,
     item: {
       id: newId,
@@ -2617,11 +2617,11 @@ app.delete('/api/admin/gallery/:id', checkAuth, async (req, res) => {
     const filename = path.basename(item.url);
     const filePath = path.join(__dirname, 'uploads', filename);
     if (fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch (e) {}
+      try { fs.unlinkSync(filePath); } catch (e) { }
     }
     try {
       await db.prepare('DELETE FROM file_storage WHERE path = ? OR path = ?').run(filename, `/uploads/${filename}`);
-    } catch (e) {}
+    } catch (e) { }
   } else if (item && item.url.includes('supabase.co')) {
     try {
       const urlParts = item.url.split('/');

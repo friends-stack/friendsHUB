@@ -9,6 +9,7 @@ import {
   PiggyBank, Wrench, Archive, Play, AlertTriangle, Info, Home, User, Landmark, Award, TrendingUp,
   Search, Filter, ChevronDown, ChevronUp, Eye, UserPlus, Shield, Star, Check
 } from 'lucide-react';
+import VerifiedBadge from './VerifiedBadge';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
@@ -1254,8 +1255,9 @@ const SavingsTracker = ({ user }) => {
                       >
                         <Avatar name={m.name} size="30px" fontSize="0.78rem" index={i} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {m.name}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                            <VerifiedBadge size={12} />
                           </div>
                           <div style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             Paid {formatCurrency(m.total_paid)}
@@ -1955,8 +1957,9 @@ const SavingsTracker = ({ user }) => {
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: '1.35 1 0' }}>
                                 <Avatar name={m.name} size="40px" fontSize="0.95rem" index={i} />
                                 <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {m.name}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                                    <VerifiedBadge size={14} />
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.6rem', color: '#64748b', marginTop: '0.1rem' }}>
                                     <Calendar size={10} color="#64748b" style={{ flexShrink: 0 }} />
@@ -2685,7 +2688,7 @@ const SavingsTracker = ({ user }) => {
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis'
                                 }}>
-                                  {isPayment ? 'payer:' : 'member:'} <strong style={{ color: '#0f172a' }}>{memberName}</strong>
+                                  {isPayment ? 'payer:' : 'member:'} <strong style={{ color: '#0f172a' }}>{memberName}</strong> <VerifiedBadge size={12} style={{ marginLeft: '2px' }} />
                                 </div>
                               </div>
 
@@ -3578,8 +3581,9 @@ const SavingsTracker = ({ user }) => {
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
                               <Avatar name={m.name} size="36px" fontSize="0.88rem" index={i} />
-                              <span style={{ fontWeight: 800, fontSize: '0.84rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {m.name}
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontWeight: 800, fontSize: '0.84rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                                <VerifiedBadge size={14} />
                               </span>
                             </div>
 
