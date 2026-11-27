@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { 
   User, Mail, Phone, Calendar, MapPin, 
   Edit2, Camera, ArrowLeft, Heart, MessageSquare,
-  Globe, Send as SendIcon
+  Globe, Send as SendIcon, CheckCircle, Star, Utensils, Coffee, Users, Home
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
@@ -335,6 +335,21 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
             padding: 0 1rem !important;
           }
         }
+        .mobile-profile-only { display: none; }
+        .desktop-profile-only { display: block; }
+        @media (max-width: 767px) {
+          .mobile-profile-only {
+            display: flex !important;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 0.65rem 0.65rem 84px 0.65rem;
+            background: #f1f5f9;
+            min-height: 100vh;
+          }
+          .desktop-profile-only {
+            display: none !important;
+          }
+        }
       `}</style>
 
       {/* Toast Notification */}
@@ -374,6 +389,408 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Mobile-Only Profile Layout (320px-767px) */}
+      <div className="mobile-profile-only">
+        {/* Green My Profile Banner */}
+        <div style={{
+          background: 'linear-gradient(135deg, #065f2a 0%, #0b7a36 55%, #16a34a 100%)',
+          borderRadius: '18px',
+          padding: '0.75rem 0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.65rem',
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 6px 18px rgba(11, 122, 54, 0.22)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', zIndex: 2, minWidth: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditing) setIsEditing(false);
+                else if (onBackToSelf) onBackToSelf();
+                else navigate(-1);
+              }}
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                background: 'white',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+              }}
+              title="Go back"
+            >
+              <ArrowLeft size={18} color="#065f2a" />
+            </button>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {isSelf ? 'My Profile' : `${activeProfile.nickname || activeProfile.full_name || 'Member'}'s Profile`}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.9)', marginTop: '0.1rem' }}>
+                {isSelf ? 'Your Profile, Your Identity' : `Community Identity • ${activeProfile.role ? activeProfile.role.toUpperCase() : 'MEMBER'}`}
+              </div>
+            </div>
+          </div>
+          <div style={{ opacity: 0.24, flexShrink: 0, zIndex: 1 }}>
+            <Users size={40} color="white" />
+          </div>
+        </div>
+
+        {/* Centered Profile Hero Card */}
+        <div style={{
+          background: 'white',
+          borderRadius: '20px',
+          border: '1px solid #e2e8f0',
+          padding: '1.15rem 1rem 1.25rem',
+          textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+        }}>
+          {isOwnProfile && !isEditing && (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              style={{
+                position: 'absolute',
+                top: '0.85rem',
+                right: '0.85rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                background: 'white',
+                border: '1px solid #cbd5e1',
+                borderRadius: '999px',
+                padding: '0.35rem 0.75rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: '#0f172a',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                zIndex: 5
+              }}
+            >
+              <Edit2 size={13} /> Edit Profile
+            </button>
+          )}
+
+          {/* Subtle Mint Wave Background */}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '54px', pointerEvents: 'none', zIndex: 0 }}>
+            <svg viewBox="0 0 400 54" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+              <path d="M0,26 C90,4 200,48 310,18 C355,6 385,22 400,14 L400,54 L0,54 Z" fill="rgba(22, 163, 74, 0.12)" />
+              <path d="M0,38 C120,18 240,50 400,26 L400,54 L0,54 Z" fill="rgba(11, 122, 54, 0.18)" />
+            </svg>
+          </div>
+
+          <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ position: 'relative', marginBottom: '0.65rem' }}>
+              {(!activeProfile.profile_picture || imageError) ? (
+                <div style={{
+                  width: '88px',
+                  height: '88px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #16a34a 0%, #0b7a36 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '2.2rem',
+                  fontWeight: 900,
+                  border: '3px solid #22c55e',
+                  textTransform: 'uppercase',
+                  boxShadow: '0 4px 14px rgba(22, 163, 74, 0.22)'
+                }}>
+                  {(activeProfile.nickname || activeProfile.full_name || activeProfile.email || 'U')[0]}
+                </div>
+              ) : (
+                <img
+                  src={activeProfile.profile_picture}
+                  alt="Profile"
+                  onError={() => setImageError(true)}
+                  onClick={() => setLightBox({ isOpen: true, url: activeProfile.profile_picture })}
+                  style={{
+                    width: '88px',
+                    height: '88px',
+                    borderRadius: '50%',
+                    border: '3px solid #22c55e',
+                    objectFit: 'cover',
+                    cursor: 'zoom-in',
+                    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.2)'
+                  }}
+                />
+              )}
+              <span style={{
+                position: 'absolute',
+                bottom: '3px',
+                right: '3px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                background: '#16a34a',
+                border: '2.5px solid white'
+              }} />
+              {isOwnProfile && isEditing && !isRestrictedUser && (
+                <label style={{
+                  position: 'absolute',
+                  bottom: '-2px',
+                  left: '-2px',
+                  background: 'white',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '50%',
+                  padding: '0.35rem',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Camera size={14} color="#0b7a36" />
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => setProfileFile(e.target.files[0])} />
+                </label>
+              )}
+            </div>
+
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'center' }}>
+              <span style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+                {activeProfile.full_name || activeProfile.nickname || 'Unknown Identity'}
+              </span>
+              <CheckCircle size={18} fill="#16a34a" color="white" />
+            </div>
+
+            {activeProfile.email && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                marginTop: '0.45rem',
+                background: '#dcfce7',
+                border: '1px solid #bbf7d0',
+                borderRadius: '999px',
+                padding: '0.28rem 0.85rem',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                color: '#065f2a'
+              }}>
+                <Mail size={13} color="#16a34a" />
+                <span>{activeProfile.email}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isEditing ? (
+          /* Mobile Edit Form */
+          <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>Edit Personal Identity</h3>
+              <button type="button" onClick={() => setIsEditing(false)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '999px', padding: '0.3rem 0.75rem', fontSize: '0.75rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+            <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Full Name / Nickname</label>
+                <input className="input-field" style={{ marginBottom: 0 }} value={editData.nickname || ''} onChange={(e) => setEditData({ ...editData, nickname: e.target.value })} required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Mobile Number</label>
+                <input className="input-field" style={{ marginBottom: 0 }} placeholder="+251..." value={editData.mobile || ''} onChange={(e) => setEditData({ ...editData, mobile: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Gender</label>
+                <select className="input-field" style={{ marginBottom: 0 }} value={editData.gender || ''} onChange={(e) => setEditData({ ...editData, gender: e.target.value })}>
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
+              {!isRestrictedUser && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Telegram Username</label>
+                    <input className="input-field" style={{ marginBottom: 0 }} placeholder="@username" value={editData.telegram_username || ''} onChange={(e) => setEditData({ ...editData, telegram_username: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Location</label>
+                    <div style={{ display: 'flex', gap: '0.45rem' }}>
+                      <input className="input-field" style={{ marginBottom: 0, flex: 1 }} placeholder="City, Country" value={editData.address || ''} onChange={(e) => setEditData({ ...editData, address: e.target.value })} />
+                      <button type="button" onClick={handleGetLocation} disabled={isLocating} style={{ padding: '0 0.75rem', borderRadius: '10px', background: '#dcfce7', color: '#065f2a', border: '1px solid #bbf7d0', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
+                        {isLocating ? '...' : '📍 GPS'}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Bio / Intro</label>
+                    <textarea className="input-field" style={{ marginBottom: 0, minHeight: '72px' }} value={editData.bio || ''} onChange={(e) => setEditData({ ...editData, bio: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.3rem', color: '#334155' }}>Favorite Food &amp; Drink</label>
+                    <input className="input-field" style={{ marginBottom: 0 }} value={editData.fav_food_drink || ''} onChange={(e) => setEditData({ ...editData, fav_food_drink: e.target.value })} />
+                  </div>
+                </>
+              )}
+              <button type="submit" disabled={uploading} style={{ width: '100%', padding: '0.75rem', borderRadius: '999px', background: '#0b7a36', color: 'white', border: 'none', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer', marginTop: '0.25rem' }}>
+                {uploading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Intro Card */}
+            <div style={{
+              background: 'white',
+              borderRadius: '18px',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+            }}>
+              <div style={{
+                background: 'linear-gradient(90deg, #0b7a36 0%, #16a34a 70%, #bbf7d0 100%)',
+                padding: '0.5rem 0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.88rem'
+              }}>
+                <User size={16} color="white" />
+                <span>Intro</span>
+              </div>
+              <div style={{ padding: '0.8rem 0.9rem' }}>
+                {!isRestrictedUser && (
+                  <p style={{ margin: '0 0 0.85rem', fontSize: '0.86rem', color: '#0f172a', fontWeight: 500, lineHeight: 1.45 }}>
+                    {activeProfile.bio || 'No bio yet. Add something about yourself!'}
+                  </p>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem 0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.75rem', color: '#334155', minWidth: 0 }}>
+                    <Home size={14} color="#475569" style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeProfile.address || 'Add location'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.75rem', color: '#334155', minWidth: 0 }}>
+                    <Phone size={14} color="#475569" style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeProfile.mobile || 'Add mobile'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.75rem', color: '#334155', minWidth: 0 }}>
+                    <Calendar size={14} color="#475569" style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Joined {activeProfile.created_at ? new Date(activeProfile.created_at).toLocaleDateString('en-GB') : 'Active'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.75rem', color: '#334155', minWidth: 0 }}>
+                    <SendIcon size={14} color="#475569" style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeProfile.telegram_username || 'Not linked'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.75rem', color: '#334155', minWidth: 0 }}>
+                    <User size={14} color="#475569" style={{ flexShrink: 0 }} />
+                    <span>{activeProfile.gender || 'Select gender'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Personal Favourites Card */}
+            {!isRestrictedUser && (
+              <div style={{
+                background: 'white',
+                borderRadius: '18px',
+                border: '1px solid #e2e8f0',
+                overflow: 'hidden',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+              }}>
+                <div style={{
+                  background: 'linear-gradient(90deg, #0b7a36 0%, #16a34a 70%, #bbf7d0 100%)',
+                  padding: '0.5rem 0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  color: 'white',
+                  fontWeight: 800,
+                  fontSize: '0.88rem'
+                }}>
+                  <Star size={16} fill="#fde047" color="#fde047" />
+                  <span>Personal Favourites</span>
+                </div>
+                <div style={{
+                  padding: '0.85rem 0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.84rem', color: '#0f172a' }}>
+                    <Utensils size={16} color="#1e3a8a" style={{ flexShrink: 0 }} />
+                    <span><strong>Food &amp; Drink:</strong> {activeProfile.fav_food_drink || 'Not specified'}</span>
+                  </div>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    background: '#fef9c3',
+                    border: '1px solid #fde68a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <Coffee size={22} color="#b45309" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Personal Identity Overview Card */}
+            <div
+              onClick={() => isOwnProfile && setIsEditing(true)}
+              style={{
+                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                border: '1px solid #bbf7d0',
+                borderRadius: '18px',
+                padding: '0.8rem 0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.65rem',
+                cursor: isOwnProfile ? 'pointer' : 'default',
+                boxShadow: '0 2px 8px rgba(22, 163, 74, 0.08)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: '#bbf7d0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <User size={20} color="#065f2a" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#065f2a' }}>Personal Identity Overview</div>
+                  <div style={{ fontSize: '0.7rem', color: '#334155', fontWeight: 500 }}>
+                    {isOwnProfile ? 'A quick view of your profile information' : 'Public community profile information'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Tablet & Desktop Profile Layout (768px+ UNCHANGED) */}
+      <div className="desktop-profile-only">
       {/* Header */}
       <header style={{ 
         background: 'white', padding: '1rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -923,6 +1340,7 @@ const ProfilePage = ({ currentUser, userId, previewUser, onProfileUpdate, onBack
           </section>
         </div>
       </main>
+      </div>
     </div>
   );
 };

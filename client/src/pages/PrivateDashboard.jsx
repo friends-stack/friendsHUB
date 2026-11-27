@@ -1985,6 +1985,69 @@ const PrivateDashboard = ({ user, setUser }) => {
       {/* Main Content */}
       {activeTab === 'profile' ? (
         <div ref={contentRef} className="main-content" style={{ flex: 1, overflowY: 'auto', height: '100vh' }}>
+          <header className="mobile-app-header" style={{
+            display: 'none',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.85rem 1.25rem',
+            background: 'white',
+            borderBottom: '1px solid #e2e8f0',
+            position: 'sticky',
+            top: 0,
+            zIndex: 1000,
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button 
+                type="button"
+                className="mobile-hamburger-btn"
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Toggle navigation menu"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  width: '38px',
+                  height: '38px',
+                  cursor: 'pointer',
+                  color: '#1e293b',
+                  padding: 0,
+                  flexShrink: 0
+                }}
+              >
+                <Menu size={22} color="#1e293b" />
+              </button>
+              <div onClick={() => setActiveTab('logs')} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
+                <img src="/logo.png" alt="Friends Logo" className="mobile-brand-logo" style={{ width: '34px', height: '34px', objectFit: 'contain' }} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span className="mobile-brand-title" style={{ fontWeight: 900, fontSize: '1.2rem', letterSpacing: '1.5px', color: '#16a34a', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+                    F.R.I.E.N.D.S
+                  </span>
+                  <span className="mobile-brand-subtitle" style={{ display: 'none' }}>Together, We Grow</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', position: 'relative' }}>
+              <button type="button" className="mobile-bell-btn" onClick={() => { setShowNotificationsModal(true); fetchNotifications(); }} style={{ position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', padding: '4px' }} title="Notifications">
+                <Bell size={22} color="#475569" />
+                {unreadNotificationsCount > 0 && (
+                  <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '18px', height: '18px', background: '#ef4444', color: 'white', borderRadius: '999px', border: '2px solid white', fontSize: '0.65rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+              <div onClick={() => setShowMobileUserMenu(prev => !prev)} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.95rem', border: '2px solid rgba(255,255,255,0.65)' }}>
+                  {(user?.nickname || user?.name || user?.email || 'E').charAt(0).toUpperCase()}
+                </div>
+                <ChevronDown className="mobile-avatar-chevron" size={18} color="#64748b" />
+              </div>
+            </div>
+          </header>
           <ProfilePage 
             currentUser={user} 
             userId={viewingProfileUserId || user.id} 
