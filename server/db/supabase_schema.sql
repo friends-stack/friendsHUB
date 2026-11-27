@@ -236,3 +236,32 @@ VALUES (
   ARRAY['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'application/pdf', 'application/zip', 'text/plain']
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- ========================================================
+-- SECURITY HARDENING: Row Level Security (RLS)
+-- Protects against Supabase 'sensitive_columns_exposed' and
+-- 'rls_disabled_in_public' warnings on PostgREST API.
+-- ========================================================
+ALTER TABLE IF EXISTS roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS memories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS savings_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS savings_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS savings_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS savings_investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS savings_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS personal_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS gallery ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bot_access ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS file_storage ENABLE ROW LEVEL SECURITY;
+
+-- Revoke direct anon / authenticated PostgREST API access to tables
+-- (Your Express backend connects via direct PostgreSQL as database owner, which bypasses RLS)
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+
